@@ -1,0 +1,1 @@
+type DAGService* = ptr object
