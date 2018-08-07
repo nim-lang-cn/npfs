@@ -3,7 +3,7 @@ import os, protobuf, streams, macros,strutils ,packedjson
 
 var DefaultBlockSize = 1024 * 256
 
-# parseProtoFile("unixfs.proto")
+parseProtoFile("unixfs.proto")
 template `&`(t:type):untyped = cast[t](alloc0(sizeof(t)))
 type
     sizeSplitterv2 = ptr object

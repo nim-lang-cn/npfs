@@ -1,4 +1,5 @@
 syntax = "proto3";
+package unixfs.pb;
 
 message Data {
 	enum DataType {
@@ -9,7 +10,6 @@ message Data {
 		Symlink = 4;
 		HAMTShard = 5;
 	}
-
 	DataType Type = 1;
 	bytes Data = 2;
 	uint64 filesize = 3;
