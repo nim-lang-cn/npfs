@@ -1,4 +1,6 @@
-import os
+import os, protobuf, streams, macros,strutils ,packedjson
+
+parseProtoFile("unixfs.proto")
 
 type
     sizeSplitterv2 = ref object
@@ -40,3 +42,65 @@ proc prevPowerOfTwo*(num: var uint32): uint32 =
     if num != result.shl(1).uint32 and result != 0:
         result = result - 1 
 
+type Multihash = distinct seq[byte]
+
+type Cid = object 
+    version* :uint64
+    codec*   :uint64
+    hash* : Multihash
+
+type BasicBlock = object
+    cid : ptr Cid
+    data : seq[byte]
+
+type Link = object
+    Name :string
+    Size :uint64
+    Cid : ptr Cid
+
+# Prefix represents all the metadata of a Cid,
+# that is, the Version, the Codec, the Multihash type
+# and the Multihash length. It does not contains
+# any actual content information.
+type Prefix = object 
+    Version:  uint64
+    Codec:    uint64
+    MhType:   uint64
+    MhLength: int
+
+# ProtoNode represents a node in the IPFS Merkle DAG.
+# nodes have opaque data and a set of navigable links.
+type ProtoNode = object
+    links: seq[Link]
+    data:  seq[byte]
+    encoded: seq[byte]
+    cached: Cid
+    Prefix: ptr Prefix
+
+type PosInfo = object
+    Offset*:   uint64
+    FullPath*: string
+    Stat*: FileInfo 
+
+type Data_DataType = enum
+    Data_Raw  
+    Data_Directory 
+    Data_File
+    Data_Metadata
+    Data_Symlink
+    Data_HAMTShard
+
+type FSNode  = object
+    Data :seq[byte]
+    blocksizes :uint64
+    subtotal: uint64
+    Type : Data_DataType
+
+#UnixfsNode is a struct created to aid in the generation
+# of unixfs DAG trees
+type UnixfsNode = ref object
+    raw*     : bool
+    rawnode* :ptr BasicBlock
+    node*    :ptr ProtoNode
+    ufmt*    :ptr FSNode
+    posInfo* :ptr PosInfo
