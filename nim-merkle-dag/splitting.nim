@@ -88,19 +88,12 @@ type PosInfo = ptr object
     FullPath*: string
     Stat*: FileInfo 
 
-type Data_DataType = enum
-    Data_Raw  
-    Data_Directory 
-    Data_File
-    Data_Metadata
-    Data_Symlink
-    Data_HAMTShard
 
 type FSNode  = ptr object
     Data :seq[byte]
     blocksizes :uint64
     subtotal: uint64
-    Type : Data_DataType
+    Type : unixfs_pb_Data_DataType
 
 #UnixfsNode is a struct created to aid in the generation
 # of unixfs DAG trees
