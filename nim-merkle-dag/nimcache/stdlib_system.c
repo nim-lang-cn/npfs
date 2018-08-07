@@ -831,19 +831,19 @@ N_LIB_PRIVATE N_NOINLINE(NI, stackSize_61foY5fGmU9c2fC9c6wRIsrA)(tyObject_GcStac
 	nimfr_("stackSize", "gc_common.nim");
 	result = (NI)0;
 	pos = (void*)0;
-	nimln_(159, "gc_common.nim");
+	nimln_(165, "gc_common.nim");
 	pos = ((void*) ((&pos)));
-	nimln_(161, "gc_common.nim");
+	nimln_(167, "gc_common.nim");
 	{
 		nimln_(396, "system.nim");
 		if (!!((pos == NIM_NIL))) goto LA3_;
-		nimln_(165, "gc_common.nim");
+		nimln_(171, "gc_common.nim");
 		result = (NI)((NU64)(((NI) (ptrdiff_t) ((*stack).bottom))) - (NU64)(((NI) (ptrdiff_t) (pos))));
 	}
 	goto LA1_;
 	LA3_: ;
 	{
-		nimln_(167, "gc_common.nim");
+		nimln_(173, "gc_common.nim");
 		result = ((NI) 0);
 	}
 	LA1_: ;
@@ -859,9 +859,9 @@ N_LIB_PRIVATE N_NOINLINE(NI, stackSize_IV9bgfYkinlae0WZ2NZi5JA)(void) {
 		tyObject_GcStack_7fytPA5bBsob6See21YMRA* stack;
 		NI T2_;
 		stack = (tyObject_GcStack_7fytPA5bBsob6See21YMRA*)0;
-		nimln_(170, "gc_common.nim");
+		nimln_(176, "gc_common.nim");
 		stack = (&gch_IcYaEuuWivYAS86vFMTS3Q.stack);
-		nimln_(171, "gc_common.nim");
+		nimln_(177, "gc_common.nim");
 		T2_ = (NI)0;
 		T2_ = stackSize_61foY5fGmU9c2fC9c6wRIsrA(stack);
 		result = (NI)(result + T2_);
@@ -942,7 +942,7 @@ N_LIB_PRIVATE N_NIMCALL(NIM_BOOL, isActiveStack_deIRQymTVHcVwfHBKDbqEA)(tyObject
 	NIM_BOOL result;
 	nimfr_("isActiveStack", "gc_common.nim");
 	result = (NIM_BOOL)0;
-	nimln_(192, "gc_common.nim");
+	nimln_(198, "gc_common.nim");
 	result = NIM_TRUE;
 	popFrame();
 	return result;
@@ -2955,20 +2955,20 @@ static N_INLINE(void*, cellToUsr_vA0UG8JLZvpzP1Xf3vkPgwsystem)(tyObject_Cell_1zc
 N_LIB_PRIVATE N_NIMCALL(void, prepareDealloc_0Ao1u9cpV0dTuUB5G9cEQ8eQ)(tyObject_Cell_1zcF9cV8XIAtbN8h5HRUB8g* cell) {
 	TNimType* t;
 	nimfr_("prepareDealloc", "gc_common.nim");
-	nimln_(395, "gc_common.nim");
+	nimln_(401, "gc_common.nim");
 	t = (*cell).typ;
-	nimln_(396, "gc_common.nim");
+	nimln_(402, "gc_common.nim");
 	{
 		void* T5_;
 		nimln_(396, "system.nim");
 		if (!!(((*t).finalizer == NIM_NIL))) goto LA3_;
-		nimln_(402, "gc_common.nim");
+		nimln_(408, "gc_common.nim");
 		gch_IcYaEuuWivYAS86vFMTS3Q.recGcLock += ((NI) 1);
-		nimln_(403, "gc_common.nim");
+		nimln_(409, "gc_common.nim");
 		T5_ = (void*)0;
 		T5_ = cellToUsr_vA0UG8JLZvpzP1Xf3vkPgwsystem(cell);
 		((Finalizer) ((*t).finalizer))(T5_);
-		nimln_(404, "gc_common.nim");
+		nimln_(410, "gc_common.nim");
 		gch_IcYaEuuWivYAS86vFMTS3Q.recGcLock -= ((NI) 1);
 	}
 	LA3_: ;
@@ -5448,7 +5448,7 @@ N_LIB_PRIVATE N_NIMCALL(tyObject_GcStack_7fytPA5bBsob6See21YMRA*, getActiveStack
 	tyObject_GcStack_7fytPA5bBsob6See21YMRA* result;
 	nimfr_("getActiveStack", "gc_common.nim");
 	result = (tyObject_GcStack_7fytPA5bBsob6See21YMRA*)0;
-	nimln_(191, "gc_common.nim");
+	nimln_(197, "gc_common.nim");
 	result = (&(*gch).stack);
 	popFrame();
 	return result;
@@ -5466,22 +5466,22 @@ N_LIB_PRIVATE N_NOINLINE(NIM_BOOL, isOnStack_dJJW59cIgsBmT59aZrOM71Mg)(void* p) 
 	nimfr_("isOnStack", "gc_common.nim");
 	result = (NIM_BOOL)0;
 	stackTop = (void*)0;
-	nimln_(294, "gc_common.nim");
+	nimln_(300, "gc_common.nim");
 	stackTop = ((void*) ((&stackTop)));
-	nimln_(295, "gc_common.nim");
+	nimln_(301, "gc_common.nim");
 	T1_ = (tyObject_GcStack_7fytPA5bBsob6See21YMRA*)0;
 	T1_ = getActiveStack_2XtoPjgvlHPkHLitAW2flw((&gch_IcYaEuuWivYAS86vFMTS3Q));
 	a = ((NI) (ptrdiff_t) ((*T1_).bottom));
-	nimln_(296, "gc_common.nim");
+	nimln_(302, "gc_common.nim");
 	b = ((NI) (ptrdiff_t) (stackTop));
-	nimln_(298, "gc_common.nim");
+	nimln_(304, "gc_common.nim");
 	T2_ = (NI)0;
 	T2_ = a;
 	a = b;
 	b = T2_;
-	nimln_(299, "gc_common.nim");
+	nimln_(305, "gc_common.nim");
 	x = ((NI) (ptrdiff_t) (p));
-	nimln_(300, "gc_common.nim");
+	nimln_(306, "gc_common.nim");
 	T3_ = (NIM_BOOL)0;
 	T3_ = ((NU64)(a) <= (NU64)(x));
 	if (!(T3_)) goto LA4_;
@@ -5764,20 +5764,20 @@ static N_NIMCALL(void, TM_Q5wkpxktOdTGvlSRo9bzt9aw_34)(void) {
 
 N_NIMCALL(void, nimRegisterThreadLocalMarker)(tyProc_T4eqaYlFJYZUv9aG9b1TV0bQ markerProc) {
 	nimfr_("nimRegisterThreadLocalMarker", "gc_common.nim");
-	nimln_(451, "gc_common.nim");
+	nimln_(457, "gc_common.nim");
 	{
 		if (!(threadLocalMarkersLen_0RZOktgt14ljJsHMSX0iCw <= ((NI) 3499))) goto LA3_;
-		nimln_(452, "gc_common.nim");
+		nimln_(458, "gc_common.nim");
 		threadLocalMarkers_pC47Nqd8F629cuTchphM5YA[(threadLocalMarkersLen_0RZOktgt14ljJsHMSX0iCw)- 0] = markerProc;
-		nimln_(453, "gc_common.nim");
+		nimln_(459, "gc_common.nim");
 		threadLocalMarkersLen_0RZOktgt14ljJsHMSX0iCw += ((NI) 1);
 	}
 	goto LA1_;
 	LA3_: ;
 	{
-		nimln_(455, "gc_common.nim");
+		nimln_(461, "gc_common.nim");
 		echoBinSafe(TM_Q5wkpxktOdTGvlSRo9bzt9aw_35, 1);
-		nimln_(456, "gc_common.nim");
+		nimln_(462, "gc_common.nim");
 		exit(((NI) 1));
 	}
 	LA1_: ;

@@ -1,7 +1,7 @@
 import os, protobuf, streams, macros,strutils ,packedjson
 
 # parseProtoFile("unixfs.proto")
-
+template `&`(t:type):untyped = cast[t](alloc0(sizeof(t)))
 type
     sizeSplitterv2 = ptr object
         f   : File
@@ -9,7 +9,7 @@ type
         err  : string
 
 proc NewSizeSplitter*(f:File, size: int64): sizeSplitterv2 =
-    result = cast[sizeSplitterv2](alloc0(sizeof(sizeSplitterv2)))
+    result = &sizeSplitterv2
     result.f = f
     result.size = size.uint32
 
@@ -42,18 +42,18 @@ proc prevPowerOfTwo*(num: var uint32): uint32 =
     if num != result.shl(1).uint32 and result != 0:
         result = result - 1 
 
-type Multihash = distinct seq[byte]
+type Multihash = seq[byte]
 
-type Cid = object 
+type Cid = ptr object 
     version* :uint64
     codec*   :uint64
     hash* : Multihash
 
-type BasicBlock = object
+type BasicBlock = ptr object
     cid : ptr Cid
     data : seq[byte]
 
-type Link = object
+type Link = ptr object
     Name :string
     Size :uint64
     Cid : ptr Cid
@@ -62,7 +62,7 @@ type Link = object
 # that is, the Version, the Codec, the Multihash type
 # and the Multihash length. It does not contains
 # any actual content information.
-type Prefix = object 
+type Prefix = ptr object 
     Version:  uint64
     Codec:    uint64
     MhType:   uint64
@@ -70,14 +70,14 @@ type Prefix = object
 
 # ProtoNode represents a node in the IPFS Merkle DAG.
 # nodes have opaque data and a set of navigable links.
-type ProtoNode = object
+type ProtoNode = ptr object
     links: seq[Link]
     data:  seq[byte]
     encoded: seq[byte]
     cached: Cid
     Prefix: ptr Prefix
 
-type PosInfo = object
+type PosInfo = ptr object
     Offset*:   uint64
     FullPath*: string
     Stat*: FileInfo 
@@ -90,7 +90,7 @@ type Data_DataType = enum
     Data_Symlink
     Data_HAMTShard
 
-type FSNode  = object
+type FSNode  = ptr object
     Data :seq[byte]
     blocksizes :uint64
     subtotal: uint64
@@ -98,7 +98,7 @@ type FSNode  = object
 
 #UnixfsNode is a struct created to aid in the generation
 # of unixfs DAG trees
-type UnixfsNode = ref object
+type UnixfsNode = ptr object
     raw*     : bool
     rawnode* :ptr BasicBlock
     node*    :ptr ProtoNode
