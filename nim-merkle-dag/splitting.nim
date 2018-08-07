@@ -1,10 +1,16 @@
 import os
 
+
+var DefaultBlockSize = 1024 * 256
+
 type
     sizeSplitterv2 = ref object
         f   : File
         size : uint32
         err  : string
+
+proc DefaultSplitter*(f:File): sizeSplitterv2 =
+    result = NewSizeSplitter(f, DefaultBlockSize)
 
 proc NewSizeSplitter*(f:File, size: int64): sizeSplitterv2 =
     result = new(sizeSplitterv2)
