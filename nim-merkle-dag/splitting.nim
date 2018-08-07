@@ -1,15 +1,15 @@
 import os, protobuf, streams, macros,strutils ,packedjson
 
-parseProtoFile("unixfs.proto")
+# parseProtoFile("unixfs.proto")
 
 type
-    sizeSplitterv2 = ref object
+    sizeSplitterv2 = ptr object
         f   : File
         size : uint32
         err  : string
 
 proc NewSizeSplitter*(f:File, size: int64): sizeSplitterv2 =
-    result = new(sizeSplitterv2)
+    result = cast[sizeSplitterv2](alloc0(sizeof(sizeSplitterv2)))
     result.f = f
     result.size = size.uint32
 
