@@ -4,8 +4,8 @@ type AddedObject = JsonNode
 
 #Adder holds the switches passed to the `add` command.
 type Adder* = ptr object
-    blockstore : ptr BasicBlock
-    dagService : ptr DAGService
+    blockstore : BasicBlock
+    dagService : DAGService
     Out        :Channel[AddedObject]
     Progress   :bool
     Hidden     :bool
@@ -16,8 +16,8 @@ type Adder* = ptr object
     Wrap       :bool
     NoCopy     :bool
     Chunker    :string
-    root      : ptr Node
-    mroot     : ptr Root
-    tempRoot : ptr Cid
-    Prefix   : ptr Prefix
+    root      :  Node
+    mroot     :  Root
+    tempRoot :  Cid
+    Prefix   :  Prefix
     liveNodes: uint64

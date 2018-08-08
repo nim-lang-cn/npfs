@@ -1,0 +1,1 @@
+type PubSub* = ptr object
