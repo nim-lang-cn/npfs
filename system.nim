@@ -2,16 +2,16 @@ import node, unixfs, routing, datastore, keystore, key, merkledag
 import times
 
 type Republisher = object
-    r:    ValueStore
-    ds:   Datastore
-    self:  PrivKey
-    ks:   Keystore
-    Interval: Duration
-    RecordLifetime: Duration
+    r:   ptr ValueStore
+    ds:  ptr Datastore
+    self: ptr PrivKey
+    ks:  ptr Keystore
+    Interval: ptr Duration
+    RecordLifetime: ptr Duration
 
 type Root* = object
-    node: ProtoNode
-    val: FSNode
-    repub: Republisher
-    dserv: DAGService
+    node: ptr ProtoNode
+    val: ptr FSNode
+    repub: ptr Republisher
+    dserv: ptr DAGService
     Type: string
