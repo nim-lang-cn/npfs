@@ -1,1 +1,1 @@
-type Histogram* = ptr object
+type Histogram* = object

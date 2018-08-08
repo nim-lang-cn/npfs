@@ -1,7 +1,7 @@
 import tables
 import ../../../blocks
 
-type Engine* = ptr object
+type Engine* = object
     peerRequestQueue: prq
     workSignal: Channel[string]
     outbox: Channel[Envelope] 

@@ -1,1 +1,1 @@
-type DAGService* = ptr object
+type DAGService* = object

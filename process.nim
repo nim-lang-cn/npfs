@@ -1,1 +1,1 @@
-type Process* = ptr object 
+type Process* = object 

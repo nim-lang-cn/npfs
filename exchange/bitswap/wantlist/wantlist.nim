@@ -1,13 +1,13 @@
 import tables
 import ../../../cid
 
-type Entry* = ptr object
+type Entry* = object
     Cid:      Cid
     Priority: int
     SesTrk: Table[uint64,string]
 
-type ThreadSafe* = ptr object
+type ThreadSafe* = object
 	`set`: Table[string, Entry]
 
-type Wantlist* = ptr object
+type Wantlist* = object
     `set`: Table[string, Entry]

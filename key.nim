@@ -1,1 +1,1 @@
-type PrivKey* = ptr object
+type PrivKey* = object

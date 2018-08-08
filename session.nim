@@ -1,11 +1,11 @@
 import tables, times
 import cid, bitswap
 
-type cidQueue = ptr object
+type cidQueue = object
     elems:  Cid
     eset:   Set
 
-type Session = ptr object
+type Session = object
     tofetch:  cidQueue
     activePeers: Table[string,string]
     activePeersArr: seq[string]

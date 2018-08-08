@@ -1,1 +1,1 @@
-type PubSub* = ptr object
+type PubSub* = object

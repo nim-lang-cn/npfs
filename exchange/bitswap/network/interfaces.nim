@@ -1,1 +1,1 @@
-type BitSwapNetwork* = ptr object
+type BitSwapNetwork* = object

@@ -1,4 +1,4 @@
 import cid
-type BasicBlock* = ptr object
+type BasicBlock* = object
     cid : Cid
     data : seq[byte]

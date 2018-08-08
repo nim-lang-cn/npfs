@@ -3,19 +3,19 @@ import os, protobuf, streams, macros,strutils ,packedjson
 
 var DefaultBlockSize = 1024 * 256
 
-template `&`(t:type):untyped = cast[t](alloc0(sizeof(t)))
+template `&`(t:type):untyped = cast[ptr t](alloc0(sizeof(t)))
 type
-    sizeSplitterv2 = ptr object
+    sizeSplitterv2 = object
         f   : File
         size : uint32
         err  : string
 
-proc NewSizeSplitter*(f:File, size: int64): sizeSplitterv2 =
+proc NewSizeSplitter*(f:File, size: int64):ptr sizeSplitterv2 =
     result = &sizeSplitterv2
     result.f = f
     result.size = size.uint32
 
-proc DefaultSplitter*(f:File): sizeSplitterv2 =
+proc DefaultSplitter*(f:File): ptr sizeSplitterv2 =
     result = NewSizeSplitter(f, DefaultBlockSize)
 
 proc NextBytes*(ss: sizeSplitterv2) : seq[byte] = 
@@ -61,16 +61,16 @@ proc prevPowerOfTwo*(num: var uint32): uint32 =
 
 
   
-type blockstore* = ptr object
+type blockstore* = object
     datastore : Batching
     rehash : bool
 
-type blockService* = ptr object
+type blockService* = object
     blockstore : Blockstore
     exchange   : Interface
     checkFirst : bool
 
-type FSRepo* = ptr object
+type FSRepo* = object
     closed :bool
     path :string
     lockfile : Closer

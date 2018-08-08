@@ -2,7 +2,7 @@ import protobuf
 
 parseProtoFile("unixfs.proto")
 
-type FSNode*  = ptr object
+type FSNode*  = object
     Data :seq[byte]
     blocksizes :uint64
     subtotal: uint64

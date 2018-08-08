@@ -1,1 +1,1 @@
-type Keystore* = ptr object
+type Keystore* = object

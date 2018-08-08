@@ -6,13 +6,13 @@ type Multihash = seq[byte]
 # that is, the Version, the Codec, the Multihash type
 # and the Multihash length. It does not contains
 # any actual content information.
-type Prefix* = ptr object 
+type Prefix* = object 
     Version:  uint64
     Codec:    uint64
     MhType:   uint64
     MhLength: int
     
-type Cid* = ptr object 
+type Cid* = object 
     version* :uint64
     codec*   :uint64
     hash* : Multihash

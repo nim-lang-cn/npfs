@@ -3,7 +3,7 @@ import blocks,format,merkledag, format, cid, system
 type AddedObject = JsonNode
 
 #Adder holds the switches passed to the `add` command.
-type Adder* = ptr object
+type Adder* = object
     blockstore : BasicBlock
     dagService : DAGService
     Out        :Channel[AddedObject]

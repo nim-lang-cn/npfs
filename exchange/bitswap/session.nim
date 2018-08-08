@@ -5,11 +5,11 @@ import ../../bitswap
 import ../../cid
 
 
-type cidQueue = ptr object
+type cidQueue = object
     elems :seq[Cid]
     eset  :seq[Set]
 
-type Session* = ptr object
+type Session* = object
     tofetch:        cidQueue
     activePeers:    Table[string, string]
     activePeersArr:  seq[string]

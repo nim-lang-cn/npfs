@@ -1,1 +1,1 @@
-type Node* = ptr object
+type Node* = object

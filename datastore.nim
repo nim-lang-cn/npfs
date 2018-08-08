@@ -1,1 +1,1 @@
-type Datastore* = ptr object
+type Datastore* = object

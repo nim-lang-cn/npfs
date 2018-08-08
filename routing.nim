@@ -1,1 +1,1 @@
-type ValueStore* = ptr object
+type ValueStore* = object

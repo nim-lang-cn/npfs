@@ -1,1 +1,1 @@
-type BitSwapMessage* = ptr object
+type BitSwapMessage* = object
