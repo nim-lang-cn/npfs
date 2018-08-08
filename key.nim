@@ -1,0 +1,1 @@
+type PrivKey* = ptr object

@@ -1,9 +1,10 @@
 import tables
+import ../../../blocks
 
-type Engine = ptr object
-    peerRequestQueue: ptr prq
+type Engine* = ptr object
+    peerRequestQueue: prq
     workSignal: Channel[string]
     outbox: Channel[Envelope] 
-    bs: Blockstore
+    bs: BasicBlock
     ledgerMap: Table[string,string]
-    ticker: ptr Ticker
+    ticker: Ticker

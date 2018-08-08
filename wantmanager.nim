@@ -1,11 +1,24 @@
 import message
+import exchange/bitswap/network/interfaces
 
-type msgQueue = ptr object
-    p: ID
+type msgQueue* = ptr object
+    p: string
     `out`:   BitSwapMessage
     network: BitSwapNetwork
-    wl:      ptr ThreadSafe
+    wl:      ThreadSafe
     sender:  MessageSender
     refcnt: int
-    work Channel[]
-    done Channel[]
+    work Channel[string]
+    done Channel[string]
+
+type WantManager* = ptr object
+    incoming:     Channel[ptr wantSet] 
+    connectEvent: Channel[peerStatus]     
+    peerReqs     Channel[seq[string]] 
+    peers: Table[string]msgQueue
+    wl:    ThreadSafe
+    bcwl:  ThreadSafe
+    network: BitSwapNetwork
+    cancel:  proc()
+    wantlistGauge: Gauge
+    sentHistogram: Histogram

@@ -1,0 +1,1 @@
+type Datastore* = ptr object

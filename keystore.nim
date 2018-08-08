@@ -1,0 +1,1 @@
+type Keystore* = ptr object
