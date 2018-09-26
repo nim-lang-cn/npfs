@@ -310,7 +310,7 @@ while glfw3.WindowShouldClose(win) == 0:
     var hostLen, usernameLen, passwordLen: int32
     layoutDynamicRow(ctx, 30, 2)
     label(ctx, "host:", uint32 TEXT_LEFT)
-    echo editString(ctx, uint32 EDIT_FIELD, host, hostLen, 64, filter)
+    discard editString(ctx, uint32 EDIT_FIELD, host, hostLen, 64, filter)
     label(ctx, "username:", uint32 TEXT_LEFT)
     discard editString(ctx, uint32 EDIT_FIELD, username, usernameLen, 64, filter)
     label(ctx, "password:", uint32 TEXT_LEFT)
