@@ -131,7 +131,7 @@ proc finalize(adder: Adder): ipld.Node =
 	return root.GetNode()
 
 
-proc outputDirs(adder: Adder, path: string, fsn: mfs.FSNode): string = 
+proc outputDirs(adder: Adder, path: string, fsn: FSNode): string = 
 	case fsn :
 	of mfs.File:
 		return ""
@@ -194,7 +194,7 @@ proc addNode(adder: Adder, node: ipld.Node, path: string): string =
 	mr, = adder.mfsRoot()
 	dir := gopath.dir(path)
 	if dir != "." :
-		opts := mfs.MkdirOpts(mkparents:  true,flush: false, cidBuilder: adder.cidBuilder)
+		opts := mfs.MkdirOpts(mkparents: true,flush: false, cidBuilder: adder.cidBuilder)
 		mfs.mkdir(mr, dir, opts)
 
 	mfs.putNode(mr, path, node)
