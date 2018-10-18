@@ -1,4 +1,4 @@
-impor tables
+import tables
 
 type CryptoHandshakeMessage* = object
     tag: uint32
