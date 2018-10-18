@@ -98,26 +98,20 @@ proc PinRoot(adder: Adder): string =
 		return ""
 	rnk := root.cid()
 	adder.dagService.Add(adder.ctx, root)
-	if adder.tempRoot.Defined() {
+	if adder.tempRoot.Defined() :
 		adder.pinning.Unpin(adder.ctx, adder.tempRoot, true)
-		
 		adder.tempRoot = rnk
-	}
 
 	adder.pinning.PinWithMode(rnk, pin.Recursive)
 	return adder.pinning.Flush()
-}
 
 # Finalize flushes the mfs root directory and returns the mfs root node.
-proc finalize(adder: Adder): ipld.Node = 
+proc finalize(adder: Adder): Node = 
 	mr, = adder.mfsRoot()
-	
 	var root: FSNode
 	var rootdir = mr.getDirectory()
 	root = rootdir
-
 	err = root.flush()
-
 	var name: string
 	if !adder.wrap : 
 		children, = rootdir.listNames(adder.ctx)
@@ -125,7 +119,6 @@ proc finalize(adder: Adder): ipld.Node =
 			return ""
 		name = children[0]
 		root = rootdir.Child(name)
-
 	err = adder.outputDirs(name, root)
 	err = mr.Close()
 	return root.GetNode()
