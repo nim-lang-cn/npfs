@@ -11,6 +11,7 @@ proc getSerialized(message: CryptoHandshakeMessage): QuicData = discard
 
 proc mkakeDirty(message: CryptoHandshakeMessage): QuicData = 
     serialized.reset()
+    
 proc setValue[T](tag: uint32, v: T) = 
     tagValueMap[tag] = cast[string](v)
 

@@ -6,7 +6,7 @@ const kNumMicrosPerMilli: uint64 = 1000
 const kNumMicrosPerSecond: uint64 = 1000 * 1000
 
 # Default number of connections for N-connection emulation.
-const kDefaultNumConnections: uint32_t = 2
+const kDefaultNumConnections: uint32 = 2
 # Default initial maximum size in bytes of a QUIC packet.
 const kDefaultMaxPacketSize: QuicByteCount = 1350
 # Default initial maximum size in bytes of a QUIC packet for servers.
