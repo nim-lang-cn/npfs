@@ -26,18 +26,14 @@ type  QuicConnectionIdSequenceNumber = uint64
 
 # A type for functions which consume data payloads and fins.
 type QuicConsumedData = object 
-  QuicConsumedData(bytes_consumed: uint, fin_consumed: bool)
   # By default, gtest prints the raw bytes of an object. The bool data
   # member causes this object to have padding bytes, which causes the
   # default gtest object printer to read uninitialize memory. So we need
   # to teach gtest how to print this object.
-  QUIC_EXPORT_PRIVATE friend std::ostream& operatorshl(
-      std::ostream& os,
-      s:QuicConsumedData)
   # How many bytes were consumed.
-  bytes_consumed: uint
+  bytesConsumed: uint
   # True if an incoming fin was consumed.
-  fin_consumed: bool
+  finConsumed: bool
 
 # QuicAsyncStatus enumerates the possible results of an asynchronous
 # operation.
@@ -61,36 +57,18 @@ type WriteStatus = enum
 
 
 proc IsWriteError(status: WriteStatus ): bool 
-  return status >= WRITE_STATUS_ERROR
-}
+  status >= WRITE_STATUS_ERROR
 
 # A type used to return the result of write calls including either the number
 # of bytes written or the error code, depending upon the status.
-type QUIC_EXPORT_PRIVATE WriteResult 
-  WriteResult(WriteStatus status, int bytes_written_or_error_code)
-  WriteResult()
+type writeResultUnion {.union.} = object
+    bytes_written: int  # only valid when status is WRITE_STATUS_OK
+    error_code:int      # only valid when status is WRITE_STATUS_ERROR
 
-  bool operator==(const WriteResult& other) const 
-    if (status != other.status) 
-      return false
-    }
-    switch (status) 
-      case WRITE_STATUS_OK:
-        return bytes_written == other.bytes_written
-      case WRITE_STATUS_BLOCKED:
-        return true
-      default:
-        return error_code == other.error_code
-    }
-  }
-
-  QUIC_EXPORT_PRIVATE friend std::ostream& operatorshl(std::ostream& os,
-                                                      const WriteResult& s)
-
-  WriteStatus status
-  union 
-    int bytes_written  # only valid when status is WRITE_STATUS_OK
-    int error_code     # only valid when status is WRITE_STATUS_ERROR
+type WriteResult* = object
+  status: WriteStatus
+  union: writeResultUnion
+   
 
 type TransmissionType = enum
   NOT_RETRANSMISSION,
@@ -112,21 +90,20 @@ type HasRetransmittableData = enum
 type IsHandshake = enum
   NOT_HANDSHAKE, IS_HANDSHAKE 
 
-type class Perspective = enum
+type Perspective = enum
     IS_SERVER, IS_CLIENT 
 
 # Describes whether a ConnectionClose was originated by the peer.
-type ConnectionCloseSource = enum 
+type ConnectionCloseSource {.pure.}= enum 
     FROM_PEER, FROM_SELF 
 
 # Should a connection be closed silently or not.
-enum class ConnectionCloseBehavior 
+type ConnectionCloseBehavior {.pure.}= enum
   SILENT_CLOSE,
   SEND_CONNECTION_CLOSE_PACKET,
   SEND_CONNECTION_CLOSE_PACKET_WITH_NO_ACK
-}
 
-enum QuicFrameType : uint8 
+type QuicFrameType {.pure.}= enum
   # Regular frame types. The values set here cannot change without the
   # introduction of a new QUIC version.
   PADDING_FRAME = 0,
@@ -137,7 +114,6 @@ enum QuicFrameType : uint8
   BLOCKED_FRAME = 5,
   STOP_WAITING_FRAME = 6,
   PING_FRAME = 7,
-
   # STREAM and ACK frames are special frames. They are encoded differently on
   # the wire and their values do not need to be stable.
   STREAM_FRAME,
@@ -173,7 +149,7 @@ enum QuicFrameType : uint8
 # byte, with the two most significant bits being 0. Thus, the following
 # enumerations are valid as both the numeric values of frame types AND their
 # encodings.
-type QuicIetfFrameType = enum
+type QuicIetfFrameType {.pure.} = enum
   IETF_PADDING = 0x00,
   IETF_RST_STREAM = 0x01,
   IETF_CONNECTION_CLOSE = 0x02,
@@ -199,30 +175,26 @@ type QuicIetfFrameType = enum
   IETF_STREAM = 0x10,
   IETF_CRYPTO = 0x18,
   IETF_NEWOKEN = 0x19,
-
   # MESSAGE frame type is not yet determined, use 0x2x temporarily to give
   # stream frame some wiggle room.
   IETF_EXTENSION_MESSAGE_NO_LENGTH = 0x20,
   IETF_EXTENSION_MESSAGE = 0x21,
-}
 # Masks for the bits that indicate the frame is a Stream frame vs the
 # bits used as flags.
 #define IETF_STREAM_FRAMEYPE_MASK 0xfffffffffffffff8
 #define IETF_STREAM_FRAME_FLAG_MASK 0x07
 #define IS_IETF_STREAM_FRAME(_stype_) \
   (((_stype_)&IETF_STREAM_FRAMEYPE_MASK) == IETF_STREAM)
-
 # These are the values encoded in the low-order 3 bits of the
 # IETF_STREAMx frame type.
 #define IETF_STREAM_FRAME_FIN_BIT 0x01
 #define IETF_STREAM_FRAME_LEN_BIT 0x02
 #define IETF_STREAM_FRAME_OFF_BIT 0x04
-
-type QuicConnectionIdLength = enum
+type QuicConnectionIdLength {.pure.}= enum
   PACKET_0BYTE_CONNECTION_ID = 0,
   PACKET_8BYTE_CONNECTION_ID = 8
 
-type QuicPacketNumberLength = enum
+type QuicPacketNumberLength {.pure.}= enum
   PACKET_1BYTE_PACKET_NUMBER = 1,
   PACKET_2BYTE_PACKET_NUMBER = 2,
   PACKET_4BYTE_PACKET_NUMBER = 4,
@@ -231,7 +203,7 @@ type QuicPacketNumberLength = enum
   PACKET_8BYTE_PACKET_NUMBER = 8
 
 # Used to indicate a QuicSequenceNumberLength using two flag bits.
-type QuicPacketNumberLengthFlags = enum
+type QuicPacketNumberLengthFlags {.pure.}= enum
   PACKET_FLAGS_1BYTE_PACKET = 0,           # 00
   PACKET_FLAGS_2BYTE_PACKET = 1,           # 01
   PACKET_FLAGS_4BYTE_PACKET = 1 shl 1,      # 10
@@ -239,7 +211,7 @@ type QuicPacketNumberLengthFlags = enum
 
 
 # The public flags are specified in one byte.
-type QuicPacketPublicFlags = enum
+type QuicPacketPublicFlags {.pure.}= enum
   PACKET_PUBLIC_FLAGS_NONE = 0,
   # Bit 0: Does the packet header contains version info?
   PACKET_PUBLIC_FLAGS_VERSION = 1 shl 0,
@@ -269,7 +241,7 @@ type QuicPacketPublicFlags = enum
   PACKET_PUBLIC_FLAGS_MAX = (1 shl 6) - 1,
 
 # The private flags are specified in one byte.
-type QuicPacketPrivateFlags = enum
+type QuicPacketPrivateFlags {.pure.}= enum
   PACKET_PRIVATE_FLAGS_NONE = 0,
   # Bit 0: Does this packet contain an entropy bit?
   PACKET_PRIVATE_FLAGS_ENTROPY = 1 shl 0,
@@ -280,10 +252,10 @@ type QuicPacketPrivateFlags = enum
 # QUIC. Note that this is separate from the congestion feedback type -
 # some congestion control algorithms may use the same feedback type
 # (Reno and Cubic are the classic example for that).
-type CongestionControlType = enum 
+type CongestionControlType {.pure.}= enum 
     kCubicBytes, kRenoBytes, kBBR, kPCC 
 
-type LossDetectionType = enum 
+type LossDetectionType {.pure.}= enum 
   kNack,          # Used to mimic TCP's loss detection.
   kTime,          # Time based loss detection.
   kAdaptiveTime,  # Adaptive time based loss detection.
@@ -292,13 +264,13 @@ type LossDetectionType = enum
 # progresses through. When retransmitting a packet, the encryption level needs
 # to be specified so that it is retransmitted at a level which the peer can
 # understand.
-type EncryptionLevel = enum 
+type EncryptionLevel {.pure.} = enum 
   ENCRYPTION_NONE = 0,
   ENCRYPTION_INITIAL = 1,
   ENCRYPTION_FORWARD_SECURE = 2,
-  NUM_ENCRYPTION_LEVELS,
+  NUM_ENCRYPTION_LEVELS
 
-type AddressChangeType = enum 
+type AddressChangeType {.pure.} = enum 
   # IP address and port remain unchanged.
   NO_CHANGE,
   # Port changed, but IP address remains unchanged.
@@ -314,7 +286,7 @@ type AddressChangeType = enum
   # IP address change from an IPv6 to an IPv6 address (port may have changed.)
   IPV6O_IPV6_CHANGE,
 
-type StreamSendingState = enum
+type StreamSendingState {.pure.} = enum
   # Sender has more data to send on this stream.
   NO_FIN,
   # Sender is done sending on this stream.
@@ -323,7 +295,7 @@ type StreamSendingState = enum
   # appended after all stream frames.
   FIN_AND_PADDING,
 
-type SentPacketState = enum
+type SentPacketState {.pure.} = enum
   # The packet has been sent and waiting to be acked.
   OUTSTANDING,
   FIRST_PACKET_STATE = OUTSTANDING,
@@ -347,16 +319,16 @@ type SentPacketState = enum
   PROBE_RETRANSMITTED,
   LAST_PACKET_STATE = PROBE_RETRANSMITTED,
 
-type PacketHeaderFormat = enum
+type PacketHeaderFormat {.pure.} = enum
   IETF_QUIC_LONG_HEADER_PACKET,
   IETF_QUIC_SHORT_HEADER_PACKET,
   GOOGLE_QUIC_PACKET,
 
 # Information about a newly acknowledged packet.
 type AckedPacket* = object
-  packet_number:QuicPacketNumber
+  packetNumber:QuicPacketNumber
   # Number of bytes sent in the packet that was acknowledged.
-   bytes_acked:QuicPacketLength
+   bytesAcked:QuicPacketLength
   # The time |packet_number| was received by the peer, according to the
   # optional timestamp the peer included in the ACK frame which acknowledged
   # |packet_number|. Zero if no timestamp was available for this packet.
@@ -367,13 +339,13 @@ type  AckedPacketVector = seq[AckedPacket]
 
 # Information about a newly lost packet.
 type LostPacket = object
-    packet_number: QuicPacketNumber
-    bytes_lost : QuicPacketLength
+    packetNumber: QuicPacketNumber
+    bytesLost : QuicPacketLength
 
 # A vector of lost packets.
 type LostPacketVector = seq[LostPacket]
 
-type QuicIetfTransportErrorCodes = enum
+type QuicIetfTransportErrorCodes {.pure.}= enum
   NO_IETF_QUIC_ERROR = 0x0,
   INTERNAL_ERROR = 0x1,
   SERVER_BUSY_ERROR = 0x2,
@@ -388,7 +360,7 @@ type QuicIetfTransportErrorCodes = enum
   INVALID_MIGRATION = 0xC,
   FRAME_ERROR_base = 0x100,  # add frame type to this base
 
-type QuicIetfPacketHeaderForm = enum
+type QuicIetfPacketHeaderForm {.pure.}= enum
   # Long header is used for packets that are sent prior to the completion of
   # version negotiation and establishment of 1-RTT keys.
   LONG_HEADER,
@@ -396,7 +368,7 @@ type QuicIetfPacketHeaderForm = enum
   SHORT_HEADER,
 
 # Used in long header to explicitly indicate the packet type.
-type QuicLongHeaderType = enum
+type QuicLongHeaderType {.pure.}= enum
   VERSION_NEGOTIATION = 0,  # Value does not matter.
   ZERO_RTT_PROTECTED = 0x7C,
   HANDSHAKE = 0x7D,
@@ -405,12 +377,12 @@ type QuicLongHeaderType = enum
   INVALID_PACKETYPE,
 
 # Used in short header to determine the size of packet number field.
-type QuicShortHeaderType = enum
+type QuicShortHeaderType {.pure.}= enum
   SHORT_HEADER_1_BYTE_PACKET_NUMBER = 0,
   SHORT_HEADER_2_BYTE_PACKET_NUMBER = 1,
   SHORT_HEADER_4_BYTE_PACKET_NUMBER = 2,
 
-type QuicPacketHeaderTypeFlags = enum 
+type QuicPacketHeaderTypeFlags {.pure.}= enum 
   # Bit 2: Reserved for experimentation for short header.
   FLAGS_EXPERIMENTATION_BIT = 1 shl 2,
   # Bit 3: Google QUIC Demultiplexing bit, the short header always sets this
@@ -426,7 +398,7 @@ type QuicPacketHeaderTypeFlags = enum
   # Bit 7: Indicates the header is long or short header.
   FLAGS_LONG_HEADER = 1 shl 7,
 
-type MessageStatus = enum
+type MessageStatus {.pure.}= enum
   MESSAGE_STATUS_SUCCESS,
   MESSAGE_STATUS_ENCRYPTION_NOT_ESTABLISHED,  # Failed to send message because
                                               # encryption is not established
@@ -442,18 +414,18 @@ type MessageStatus = enum
                                   # reaches an invalid state.
 
 # Used to return the result of SendMessage calls
-type MessageResult = object
+type MessageResult {.pure.}= object
   MessageStatus status
   # Only valid when status is MESSAGE_STATUS_SUCCESS.
   QuicMessageId message_id
 
-type WriteStreamDataResult = enum
+type WriteStreamDataResult {.pure.}= enum
   WRITE_SUCCESS,
   STREAM_MISSING,  # Trying to write data of a nonexistent stream (e.g.
                    # closed).
   WRITE_FAILED,    # Trying to write nonexistent data of a stream
 
-type StreamType = enum
+type StreamType {.pure.}= enum
   # Bidirectional streams allow for data to be sent in both directions.
   BIDIRECTIONAL,
   # Unidirectional streams carry data in one direction only.
