@@ -56,7 +56,7 @@ type WriteStatus = enum
   WRITE_STATUS_NUM_VALUES,
 
 
-proc IsWriteError(status: WriteStatus ): bool 
+proc IsWriteError(status: WriteStatus ): bool =
   status >= WRITE_STATUS_ERROR
 
 # A type used to return the result of write calls including either the number
@@ -120,7 +120,6 @@ type QuicFrameType {.pure.}= enum
   ACK_FRAME,
   # The path MTU discovery frame is encoded as a PING frame on the wire.
   MTU_DISCOVERY_FRAME,
-
   # These are for IETF-specific frames for which there is no mapping
   # from Google QUIC frames. These are valid/allowed if and only if IETF-
   # QUIC has been negotiated. Values are not important, they are not
@@ -135,9 +134,7 @@ type QuicFrameType {.pure.}= enum
   MESSAGE_FRAME,
   CRYPTO_FRAME,
   NEWOKEN_FRAME,
-
   NUM_FRAMEYPES
-
 # Ietf frame types. These are defined in the IETF QUIC Specification.
 # Explicit values are given in the enum so that we can be sure that
 # the symbol will map to the correct stream type.
@@ -241,7 +238,7 @@ type QuicPacketPublicFlags {.pure.}= enum
   PACKET_PUBLIC_FLAGS_MAX = (1 shl 6) - 1,
 
 # The private flags are specified in one byte.
-type QuicPacketPrivateFlags {.pure.}= enum
+type QuicPacketPrivateFlags {.pure.} = enum
   PACKET_PRIVATE_FLAGS_NONE = 0,
   # Bit 0: Does this packet contain an entropy bit?
   PACKET_PRIVATE_FLAGS_ENTROPY = 1 shl 0,
@@ -256,19 +253,19 @@ type CongestionControlType {.pure.}= enum
     kCubicBytes, kRenoBytes, kBBR, kPCC 
 
 type LossDetectionType {.pure.}= enum 
-  kNack,          # Used to mimic TCP's loss detection.
-  kTime,          # Time based loss detection.
-  kAdaptiveTime,  # Adaptive time based loss detection.
-  kLazyFack,      # Nack based but with FACK disabled for the first ack.
+    kNack,          # Used to mimic TCP's loss detection.
+    kTime,          # Time based loss detection.
+    kAdaptiveTime,  # Adaptive time based loss detection.
+    kLazyFack,      # Nack based but with FACK disabled for the first ack.
 # EncryptionLevel enumerates the stages of encryption that a QUIC connection
 # progresses through. When retransmitting a packet, the encryption level needs
 # to be specified so that it is retransmitted at a level which the peer can
 # understand.
 type EncryptionLevel {.pure.} = enum 
-  ENCRYPTION_NONE = 0,
-  ENCRYPTION_INITIAL = 1,
-  ENCRYPTION_FORWARD_SECURE = 2,
-  NUM_ENCRYPTION_LEVELS
+    ENCRYPTION_NONE = 0,
+    ENCRYPTION_INITIAL = 1,
+    ENCRYPTION_FORWARD_SECURE = 2,
+    NUM_ENCRYPTION_LEVELS
 
 type AddressChangeType {.pure.} = enum 
   # IP address and port remain unchanged.
@@ -326,13 +323,13 @@ type PacketHeaderFormat {.pure.} = enum
 
 # Information about a newly acknowledged packet.
 type AckedPacket* = object
-  packetNumber:QuicPacketNumber
+  packetNumber: QuicPacketNumber
   # Number of bytes sent in the packet that was acknowledged.
-   bytesAcked:QuicPacketLength
+   bytesAcked: QuicPacketLength
   # The time |packet_number| was received by the peer, according to the
   # optional timestamp the peer included in the ACK frame which acknowledged
   # |packet_number|. Zero if no timestamp was available for this packet.
-   receiveimestamp:QuicTime
+   receiveimestamp: QuicTime
 
 # A vector of acked packets.
 type  AckedPacketVector = seq[AckedPacket]
@@ -368,7 +365,7 @@ type QuicIetfPacketHeaderForm {.pure.}= enum
   SHORT_HEADER,
 
 # Used in long header to explicitly indicate the packet type.
-type QuicLongHeaderType {.pure.}= enum
+type QuicLongHeaderType {.pure.} = enum
   VERSION_NEGOTIATION = 0,  # Value does not matter.
   ZERO_RTT_PROTECTED = 0x7C,
   HANDSHAKE = 0x7D,
@@ -377,12 +374,12 @@ type QuicLongHeaderType {.pure.}= enum
   INVALID_PACKETYPE,
 
 # Used in short header to determine the size of packet number field.
-type QuicShortHeaderType {.pure.}= enum
+type QuicShortHeaderType {.pure.} = enum
   SHORT_HEADER_1_BYTE_PACKET_NUMBER = 0,
   SHORT_HEADER_2_BYTE_PACKET_NUMBER = 1,
   SHORT_HEADER_4_BYTE_PACKET_NUMBER = 2,
 
-type QuicPacketHeaderTypeFlags {.pure.}= enum 
+type QuicPacketHeaderTypeFlags {.pure.} = enum 
   # Bit 2: Reserved for experimentation for short header.
   FLAGS_EXPERIMENTATION_BIT = 1 shl 2,
   # Bit 3: Google QUIC Demultiplexing bit, the short header always sets this
@@ -415,9 +412,9 @@ type MessageStatus {.pure.}= enum
 
 # Used to return the result of SendMessage calls
 type MessageResult {.pure.}= object
-  MessageStatus status
+  status: MessageStatus
   # Only valid when status is MESSAGE_STATUS_SUCCESS.
-  QuicMessageId message_id
+  messageId: QuicMessageId
 
 type WriteStreamDataResult {.pure.}= enum
   WRITE_SUCCESS,
