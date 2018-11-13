@@ -22,8 +22,6 @@ const framesType = {"0x00":"PADDING",
                     "0x1a":"ACK",
                     "0x1b":"ACK"}.toTable
 
-createParser(longHeader):
-    u1: headerType = 1
 
 proc variableLengthEncoding*(): byte = 
     var length: uint64
@@ -36,8 +34,14 @@ proc variableLengthEncoding*(): byte =
     elif length in 1073741824u64..4611686018427387903u64:
         result = 0x11
 
+createParser(initialPacket):
+    u8: headerType = 0x80
+    u32: version
+    u4: dcil
+    u4: scil
+
 createParser(versionNegoPacket):
-    u1: headerType = 0x80
+    u8: headerType = 0x80
     u32: version = 0x0
     u4: dcil 
     u4: scil
@@ -45,13 +49,6 @@ createParser(versionNegoPacket):
     u8: scid[if scil != 0: scil+3 else: 0]
     u32: supportedVersion[]
 
-
-createParser(initialPacket):
-    u1: headerType = 1
-    u7: initialPacket = 0x7f
-    u32: version
-    u4: dcil
-    u4: scil
 
 when isMainModule:
     import nativesockets, os
@@ -66,10 +63,12 @@ when isMainModule:
     var outs = newStringStream()
     versionNegoPacket.put(outs, outData)   
     outs.setPosition(0)
-    var frame = cast[seq[byte]](outs.readAll())
+    var frameString = outs.readAll()
+    echo frameString.len
+    var frame = cast[seq[byte]](frameString)
     echo frame
-    let sockfd = createNativeSocket(AF_INET, SOCK_DGRAM, Protocol.IPPROTO_UDP)
-    var peer = getAddrInfo("192.168.100.224", Port 80,  sockType = SOCK_DGRAM, protocol =  IPPROTO_UDP)
-    echo sockfd.sendto(addr frame, sizeof(frame).cint, 0.cint, peer.ai_addr, SockLen sizeof(peer.ai_addrlen))
+    let sockfd = createNativeSocket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
+    var peer = getAddrInfo("192.168.100.224", Port 1234,  sockType = SOCK_DGRAM, protocol =  IPPROTO_UDP)
+    echo sockfd.sendto( addr frame, frameString.len, 0.cint, peer.ai_addr,  peer.ai_addrlen)
     var error : OSErrorCode = osLastError()
     if error != 0.OSErrorCode  : echo osErrorMsg error
