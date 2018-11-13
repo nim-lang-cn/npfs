@@ -269,7 +269,7 @@ proc getOutput(dagnode: ipld.Node): Object =
 
 	var output = Object(
 		Hash:  c,
-		Size:  strconv.FormatUint(s, 10),
+		Size:  parseInt(s, 10),
 		Links: make([]Link, len(dagnode.Links())),
     )
 

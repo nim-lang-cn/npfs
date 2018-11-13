@@ -1,6 +1,5 @@
 type EpollCallbackInterface* = object of RootObj
 
-
 proc onRegistration(eci: EpollCallbackInterface, eps: epollServer, fd: int, eventMask: int) = discard
 
 proc onModification(eci: EpollCallbackInterface,fd: int, eventMask: int) = discard

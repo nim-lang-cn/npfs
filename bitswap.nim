@@ -13,6 +13,7 @@ type counters* = object
     dataSent   :    uint64
     dataRecvd   :   uint64
     messagesRecvd:  uint64
+    
 #Bitswap instances implement the bitswap protocol.
 type Bitswap* = object
     findKeys : Channel[blockRequest] 
