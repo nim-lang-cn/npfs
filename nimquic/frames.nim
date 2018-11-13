@@ -68,8 +68,8 @@ when isMainModule:
     outs.setPosition(0)
     var frame = cast[seq[byte]](outs.readAll())
     echo frame
-    let sockfd = createNativeSocket(nativesockets.AF_INET, nativesockets.SOCK_DGRAM, Protocol.IPPROTO_UDP)
-    var peer = getAddrInfo("192.168.100.9", Port 80, sockType = SOCK_DGRAM, protocol = IPPROTO_UDP)
+    let sockfd = createNativeSocket(AF_INET, SOCK_DGRAM, Protocol.IPPROTO_UDP)
+    var peer = getAddrInfo("192.168.100.224", Port 80,  sockType = SOCK_DGRAM, protocol =  IPPROTO_UDP)
     echo sockfd.sendto(addr frame, sizeof(frame).cint, 0.cint, peer.ai_addr, SockLen sizeof(peer.ai_addrlen))
     var error : OSErrorCode = osLastError()
     if error != 0.OSErrorCode  : echo osErrorMsg error
