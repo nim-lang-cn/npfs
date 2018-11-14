@@ -1,4 +1,4 @@
-import tables, strformat, binaryparse, streams
+import tables, strformat, binaryparse, streams, net
 
 const framesType = {"0x00":"PADDING",
                     "0x01":"RST_STREAM",
@@ -40,6 +40,18 @@ createParser(initialPacket):
     u4: dcil
     u4: scil
 
+var readSupportedVersions = (get: (proc (s: Stream): tuple[supportedVersions: seq[uint32]] =
+    result.supportedVersions = @[]
+    while not s.atEnd:
+      result.supportedVersions.add 0
+      s.readDataLE(result.supportedVersions[^1].addr , 4)
+    ),
+    put: (proc (s: Stream, input: var tuple[supportedVersions: seq[uint32]]) =
+     for supportedVersion in input.supportedVersions:
+       s.write supportedVersion
+   )
+)
+
 createParser(versionNegoPacket):
     u8: headerType = 0x80
     u32: version = 0x0
@@ -47,7 +59,7 @@ createParser(versionNegoPacket):
     u4: scil
     u8: dcid[if dcil != 0: dcil+3 else: 0]
     u8: scid[if scil != 0: scil+3 else: 0]
-    u32: supportedVersion[]
+    u32: supportedVersions[]
 
 
 when isMainModule:
@@ -57,18 +69,24 @@ when isMainModule:
     outData.version = 0
     outData.dcil = 1
     outData.scil = 1
-    outData.dcid = @[15u8]
-    outData.scid = @[15u8]
-    var outs = newStringStream()
-    versionNegoPacket.put(outs, outData)   
-    outs.setPosition(0)
-    var frameString = outs.readAll()
-    var frame = cast[seq[byte]](frameString)
-    echo frame
+    outData.dcid = @[1u8,2,3,4]
+    outData.scid = @[5u8,6,7,8]
+    outData.supportedVersions =  @[10'u32, 100, 42_000]
+    var ss = newStringStream()
+    versionNegoPacket.put(ss, outData)   
+    var size = ss.getPosition()
+    echo outData
+    ss.setPosition(0)
+    var outs = ss.readAll().cstring
     let sockfd = createNativeSocket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
-    var peer = getAddrInfo("192.168.100.224", Port 1234,  sockType = SOCK_DGRAM, protocol = IPPROTO_UDP)
+    defer: sockfd.close()
+    sockfd.setSockOptInt(SOL_SOCKET, SO_BROADCAST, 1)
+    var peer = getAddrInfo("192.168.100.224", Port 1234, sockType = SOCK_DGRAM, protocol = IPPROTO_UDP)
     if sockfd.connect(peer.ai_addr, peer.ai_addrlen.SockLen) < 0'i32:
         freeAddrInfo(peer)
         raiseOSError(osLastError())
-    if sockfd.send( addr frame, cint sizeof frameString, 0) < 0'i32:
+    var sent = sockfd.send(outs, cint size, 0) 
+    if sent < 0'i32:
         raiseOSError(osLastError())
+    else: 
+        echo sent
