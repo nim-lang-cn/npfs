@@ -1,4 +1,5 @@
 import tables, strformat, binaryparse, streams, net
+include parsers
 
 const framesType = {"0x00":"PADDING",
                     "0x01":"RST_STREAM",
@@ -34,37 +35,9 @@ proc variableLengthEncoding*(): byte =
     elif length in 1073741824u64..4611686018427387903u64:
         result = 0x11
 
-createParser(initialPacket):
-    u8: headerType = 0x80
-    u32: version
-    u4: dcil
-    u4: scil
-
-var readSupportedVersions = (get: (proc (s: Stream): tuple[supportedVersions: seq[uint32]] =
-    result.supportedVersions = @[]
-    while not s.atEnd:
-      result.supportedVersions.add 0
-      s.readDataLE(result.supportedVersions[^1].addr , 4)
-    ),
-    put: (proc (s: Stream, input: var tuple[supportedVersions: seq[uint32]]) =
-     for supportedVersion in input.supportedVersions:
-       s.write supportedVersion
-   )
-)
-
-createParser(versionNegoPacket):
-    u8: headerType = 0x80
-    u32: version = 0x0
-    u4: dcil 
-    u4: scil
-    u8: dcid[if dcil != 0: dcil+3 else: 0]
-    u8: scid[if scil != 0: scil+3 else: 0]
-    u32: supportedVersions[]
-
-
 when isMainModule:
     import nativesockets, os
-    var outData: typeGetter(versionNegoPacket)
+    var outData: typeGetter(QuicVersionNegotiationPacket)
     outData.headerType = 0x80
     outData.version = 0
     outData.dcil = 1
@@ -73,7 +46,7 @@ when isMainModule:
     outData.scid = @[5u8,6,7,8]
     outData.supportedVersions =  @[10'u32, 100, 42_000]
     var ss = newStringStream()
-    versionNegoPacket.put(ss, outData)   
+    QuicVersionNegotiationPacket.put(ss, outData)   
     var size = ss.getPosition()
     echo outData
     ss.setPosition(0)
