@@ -59,16 +59,16 @@ when isMainModule:
     outData.scil = 1
     outData.dcid = @[15u8]
     outData.scid = @[15u8]
-    echo outData
     var outs = newStringStream()
     versionNegoPacket.put(outs, outData)   
     outs.setPosition(0)
     var frameString = outs.readAll()
-    echo frameString.len
     var frame = cast[seq[byte]](frameString)
     echo frame
     let sockfd = createNativeSocket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
-    var peer = getAddrInfo("192.168.100.224", Port 1234,  sockType = SOCK_DGRAM, protocol =  IPPROTO_UDP)
-    echo sockfd.sendto( addr frame, frameString.len, 0.cint, peer.ai_addr,  peer.ai_addrlen)
-    var error : OSErrorCode = osLastError()
-    if error != 0.OSErrorCode  : echo osErrorMsg error
+    var peer = getAddrInfo("192.168.100.224", Port 1234,  sockType = SOCK_DGRAM, protocol = IPPROTO_UDP)
+    if sockfd.connect(peer.ai_addr, peer.ai_addrlen.SockLen) < 0'i32:
+        freeAddrInfo(peer)
+        raiseOSError(osLastError())
+    if sockfd.send( addr frame, cint sizeof frameString, 0) < 0'i32:
+        raiseOSError(osLastError())
