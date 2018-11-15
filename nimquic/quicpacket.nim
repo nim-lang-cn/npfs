@@ -1,5 +1,7 @@
 import quictypes, strutils
 
+
+    
 type QuicData* = object of RootObj
     buffer: ptr char
     length: uint
@@ -96,3 +98,4 @@ proc `=destroy`*(serializedPacket: SerializedPacket) =
 proc copyBuffer*(packet: serializedPacket): ptr char = 
     result = cast[ptr char]alloc0(packet.encryptedLength)
     copyMem(result, packet.data, packet.length)
+

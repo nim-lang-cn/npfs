@@ -1,5 +1,5 @@
 import tables, strformat, binaryparse, streams, net
-include parsers
+include parsers, quic_data_writer
 
 const framesType = {"0x00":"PADDING",
                     "0x01":"RST_STREAM",
@@ -23,17 +23,20 @@ const framesType = {"0x00":"PADDING",
                     "0x1a":"ACK",
                     "0x1b":"ACK"}.toTable
 
+proc GetVarInt62Len*(value: uint64):int =
+  if (value and kVarInt62ErrorMask) != 0:
+    echo fmt"Attempted to encode a value, {value}, that is too big for VarInt62"
+    result = 0
+  if (value and kVarInt62Mask8Bytes) != 0:
+    result = 8
+  if (value and kVarInt62Mask4Bytes) != 0:
+    result = 4
+  if (value and kVarInt62Mask2Bytes) != 0:
+    result = 2
+  result = 1
 
-proc variableLengthEncoding*(): byte = 
-    var length: uint64
-    if length in 0u64..63u64:
-        result = 0x00
-    elif length in 64u64..16383u64:
-        result = 0x01
-    elif length in 16384u64..1073741823u64:
-        result = 0x10
-    elif length in 1073741824u64..4611686018427387903u64:
-        result = 0x11
+proc WriteVarInt62*(value: uint64): bool = 
+    result = true
 
 when isMainModule:
     import nativesockets, os
