@@ -1,12 +1,10 @@
-import streams, binaryparse, math
+import streams, binaryparse, math, strformat
 const
     PacketNumberLenInvalid*:uint8 = 0
     PacketNumberLen1*:uint8 = 1
     PacketNumberLen2*:uint8 = 2
     PacketNumberLen4*:uint8 = 4
     PacketNumberLen6*:uint8 = 6
-
-
 
 
 proc DecodePacketNumber*(packetNumberLength: uint8, 
@@ -18,11 +16,11 @@ proc DecodePacketNumber*(packetNumberLength: uint8,
     var pnHwin = uint64 pnWin div 2
     var pnMask = pnWin - 1
     var candidatePn = expectedPn and not pnMask or wirePacketNumber
+    result = candidatePn 
     if candidatePn <= expectedPn - pnHwin:
         result = candidatePn + pnWin
     if candidatePn > expectedPn + pnHwin and candidatePn > pnWin:
         result = candidatePn - pnWin
-    result = candidatePn + uint64 pow(2.0, packetNumberLength.float)
   
 proc delta(a, b :uint64): uint64 =
     if a < b :
@@ -78,9 +76,8 @@ proc getPacketNumberLength*(packetNumber: uint64): uint8 =
 when isMainModule:
     # should be 0xaa8309b3, 0xaa8309b3 - 0xaa82c9b3 = 2^14
     import strformat, math
-    var number = InferPacketNumber(14, 0xaa82f30e'u64, 0x9b3, 0)
-    echo fmt"{number:#x}"
-    number = DecodePacketNumber(14, 0xaa82f30e'u64, 0x9b3, 0)
+    # var number = InferPacketNumber(14, 0xaa82f30e'u64, 0x9b3, 0)
+    # echo fmt"{number:#x}"
+    var number = DecodePacketNumber(14, 0xaa82f30e'u64, 0x9b3, 0)
     echo fmt"{number :#x}"
-    echo getPacketNumberLength(0x9b3)
 
