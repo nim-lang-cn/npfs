@@ -37,21 +37,15 @@ var quicVersion1Salt* = @[0x9c'u8, 0x10, 0x8f, 0x98, 0x52,
 
 #  (where the constant concatenated to the end of each T(n) is a single octet.)
 
-proc hkdfExpand*(prk, info: string, l: int): seq[uint8] =
-    var 
-        expander = sha256.hmac(prk, info)
-        res: seq[uint8]
-        counter = 1'u8
-        prev: string
-    var p = res
-    if l > 255 * 32:
+proc hkdfExpand*(prk, info: string, length: int): seq[uint8] =
+    var prev: string
+    if length > 255 * sha256.sizeDigest:
         echo "hkdf: requested too much output"
     
-    while len(p) > 0 :
-        prev = $sha256.hmac(prk, cast[string](prev) & info & $counter)
-        counter.inc
-        copyMem(addr p, addr prev[0], prev.len)
-    result = @res
+    result.setLen length
+    for i in 1..length :
+        prev = $sha256.hmac(prk, cast[string](prev) & info & $i)
+        copyMem(addr result[0], addr prev[0], prev.len)
 
 proc hkdfExpandLabel*(secret: string, label: string, length: int): seq[byte] =
     const prefix = "quic "
