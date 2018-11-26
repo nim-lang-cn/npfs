@@ -1,6 +1,6 @@
 import binaryparse, streams, math, strformat, strutils, algorithm, sequtils
 # import packet_number
-
+import varint
 # createParser(QuicVersionNegotiationPacket):
 #     u8: headerType = 0x80
 #     u32: version = 0x0
@@ -103,12 +103,38 @@ proc readVarInt*(s:Stream): tuple[varint: uint64] =
     # echo fmt"varint:{result.varint}"
 
 proc writeVarInt*(s: Stream, input: var tuple[varint: uint64]) = 
-    var a  = @ (cast[ptr array[8,uint8]](addr input.varint)[])
-    a.reverse()
-    for c in a:
-        s.write c 
+    var buff : seq[uint8]
+    var i = cast[ptr array[8,uint8]](addr input.varint)[]
+    if input.varint <= maxVarInt1:
+        # buff.add uint8(i) 
+        s.writeDataBE(addr i[0], 1)
+    elif input.varint <= maxVarInt2:
+        # buff = @[i shl 8 or 0x40, i].mapIt(it.uint8)
+        var b1 = i[0] or 0x40
+        s.writeDataBE(addr(b1), 1)
+        s.writeDataBE(addr i[1], 1)
+    elif input.varint <= maxVarInt4:
+        var b1 = i[0] or 0x80
+        s.writeDataBE(addr b1, 1)
+        s.writeDataBE(addr i[1], 1)
+        s.writeDataBE(addr i[2], 1)
+        s.writeDataBE(addr i[3], 1)
+        # buff = @[i shl 24 or 0x80, i shl 16, i shl 8, i].mapIt(it.uint8)
+    elif input.varint <= maxVarInt8:
+        # buff = @[i shl 56 or 0xc0, i shl 48, i shl 40, i shl 32, 
+                #  i shl 24, i shl 16, i shl 8, i].mapIt(it.uint8)
+        var b1 = i[0] or 0xc0
+        s.writeDataBE(addr b1, 1)
+        s.writeDataBE(addr i[1], 1)
+        s.writeDataBE(addr i[2], 1)
+        s.writeDataBE(addr i[3], 1)
+        s.writeDataBE(addr i[4], 1)
+        s.writeDataBE(addr i[5], 1)
+        s.writeDataBE(addr i[6], 1)
+        s.writeDataBE(addr i[7], 1)
 
-var tokenEncoding = (get: (proc(s:Stream): tuple[varint: uint64] = s.readVarInt),
+
+var variableLengthEncoding = (get: (proc(s:Stream): tuple[varint: uint64] = s.readVarInt),
     put: (proc (s: Stream, input: var tuple[varint: uint64]) = s.writeVarInt(input)))
 
 createParser(QuicInitialPacket):
@@ -118,13 +144,13 @@ createParser(QuicInitialPacket):
     u4: scil
     u8: dcid[if dcil != 0: dcil+3 else: 0]
     u8: scid[if scil != 0: scil+3 else: 0]
-    *tokenEncoding: token
+    *variableLengthEncoding: token
     u16: length
     *packetNumber: inner
     # u32: payload[]
 
 proc uintToArray(i: var uint64): seq[uint8] = 
-    result  = @ (cast[ptr array[8,uint8]](addr i)[])
+    result  = @cast[array[8,uint8]](i)
     result.reverse()
     echo result.mapIt(it.toHex)
 
