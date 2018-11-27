@@ -1,5 +1,9 @@
-import random, math
+import random
 
-
-proc generateConnectionID*(len: uint8): uint64 = 
-    result = rand(pow(2.0, 4.0).uint64..pow(2.0,18.0).uint64)
+proc generateConnectionID*(len: uint8 = 0): seq[uint8] = 
+    randomize()
+    for i in 1..rand(4..18):
+        result.add uint8 rand(0..255)
+    
+when isMainModule:
+    echo generateConnectionID().len

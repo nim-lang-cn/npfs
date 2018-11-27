@@ -74,10 +74,7 @@ proc getPacketNumberLength*(packetNumber: uint64): uint8 =
         result = PacketNumberLen4
 
 when isMainModule:
-    # should be 0xaa8309b3, 0xaa8309b3 - 0xaa82c9b3 = 2^14
     import strformat, math
-    # var number = InferPacketNumber(14, 0xaa82f30e'u64, 0x9b3, 0)
-    # echo fmt"{number:#x}"
     var number = DecodePacketNumber(14, 0xaa82f30e'u64, 0x9b3, 0)
     echo fmt"{number :#x}"
 
