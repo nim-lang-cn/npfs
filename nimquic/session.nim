@@ -118,6 +118,7 @@ type Session*[T] = object
     logger: uint64
 
 
+
 var size = ss.getPosition()
 var outs = ss.readAll().cstring
 let sockfd = createNativeSocket(Domain.AF_INET, SOCK_DGRAM, IPPROTO_UDP)

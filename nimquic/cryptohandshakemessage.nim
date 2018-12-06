@@ -4,7 +4,7 @@ type CryptoHandshakeMessage* = object
     tag: uint32
     tagValueMap: Table[uint32, string]
     minimumSize: uint
-    serialized: QuicData
+    serialized: string
 
 proc clear(message: CryptoHandshakeMessage) = discard
 proc getSerialized(message: CryptoHandshakeMessage): QuicData = discard
