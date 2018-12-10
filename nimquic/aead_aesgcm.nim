@@ -16,8 +16,8 @@ type AeadAESGCM*[T] = object
 
 proc computeSecrets*(HashType: typedesc ,connID: string): tuple[clientSecret, serverSecret: seq[uint8]] =
     var initialSecret = hkdfExtract(HashType, cast[string](quicVersion1Salt), connID)
-    result.clientSecret = hkdfExpandLabel(HashType,initialSecret, "client in", sha256.sizeDigest)
-    result.serverSecret = hkdfExpandLabel(HashType,initialSecret, "server in", sha256.sizeDigest)
+    result.clientSecret = hkdfExpandLabel(HashType, initialSecret.data, "client in", sha256.sizeDigest)
+    result.serverSecret = hkdfExpandLabel(HashType, initialSecret.data, "server in", sha256.sizeDigest)
 
 proc computeAEADKeyAndIV*(HashType: typedesc,secret: string): tuple[key,iv: string] = 
     result.key = hkdfExpandLabel(HashType,secret, "key", 16)
@@ -32,9 +32,9 @@ proc newAEAD*[T](HashType: typedesc ,connectionId: string, pers: int): AeadAESGC
     else:
         mySecret = serverSecret
         otherSecret = clientSecret
-    var (myKey, myIV) = computeAEADKeyAndIV(HashType,mySecret)
-    var (otherKey, otherIV) = computeAEADKeyAndIV(HashType,otherSecret)
-    var ectx, dctx: GCM[aes1T28]
+    var (myKey, myIV) = computeAEADKeyAndIV(HashType, mySecret)
+    var (otherKey, otherIV) = computeAEADKeyAndIV(HashType, otherSecret)
+    var ectx, dctx: GCM[aes128]
     var aad = "Alice Authentication Data"
     ectx.init(myKey, myIV, aad)
     dctx.init(otherKey, otherIV, aad)
@@ -68,6 +68,3 @@ when isMainModule:
     var (clientSecret, serverSecret) = computeSecrets(sha256, connStr)
     echo clientSecret
     echo serverSecret
-
-    #var clientSecret = [159 83 100 87 243 42 30 10 232 100 188 179 202 241 35 81 16 99 14 29 31 179 56 53 189 5 65 112 249 155 247 220]
-    #var severSecret = [176 135 220 215 71 141 218 138 133 143 191 61 96 92 136 133 134 192 163 169 135 84 35 173 79 17 79 11 163 142 90 46]
