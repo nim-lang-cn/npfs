@@ -54,7 +54,7 @@ var packetNumber* = (get: (proc (s: Stream): tuple[number: uint64] =
             s.write input.number and 0x7
         elif input.number <= 16383'u64 :
             s.write uint8 input.number shr 8 and 0x3f or 0x80
-            s.write uint8 input.number
+            s.write input.number.uint8
         elif input.number <= 1073741823'u64 :
             s.write uint8 input.number shr 24 and 0x3f or 0xc0
             s.write uint8 input.number shr 16
@@ -68,7 +68,7 @@ var packetNumber* = (get: (proc (s: Stream): tuple[number: uint64] =
 proc readVarInt*(s:Stream): tuple[varint: uint64] = 
     var firstOctet:uint8 = 0
     s.readDataLE(firstOctet.addr, 1)
-    var length = 1 shl (firstOctet and 0xC shr 6)
+    var length = 1 shl (firstOctet and uint(0xC shr 6))
     var b1: uint8 = firstOctet and (0xff - 0xc0)
     if length == 1:
         result.varint = b1
@@ -138,22 +138,20 @@ proc uintToArray(i: var uint64): seq[uint8] =
     result.reverse()
     echo result.mapIt(it.toHex)
 
-when isMainModule:
-    var packet :typeGetter(QuicInitialPacket)
-    packet.headerType = 0xff
-    packet.version = 0
-    packet.dcil = 1
-    packet.scil = 1
-    packet.dcid = @[1'u8,2,3,4]
-    packet.scid = @[5'u8,6,7,8]
-    packet.token = (varint: 151288809941952652'u64)
-    packet.length = 4'u16
-    packet.inner = (number: 0x9b3'u64)
+# when isMainModule:
+#     var packet :typeGetter(QuicInitialPacket)
+#     packet.headerType = 0xff
+#     packet.version = 0
+#     packet.dcil = 1
+#     packet.scil = 1
+#     packet.dcid = @[1'u8,2,3,4]
+#     packet.scid = @[5'u8,6,7,8]
+#     packet.token = (varint: 151288809941952652'u64)
+#     packet.length = 4'u16
+#     packet.inner = (number: 0xb3'u64)
 
-    var ss = newStringStream()
-    QuicInitialPacket.put(ss, packet)
-    ss.setPosition 0
-    echo cast[seq[byte]](ss.readAll())
-    ss.setPosition(0)
-    var inData = QuicInitialPacket.get(ss)
-    echo inData.inner.number
+#     var ss = newStringStream()
+#     QuicInitialPacket.put(ss, packet)
+#     ss.setPosition 0
+#     ss.setPosition(0)
+#     var inData = QuicInitialPacket.get(ss)

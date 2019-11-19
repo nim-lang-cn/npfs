@@ -3,7 +3,6 @@ include parsers
 
 const cap = 30
 var buf : array[cap, byte]
-var packet: string
 
 proc toStr*(a: openArray[byte]): string =
     result = newString len a
@@ -15,7 +14,7 @@ proc main() =
     let sockfd = createNativeSocket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
     defer: sockfd.close()
 
-    var peer = getAddrInfo("0.0.0.0", Port 1234, sockType = SOCK_DGRAM, protocol = IPPROTO_UDP)
+    var peer = getAddrInfo("0.0.0.0", Port(5000), sockType = SOCK_DGRAM, protocol = IPPROTO_UDP)
     if sockfd.bindAddr(peer.ai_addr, SockLen peer.ai_addrlen) < 0i32:
         freeAddrInfo(peer)
         raiseOSError(osLastError())
@@ -31,12 +30,11 @@ proc main() =
 
     while true:
         var bytes = recv(sockfd, addr buf , cap, 0)
-        echo buf
         var packet = toStr buf
         var ss = newStringStream(packet)
         try:
             var readData = QuicVersionNegotiationPacket.get(ss)
-            echo readData
+            echo "readData:" & $readData
         except:
             var e = getCurrentException()
             echo getStackTrace(e)

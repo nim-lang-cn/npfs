@@ -2,28 +2,33 @@ import nimcrypto
 import hkdf
 import endians, sequtils
 
-const 
+const
     PerspectiveServer = 1
     PerspectiveClient = 2
     gcmStandardNonceSize* = 12
     gcmBlockSize* = 16
 
 type AeadAESGCM*[T] = object
-    otherIV:   seq[uint8]
-    myIV:      seq[uint8]
+    otherIV: seq[uint8]
+    myIV: seq[uint8]
     encrypter: GCM[T]
     decrypter: GCM[T]
 
-proc computeSecrets*(HashType: typedesc ,connID: string): tuple[clientSecret, serverSecret: seq[uint8]] =
-    var initialSecret = hkdfExtract(HashType, cast[string](quicVersion1Salt), connID)
-    result.clientSecret = hkdfExpandLabel(HashType, initialSecret.data, "client in", sha256.sizeDigest)
-    result.serverSecret = hkdfExpandLabel(HashType, initialSecret.data, "server in", sha256.sizeDigest)
+proc computeSecrets*(HashType: typedesc, connID: string): tuple[clientSecret,
+        serverSecret: seq[uint8]] =
+    var initialSecret = hkdfExtract(HashType, cast[string](quicVersion1Salt),
+            connID)
+    result.clientSecret = hkdfExpandLabel(HashType, initialSecret.data,
+            "client in", sha256.sizeDigest)
+    result.serverSecret = hkdfExpandLabel(HashType, initialSecret.data,
+            "server in", sha256.sizeDigest)
 
-proc computeAEADKeyAndIV*(HashType: typedesc,secret: string): tuple[key,iv: string] = 
-    result.key = hkdfExpandLabel(HashType,secret, "key", 16)
-    result.iv = hkdfExpandLabel(HashType,secret, "iv", 12)
+proc computeAEADKeyAndIV*(HashType: typedesc, secret: string): tuple[key,
+        iv: string] =
+    result.key = hkdfExpandLabel(HashType, secret, "key", 16)
+    result.iv = hkdfExpandLabel(HashType, secret, "iv", 12)
 
-proc newAEAD*[T](HashType: typedesc ,connectionId: string, pers: int): AeadAESGCM[T] =  
+proc newAEAD*[T](HashType: typedesc, connectionId: string, pers: int): AeadAESGCM[T] =
     var (clientSecret, serverSecret) = computeSecrets(HashType, connectionId)
     var mySecret, otherSecret: string
     if pers == PerspectiveClient:
@@ -55,8 +60,8 @@ proc seal*[T](aead: AeadAESGCM[T], plaintext: string, aad: string): seq[uint8] =
 
 
 proc open*[T](aead: AeadAESGCM[T], encText: string, aad: string): seq[uint8] =
-    var dtag: array[aes128.sizeBlock, uint8] 
-    result= newSeq[uint8](len(aad))
+    var dtag: array[aes128.sizeBlock, uint8]
+    result = newSeq[uint8](len(aad))
     aead.dctx.dencrypt(encText, result)
     aead.dctx.getTag(dtag)
     aead.dctx.clear()

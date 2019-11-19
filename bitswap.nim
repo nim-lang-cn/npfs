@@ -1,4 +1,4 @@
-import packedjson, tables, wantmanager, blocks, interfaces, process
+import json, tables, wantmanager, blocks, interfaces, process
 import exchange/bitswap/network/interfaces
 import exchange/bitswap/decision/engine
 import exchange/bitswap/notifications/notifications
