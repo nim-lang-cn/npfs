@@ -1,39 +1,39 @@
-import nativesockets, os, binaryparse, streams
+import net, os, binaryparse, streams
 include parsers
 
-const cap = 30
+const cap = 1500
 var buf : array[cap, byte]
 
 proc toStr*(a: openArray[byte]): string =
-    result = newString len a
+    result = newString a.len
     for idx, val in a:
       result[idx] = char val
 
 proc main() = 
 
-    let sockfd = createNativeSocket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
-    defer: sockfd.close()
+    let socket = newSocket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
+    defer: socket.close()
 
-    var peer = getAddrInfo("0.0.0.0", Port(5000), sockType = SOCK_DGRAM, protocol = IPPROTO_UDP)
-    if sockfd.bindAddr(peer.ai_addr, SockLen peer.ai_addrlen) < 0i32:
-        freeAddrInfo(peer)
-        raiseOSError(osLastError())
+    socket.bindAddr(Port(5000), "0.0.0.0")
 
-    createParser(QuicVersionNegotiationPacket):
-        u8: headerType 
-        u32: version 
+    createParser(QuicInitialPacket):
+        u8: headerType = 0b11000000
+        u32: version
         u4: dcil 
         u4: scil
         u8: dcid[if dcil != 0: dcil+3 else: 0]
         u8: scid[if scil != 0: scil+3 else: 0]
-        u32: supportedVersions[]
+        *variableLengthEncoding: token
+        u16: length
+        *packetNumber: inner
+        *cryptoFrame : frame
 
     while true:
-        var bytes = recv(sockfd, addr buf , cap, 0)
+        var bytes = socket.recv(addr buf, cap)
         var packet = toStr buf
         var ss = newStringStream(packet)
         try:
-            var readData = QuicVersionNegotiationPacket.get(ss)
+            var readData = QuicInitialPacket.get(ss)
             echo "readData:" & $readData
         except:
             var e = getCurrentException()

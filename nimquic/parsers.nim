@@ -1,6 +1,10 @@
 import binaryparse, streams, math, strformat, strutils, algorithm, sequtils
-# import packet_number
-import varint
+
+const 
+    maxVarInt1*: uint64 = 63
+    maxVarInt2* = 16383
+    maxVarInt4* = 1073741823
+    maxVarInt8* = 4611686018427387903'u64
 
 # createParser(QuicVersionNegotiationPacket):
 #     u8: headerType = 0x80
@@ -119,6 +123,8 @@ proc writeVarInt*(s: Stream, input: var tuple[varint: uint64]) =
         s.writeDataBE(addr i[6], 1)
         s.writeDataBE(addr i[7], 1)
 
+var streamOffset: uint64
+
 var variableLengthEncoding* = (get: (proc(s:Stream): tuple[varint: uint64] = s.readVarInt),
     put: (proc (s: Stream, input: var tuple[varint: uint64]) = s.writeVarInt(input)))
 
@@ -133,7 +139,7 @@ var cryptoFrame* = (get:(proc(s:Stream): tuple[varint: uint64] =
                             s.setPosition(pos + 1)
                             discard s.readData(addr result, length.int)
                             ),
-                    put:(proc (s: Stream, input: var tuple[varint: uint64]) = s.writeVarInt(input)))
+                    put:(proc (s: Stream, input: var tuple[varint: uint64]) = echo input))
 
 createParser(QuicInitialPacket):
     u8: headerType = 0b11000000
