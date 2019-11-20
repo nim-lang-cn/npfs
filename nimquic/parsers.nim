@@ -123,11 +123,20 @@ var variableLengthEncoding* = (get: (proc(s:Stream): tuple[varint: uint64] = s.r
     put: (proc (s: Stream, input: var tuple[varint: uint64]) = s.writeVarInt(input)))
 
 
-var crypto* = (get:(proc(s:Stream): tuple[varint: uint64] = s.readVarInt),
-                put:(proc (s: Stream, input: var tuple[varint: uint64]) = s.writeVarInt(input)))
+var cryptoFrame* = (get:(proc(s:Stream): tuple[varint: uint64] = 
+                            var firstOctet:uint8 = 0
+                            var offset = s.readVarInt()
+                            var pos = s.getPosition()
+                            s.setPosition(pos + 1)
+                            var length = s.readVarInt().varint
+                            pos = s.getPosition()
+                            s.setPosition(pos + 1)
+                            discard s.readData(addr result, length.int)
+                            ),
+                    put:(proc (s: Stream, input: var tuple[varint: uint64]) = s.writeVarInt(input)))
 
 createParser(QuicInitialPacket):
-    u8: headerType = 0xff
+    u8: headerType = 0b11000000
     u32: version
     u4: dcil 
     u4: scil
@@ -136,7 +145,7 @@ createParser(QuicInitialPacket):
     *variableLengthEncoding: token
     u16: length
     *packetNumber: inner
-    *crypto :cryptoFrame
+    *cryptoFrame : frame
 
 proc uintToArray(i: var uint64): seq[uint8] = 
     result  = @cast[array[8,uint8]](i)
