@@ -122,6 +122,10 @@ proc writeVarInt*(s: Stream, input: var tuple[varint: uint64]) =
 var variableLengthEncoding* = (get: (proc(s:Stream): tuple[varint: uint64] = s.readVarInt),
     put: (proc (s: Stream, input: var tuple[varint: uint64]) = s.writeVarInt(input)))
 
+
+var crypto* = (get:(proc(s:Stream): tuple[varint: uint64] = s.readVarInt),
+                put:(proc (s: Stream, input: var tuple[varint: uint64]) = s.writeVarInt(input)))
+
 createParser(QuicInitialPacket):
     u8: headerType = 0xff
     u32: version
@@ -132,6 +136,7 @@ createParser(QuicInitialPacket):
     *variableLengthEncoding: token
     u16: length
     *packetNumber: inner
+    *crypto :cryptoFrame
 
 proc uintToArray(i: var uint64): seq[uint8] = 
     result  = @cast[array[8,uint8]](i)

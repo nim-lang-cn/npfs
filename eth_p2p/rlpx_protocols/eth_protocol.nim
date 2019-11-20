@@ -21,8 +21,8 @@ type
     number: uint
 
   NewBlockAnnounce* = object
-    header: BlockHeader
-    body {.rlpInline.}: BlockBody
+    header*: BlockHeader
+    body* {.rlpInline.}: BlockBody
 
   PeerState = ref object
     initialized*: bool
@@ -36,9 +36,9 @@ const
   maxHeadersFetch* = 192
   protocolVersion* = 63
 
-rlpxProtocol eth(version = protocolVersion,
-                 peerState = PeerState,
-                 useRequestIds = false):
+p2pProtocol eth(version = protocolVersion,
+                peerState = PeerState,
+                useRequestIds = false):
 
   onPeerConnected do (peer: Peer):
     let
@@ -54,7 +54,7 @@ rlpxProtocol eth(version = protocolVersion,
 
     let m = await peer.nextMsg(eth.status)
     if m.networkId == network.networkId and m.genesisHash == chain.genesisHash:
-      debug "suitable peer", peer
+      trace "suitable peer", peer
     else:
       raise newException(UselessPeerError, "Eth handshake params mismatch")
     peer.state.initialized = true
@@ -75,7 +75,7 @@ rlpxProtocol eth(version = protocolVersion,
     discard
 
   requestResponse:
-    proc getBlockHeaders(peer: Peer, request: BlocksRequest) =
+    proc getBlockHeaders(peer: Peer, request: BlocksRequest) {.gcsafe.} =
       if request.maxResults > uint64(maxHeadersFetch):
         await peer.disconnect(BreachOfProtocol)
         return
@@ -85,7 +85,7 @@ rlpxProtocol eth(version = protocolVersion,
     proc blockHeaders(p: Peer, headers: openarray[BlockHeader])
 
   requestResponse:
-    proc getBlockBodies(peer: Peer, hashes: openarray[KeccakHash]) =
+    proc getBlockBodies(peer: Peer, hashes: openarray[KeccakHash]) {.gcsafe.} =
       if hashes.len > maxBodiesFetch:
         await peer.disconnect(BreachOfProtocol)
         return

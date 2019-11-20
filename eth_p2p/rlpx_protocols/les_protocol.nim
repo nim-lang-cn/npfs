@@ -75,7 +75,7 @@ const
   keyAnnounceType = "announceType"
   keyAnnounceSignature = "sign"
 
-proc initProtocolState(network: LesNetwork, node: EthereumNode) =
+proc initProtocolState(network: LesNetwork, node: EthereumNode) {.gcsafe.} =
   network.peers = initSet[LesPeer]()
 
 proc addPeer(network: LesNetwork, peer: LesPeer) =
@@ -86,7 +86,7 @@ proc removePeer(network: LesNetwork, peer: LesPeer) =
   network.delistFromFlowControl peer
   network.peers.excl peer
 
-template costQuantity(quantityExpr: int, max: int) {.pragma.}
+template costQuantity(quantityExpr, max: untyped) {.pragma.}
 
 proc getCostQuantity(fn: NimNode): tuple[quantityExpr, maxQuantity: NimNode] =
   # XXX: `getCustomPragmaVal` doesn't work yet on regular nnkProcDef nodes
@@ -158,12 +158,12 @@ func getRequiredValue(values: openarray[KeyValuePair],
   raise newException(HandshakeError,
                      "Required handshake field " & key & " missing")
 
-rlpxProtocol les(version = lesVersion,
-                 peerState = LesPeer,
-                 networkState = LesNetwork,
-                 outgoingRequestDecorator = outgoingRequestDecorator,
-                 incomingRequestDecorator = incomingRequestDecorator,
-                 incomingResponseThunkDecorator = incomingResponseDecorator):
+p2pProtocol les(version = lesVersion,
+                peerState = LesPeer,
+                networkState = LesNetwork,
+                outgoingRequestDecorator = outgoingRequestDecorator,
+                incomingRequestDecorator = incomingRequestDecorator,
+                incomingResponseThunkDecorator = incomingResponseDecorator):
 
   ## Handshake
   ##
@@ -301,7 +301,7 @@ rlpxProtocol les(version = lesVersion,
     proc getBlockBodies(
            peer: Peer,
            blocks: openarray[KeccakHash]) {.
-           costQuantity(blocks.len, max = maxBodiesFetch).} =
+           costQuantity(blocks.len, max = maxBodiesFetch), gcsafe.} =
 
       let blocks = peer.network.chain.getBlockBodies(blocks)
       await peer.blockBodies(reqId, updateBV(), blocks)

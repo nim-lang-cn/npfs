@@ -4,7 +4,7 @@ import
   private/types, rlpx, ../eth_p2p
 
 type
-  Action = proc (p: Peer, data: Rlp): Future[void]
+  Action = proc (p: Peer, data: Rlp): Future[void] {.gcsafe.}
 
   ProtocolMessagePair = object
     protocol: ProtocolInfo
@@ -28,6 +28,8 @@ type
 
     expectedMsgs: Deque[ExpectedMsg]
     receivedMsgsCount: int
+    when useSnappy:
+      useCompression*: bool
 
 var
   nextUnusedMockPort = 40304
@@ -85,10 +87,10 @@ proc expectationViolationMsg(mock: MockConf,
   result.add "\n"
 
 proc addProtocol(mock: MockConf, p: ProtocolInfo): ProtocolInfo =
-  new result
+  result = create ProtocolInfoObj
   deepCopy(result[], p[])
 
-  proc incomingMsgHandler(p: Peer, receivedMsgId: int, rlp: Rlp): Future[void] =
+  proc incomingMsgHandler(p: Peer, receivedMsgId: int, rlp: Rlp): Future[void] {.gcsafe.} =
     let (receivedMsgProto, receivedMsgInfo) = p.getMsgMetadata(receivedMsgId)
     let expectedMsgIdx = mock.receivedMsgsCount
 
@@ -126,7 +128,7 @@ proc addHandshake*(mock: MockConf, msg: auto) =
   msgInfo.protocol = mock.addProtocol(msgInfo.protocol)
   let expectedMsg = ExpectedMsg(msg: msgInfo, response: reply(msg))
 
-  when msg is p2p.hello:
+  when msg is devp2p.hello:
     devp2pHandshake = expectedMsg
   else:
     mock.handshakes.add expectedMsg
@@ -152,6 +154,12 @@ macro expect*(mock: MockConf, MsgType: type, handler: untyped = nil): untyped =
     newCall(bindSym"makeProtoMsgPair", MsgType.getType),
     newCall(bindSym"toAction", handler))
 
+template compression(m: MockConf): bool =
+  when useSnappy:
+    m.useCompression
+  else:
+    false
+
 proc newMockPeer*(userConfigurator: proc (m: MockConf)): EthereumNode =
   var mockConf = new MockConf
   mockConf.keys = newKeyPair()
@@ -169,7 +177,8 @@ proc newMockPeer*(userConfigurator: proc (m: MockConf)): EthereumNode =
                              mockConf.networkId,
                              mockConf.chain,
                              mockConf.clientId,
-                             addAllCapabilities = false)
+                             addAllCapabilities = false,
+                             mockConf.compression())
 
   mockConf.handshakes.sort do (lhs, rhs: ExpectedMsg) -> int:
     # this is intentially sorted in reverse order, so we
@@ -191,7 +200,7 @@ proc newMockPeer*(userConfigurator: proc (m: MockConf)): EthereumNode =
       proc sendHello(p: Peer, data: Rlp) {.async.} =
         await p.hello(devp2pVersion,
                       mockConf.clientId,
-                      node.rlpxCapabilities,
+                      node.capabilities,
                       uint(node.address.tcpPort),
                       node.keys.pubkey.getRaw())
 
@@ -199,7 +208,6 @@ proc newMockPeer*(userConfigurator: proc (m: MockConf)): EthereumNode =
         msg: makeProtoMsgPair(p2p.hello),
         response: sendHello)
 
-  node.initProtocolStates()
   node.startListening()
   return node
 
