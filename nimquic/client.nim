@@ -3,14 +3,13 @@ include parsers
 
 
 proc main() = 
-    let socket = newSocket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
 
     var cryptoFrame: typeGetter(CryptoFrame)
     cryptoFrame.offSet = 1
     cryptoFrame.length = 10
     cryptoFrame.data = toSeq 1'u8..9'u8
 
-    var initialPacket :typeGetter(QuicInitialPacket)
+    var initialPacket: typeGetter(QuicInitialPacket)
     initialPacket.headerType = 0b1100_0000
     initialPacket.version = 1
     initialPacket.dcil = 1
@@ -26,7 +25,11 @@ proc main() =
     QuicInitialPacket.put(ss,initialPacket)
     ss.setPosition(0)
     var buff = ss.readAll()
-    echo cast[seq[uint8]](buff)
-    socket.sendTo("127.0.0.1", Port(5000), addr buff[0], buff.len)
+    var content = cast[seq[uint8]](buff)
+    
+    echo content.len
+    let socket = newSocket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
+    socket.sendTo("127.0.0.1", Port(5000), addr buff[0], content.len)
 
 main()
+

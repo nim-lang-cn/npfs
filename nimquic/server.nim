@@ -2,7 +2,6 @@ import net, os, binaryparse, streams
 include parsers
 
 const cap = 1500
-var buf : array[cap, byte]
 
 proc toStr*(a: openArray[byte]): string =
     result = newString a.len
@@ -10,22 +9,20 @@ proc toStr*(a: openArray[byte]): string =
       result[idx] = char val
 
 proc main() = 
+
     let socket = newSocket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
     defer: socket.close()
 
-    var file: File
-    echo file.open(socket.getFd().FileHandle, fmReadWrite)
-    
-    var fs = newFileStream(file)
     socket.bindAddr(Port(5000), "0.0.0.0")
     while true:
-        # var bytes = socket.recv(addr buf, cap)
-        # var packet = toStr buf
-        # echo packet
-        # var packet = fs.readAll()
-        # var ss = newStringStream(packet)
+        var
+            address: string
+            buf: string
+            port: Port
+        var bytes = socket.recvFrom(buf, cap, address, port)
+        var ss = newStringStream(buf)
         try:
-            var readData = QuicInitialPacket.get(fs)
+            var readData = QuicInitialPacket.get(ss)
             echo "readData:" & $readData
         except:
             var e = getCurrentException()

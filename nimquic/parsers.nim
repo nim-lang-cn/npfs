@@ -40,36 +40,6 @@ var packetNumber* = (get: (proc (s: Stream): tuple[number: uint64] =
     )
 )
 
-
-createParser(QuicVersionNegotiationPacket):
-    u8: headerType
-    u32: version
-    u4: dcil 
-    u4: scil
-    u8: dcid[if dcil != 0: dcil+3 else: 0]
-    u8: scid[if scil != 0: scil+3 else: 0]
-    u32: supportedVersions[]
-
-createParser(QuicRetryPacket):
-    u8: headerType
-    u32: version
-    u4: dcil
-    u4: scil
-    u8: dcid[if dcil != 0: dcil+3 else: 0]
-    u8: scid[if scil != 0: scil+3 else: 0]
-    u8: odcil
-    u8: odci[odcil]
-    u32: retryToken
-
-createParser(QuicHandshakePacket):
-    u8: headerType
-    u32: version
-    u4: dcil
-    u4: scil
-    u8: dcid[if dcil != 0: dcil+3 else: 0]
-    u8: scid[if scil != 0: scil+3 else: 0]
-    *packetNumber: inner
-
 proc readVarInt*(s:Stream): tuple[varint: uint64] = 
     var firstOctet:uint8 = 0
     s.readDataLE(firstOctet.addr, 1)
@@ -128,23 +98,6 @@ proc writeVarInt*(s: Stream, input: var tuple[varint: uint64]) =
 var variableLengthEncoding* = (get: (proc(s:Stream): tuple[varint: uint64] = s.readVarInt),
     put: (proc (s: Stream, input: var tuple[varint: uint64]) = s.writeVarInt(input)))
 
-
-# var cryptoFrame* = (get:(proc(s:Stream): tuple[varint: uint64] = 
-#                             var firstOctet:uint8 = 0
-#                             if not s.isNil :
-#                                 var offset = s.readVarInt()
-#                                 var pos = s.getPosition()
-#                                 s.setPosition(pos + 1)
-#                                 cryptoFrameLength = s.readVarInt().varint
-#                                 pos = s.getPosition()
-#                                 s.setPosition(pos + 1)
-#                                 discard s.readData(addr result, cryptoFrameLength.int)
-#                             ),
-#                     put:(proc (s: Stream, input: var tuple[varint: uint64]) = 
-#                             s.writeData(addr cryptoFrameOffset, 2)
-#                             s.writeData(addr cryptoFrameLength, 2)
-#                             s.writeData(cryptoFrameData, cryptoFrameLength.int)
-#                             ))
 
 createParser(CryptoFrame):
     u16: offset
