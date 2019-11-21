@@ -6,35 +6,6 @@ const
     maxVarInt4* = 1073741823
     maxVarInt8* = 4611686018427387903'u64
 
-# createParser(QuicVersionNegotiationPacket):
-#     u8: headerType = 0x80
-#     u32: version = 0x0
-#     u4: dcil 
-#     u4: scil
-#     u8: dcid[if dcil != 0: dcil+3 else: 0]
-#     u8: scid[if scil != 0: scil+3 else: 0]
-#     u32: supportedVersions[]
-
-# createParser(QuicRetryPacket):
-#     u8: headerType = 0xfe
-#     u32: version
-#     u4: dcil
-#     u4: scil
-#     u8: dcid[if dcil != 0: dcil+3 else: 0]
-#     u8: scid[if scil != 0: scil+3 else: 0]
-#     u8: odcil
-#     u8: odci[odcil]
-#     u32: retryToken
-
-# createParser(QuicHandshakePacket):
-#     u8: headerType = 0xfd
-#     u32: version
-#     u4: dcil
-#     u4: scil
-#     u8: dcid[if dcil != 0: dcil+3 else: 0]
-#     u8: scid[if scil != 0: scil+3 else: 0]
-#     *packetNumber: inner
-
 
 var packetNumber* = (get: (proc (s: Stream): tuple[number: uint64] =
     var firstOctet = 0
@@ -68,6 +39,36 @@ var packetNumber* = (get: (proc (s: Stream): tuple[number: uint64] =
 
     )
 )
+
+
+createParser(QuicVersionNegotiationPacket):
+    u8: headerType
+    u32: version
+    u4: dcil 
+    u4: scil
+    u8: dcid[if dcil != 0: dcil+3 else: 0]
+    u8: scid[if scil != 0: scil+3 else: 0]
+    u32: supportedVersions[]
+
+createParser(QuicRetryPacket):
+    u8: headerType
+    u32: version
+    u4: dcil
+    u4: scil
+    u8: dcid[if dcil != 0: dcil+3 else: 0]
+    u8: scid[if scil != 0: scil+3 else: 0]
+    u8: odcil
+    u8: odci[odcil]
+    u32: retryToken
+
+createParser(QuicHandshakePacket):
+    u8: headerType
+    u32: version
+    u4: dcil
+    u4: scil
+    u8: dcid[if dcil != 0: dcil+3 else: 0]
+    u8: scid[if scil != 0: scil+3 else: 0]
+    *packetNumber: inner
 
 proc readVarInt*(s:Stream): tuple[varint: uint64] = 
     var firstOctet:uint8 = 0
@@ -123,26 +124,35 @@ proc writeVarInt*(s: Stream, input: var tuple[varint: uint64]) =
         s.writeDataBE(addr i[6], 1)
         s.writeDataBE(addr i[7], 1)
 
-var streamOffset: uint64
 
 var variableLengthEncoding* = (get: (proc(s:Stream): tuple[varint: uint64] = s.readVarInt),
     put: (proc (s: Stream, input: var tuple[varint: uint64]) = s.writeVarInt(input)))
 
 
-var cryptoFrame* = (get:(proc(s:Stream): tuple[varint: uint64] = 
-                            var firstOctet:uint8 = 0
-                            var offset = s.readVarInt()
-                            var pos = s.getPosition()
-                            s.setPosition(pos + 1)
-                            var length = s.readVarInt().varint
-                            pos = s.getPosition()
-                            s.setPosition(pos + 1)
-                            discard s.readData(addr result, length.int)
-                            ),
-                    put:(proc (s: Stream, input: var tuple[varint: uint64]) = echo input))
+# var cryptoFrame* = (get:(proc(s:Stream): tuple[varint: uint64] = 
+#                             var firstOctet:uint8 = 0
+#                             if not s.isNil :
+#                                 var offset = s.readVarInt()
+#                                 var pos = s.getPosition()
+#                                 s.setPosition(pos + 1)
+#                                 cryptoFrameLength = s.readVarInt().varint
+#                                 pos = s.getPosition()
+#                                 s.setPosition(pos + 1)
+#                                 discard s.readData(addr result, cryptoFrameLength.int)
+#                             ),
+#                     put:(proc (s: Stream, input: var tuple[varint: uint64]) = 
+#                             s.writeData(addr cryptoFrameOffset, 2)
+#                             s.writeData(addr cryptoFrameLength, 2)
+#                             s.writeData(cryptoFrameData, cryptoFrameLength.int)
+#                             ))
+
+createParser(CryptoFrame):
+    u16: offset
+    u16: length
+    u8: data[]
 
 createParser(QuicInitialPacket):
-    u8: headerType = 0b11000000
+    u8: headerType
     u32: version
     u4: dcil 
     u4: scil
@@ -151,7 +161,7 @@ createParser(QuicInitialPacket):
     *variableLengthEncoding: token
     u16: length
     *packetNumber: inner
-    *cryptoFrame : frame
+    *CryptoFrame: frame
 
 proc uintToArray(i: var uint64): seq[uint8] = 
     result  = @cast[array[8,uint8]](i)
