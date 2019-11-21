@@ -10,18 +10,22 @@ proc toStr*(a: openArray[byte]): string =
       result[idx] = char val
 
 proc main() = 
-
     let socket = newSocket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
     defer: socket.close()
 
+    var file: File
+    echo file.open(socket.getFd().FileHandle, fmReadWrite)
+    
+    var fs = newFileStream(file)
     socket.bindAddr(Port(5000), "0.0.0.0")
     while true:
-        var bytes = socket.recv(addr buf, cap)
-        var packet = toStr buf
-        echo packet
-        var ss = newStringStream(packet)
+        # var bytes = socket.recv(addr buf, cap)
+        # var packet = toStr buf
+        # echo packet
+        # var packet = fs.readAll()
+        # var ss = newStringStream(packet)
         try:
-            var readData = QuicInitialPacket.get(ss)
+            var readData = QuicInitialPacket.get(fs)
             echo "readData:" & $readData
         except:
             var e = getCurrentException()
