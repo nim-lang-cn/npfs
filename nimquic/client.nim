@@ -56,8 +56,8 @@ proc main() =
     
     ss.setPosition(8)
     var pnOffSet = 8 +  variableLengthEncoding.get(ss).varint + 2
-    for i in packet[pnOffSet..pnOffSet+pnLen]:
-        packet[pnOffSet..pnOffSet+pnLen + i] = packet[pnOffSet..pnOffSet+pnLen + i] xor mask[1..1+pnLen+i]
+    for i in 0..pnLen:
+        packet[pnOffSet + i] = packet[pnOffSet + i] xor mask[1+i]
 
 
     var crypto = clientAead.seal($sample, $packet)
