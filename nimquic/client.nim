@@ -23,8 +23,8 @@ proc main() =
     var ss = newStringStream()
     QuicInitialPacket.put(ss,initialPacket)
     ss.setPosition(0)
-    var packet = ss.readAll()
-    
+    var buff = ss.readAll()
+    var packet = cast[seq[byte]](buff)
 
     var sampleOffset = 1 + connId.len + 4
     echo sampleOffset
@@ -42,15 +42,25 @@ proc main() =
     var ectx, dctx: ECB[aes128]
     var key: array[aes128.sizeKey, byte]
     var plainText: array[aes128.sizeBlock * 2, byte]
-    var encText: array[aes128.sizeBlock * 2, byte]
-    var ptrPlainText = cast[ptr byte](addr plainText[0])
-    var mask = cast[ptr byte](addr encText[0])
+    var mask: array[aes128.sizeBlock * 2, byte]
 
     ectx.init(clientHp)
-    ectx.encrypt(ptrPlainText, mask, sample.len.uint)
+    ectx.encrypt(addr plainText[0], addr mask[0], sample.len.uint)
     ectx.clear()
 
-    var crypto = clientAead.seal($sample, packet)
+    var pnLen:uint64 = packet[0].byte and 0x30 + 1
+    if (packet[0].int and 0x80) == 0x80:
+        packet[0] = packet[0] xor byte(mask[0] and 0x0f)
+    else:
+        packet[0] = packet[0] xor byte(mask[0] and 0x1f)
+    
+    ss.setPosition(8)
+    var pnOffSet = 8 +  variableLengthEncoding.get(ss).varint + 2
+    for i in packet[pnOffSet..pnOffSet+pnLen]:
+        packet[pnOffSet..pnOffSet+pnLen + i] = packet[pnOffSet..pnOffSet+pnLen + i] xor mask[1..1+pnLen+i]
+
+
+    var crypto = clientAead.seal($sample, $packet)
 
     let socket = newSocket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
     socket.sendTo("127.0.0.1", Port(5000), addr crypto[0], crypto.len)
