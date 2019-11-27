@@ -1,4 +1,4 @@
-import binaryparse, streams, math, strformat, strutils, algorithm, sequtils
+import binaryparse, streams, strutils, algorithm, sequtils
 
 const 
     maxVarInt1*: uint64 = 63
