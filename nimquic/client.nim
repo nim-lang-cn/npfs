@@ -9,35 +9,58 @@ proc main() =
     cryptoFrame.data = toSeq 1'u8..9'u8
 
     var initialPacket: typeGetter(QuicInitialPacket)
-    initialPacket.headerType = 0b1100_0000
-    initialPacket.version = 1
-    initialPacket.dcil = 1
-    initialPacket.scil = 1
-    initialPacket.dcid = @[1'u8,2,3,4]
-    initialPacket.scid = @[5'u8,6,7,8]
-    initialPacket.token = (varint: 151288809941952652'u64)
-    initialPacket.length = 4'u16
-    initialPacket.inner = (number: 0xb3'u64)
+    initialPacket.header.headerType = 0b1100_0011
+    initialPacket.header.version = 0xff000017'u32
+    initialPacket.header.dcil = 0x0
+    initialPacket.header.scil = 0x8
+    initialPacket.header.dcid = @[0x83'u8, 0x94, 0xc8, 0xf0, 0x3e, 0x51, 0x57, 0x08]
+    initialPacket.header.scid = @[0'u8]
+    initialPacket.header.token = (varint: 0'u64)
+    initialPacket.header.pnlength = 4 #449e 包号长度额外变长编码？
+    initialPacket.header.pn = (number: 0x2'u64)
     initialPacket.frame = (offSet: 1'u16, length:10'u16, data: toSeq 1'u8..9'u8)
 
-    var ss = newStringStream()
-    QuicInitialPacket.put(ss,initialPacket)
-    ss.setPosition(0)
-    var buff = ss.readAll()
-    var packet = cast[seq[byte]](buff)
+    var headerStream = newStringStream()
+    LongHeader.put(headerStream,initialPacket.header)
+    headerStream.setPosition(0)
+    var header = headerStream.readAll()
+    var headerPayload = cast[seq[byte]](header)
+    # c3ff000017088394c8f03e515708 0000 449e 00000002
+    # C3FF000017088394C8F03E515708 0000 449E 00000002
 
-    var sampleOffset = 1 + connId.len + 4
-    echo sampleOffset
+    var frameStream = newStringStream()
+    CryptoFrame.put(frameStream,initialPacket.frame)
+    frameStream.setPosition(0)
+    var frame = frameStream.readAll()
 
-    var sample = packet[sampleOffset..sampleOffset+15]
-    echo sample.len
 
     var connId = @[0x83'u8, 0x94, 0xc8, 0xf0, 0x3e, 0x51, 0x57, 0x08]
     var connStr = cast[string](connId)
     var (clientSecret, serverSecret) = computeSecrets(sha256, connStr)
+    echo "clientSecret:" & clientSecret.toHex
 
     var clientHp: seq[byte]
     var clientAead = sha256.newAEAD(aes128, connStr, PerspectiveClient, clientHp)
+
+    var cryptoAndPaddingPayload = @[0x06'u8,0x00,0x40,0xc4,0x01,0x00,0x00,0xc0,0x03,0x03,0x66,0x60,0x26,0x1f,0xf9,0x47,0xce,0xa4,0x9c,0xce,0x6c,0xfa,0xd6,0x87,0xf4,0x57,0xcf,0x1b,0x14,0x53,0x1b,0xa1,
+                                    0x41,0x31,0xa0,0xe8,0xf3,0x09,0xa1,0xd0,0xb9,0xc4,0x00,0x00,0x06,0x13,0x01,0x13,0x03,0x13,0x02,0x01,0x00,0x00,0x91,0x00,0x00,0x00,0x0b,0x00,0x09,0x00,0x00,0x06,
+                                    0x73,0x65,0x72,0x76,0x65,0x72,0xff,0x01,0x00,0x01,0x00,0x00,0x0a,0x00,0x14,0x00,0x12,0x00,0x1d,0x00,0x17,0x00,0x18,0x00,0x19,0x01,0x00,0x01,0x01,0x01,0x02,0x01,
+                                    0x03,0x01,0x04,0x00,0x23,0x00,0x00,0x00,0x33,0x00,0x26,0x00,0x24,0x00,0x1d,0x00,0x20,0x4c,0xfd,0xfc,0xd1,0x78,0xb7,0x84,0xbf,0x32,0x8c,0xae,0x79,0x3b,0x13,0x6f,
+                                    0x2a,0xed,0xce,0x00,0x5f,0xf1,0x83,0xd7,0xbb,0x14,0x95,0x20,0x72,0x36,0x64,0x70,0x37,0x00,0x2b,0x00,0x03,0x02,0x03,0x04,0x00,0x0d,0x00,0x20,0x00,0x1e,0x04,0x03,
+                                    0x05,0x03,0x06,0x03,0x02,0x03,0x08,0x04,0x08,0x05,0x08,0x06,0x04,0x01,0x05,0x01,0x06,0x01,0x02,0x01,0x04,0x02,0x05,0x02,0x06,0x02,0x02,0x02,0x00,0x2d,0x00,0x02,
+                                    0x01,0x01,0x00,0x1c,0x00,0x02,0x40,0x01]
+
+    # Protecting the payload produces output that is sampled for header protection. How?
+    # TODO 得到如下的包加密后的前16字节结果
+    # 头保护采样从包加密结果的密文中取前16个字节，应当如下
+    # var sample = @[0x53'u8,0x50,0x64,0xa4,0x26,0x8a,0x0d,0x9d,0x7b,0x1c,0x9d,0x25,0x0a,0xe3,0x55,0x16]
+    var packet = clientAead.seal($clientSecret,$cryptoAndPaddingPayload)
+    echo "packet:" & packet.toHex
+
+    var sampleOffset = 1 + connId.len + 4
+
+    var sample = packet[sampleOffset..sampleOffset+15]
+
     
     var ectx, dctx: ECB[aes128]
     var key: array[aes128.sizeKey, byte]
@@ -45,8 +68,9 @@ proc main() =
     var mask: array[aes128.sizeBlock * 2, byte]
 
     ectx.init(clientHp)
-    ectx.encrypt(addr plainText[0], addr mask[0], sample.len.uint)
+    ectx.encrypt(addr sample[0], addr mask[0], sample.len.uint)
     ectx.clear()
+
 
     var pnLen:uint64 = packet[0].byte and 0x30 + 1
     if (packet[0].int and 0x80) == 0x80:
@@ -54,16 +78,15 @@ proc main() =
     else:
         packet[0] = packet[0] xor byte(mask[0] and 0x1f)
     
-    ss.setPosition(8)
-    var pnOffSet = 8 +  variableLengthEncoding.get(ss).varint + 2
-    for i in 0..pnLen:
-        packet[pnOffSet + i] = packet[pnOffSet + i] xor mask[1+i]
+    # ss.setPosition(8)
+    # var pnOffSet = 8 +  variableLengthEncoding.get(ss).varint + 2
+    # for i in 0..pnLen:
+    #     packet[pnOffSet + i] = packet[pnOffSet + i] xor mask[1+i]
 
 
-    var crypto = clientAead.seal($sample, $packet)
 
     let socket = newSocket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
-    socket.sendTo("127.0.0.1", Port(5000), addr crypto[0], crypto.len)
+    socket.sendTo("127.0.0.1", Port(5000), addr packet[0], packet.len)
 
 main()
 

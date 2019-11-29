@@ -24,12 +24,13 @@ var packetNumber* = (get: (proc (s: Stream): tuple[number: uint64] =
     s.readDataLE(result.number.addr, encodedLength)
     ),
     put: (proc (s: Stream, input: var tuple[number: uint64]) =
-        var firstOctet :uint8= 0
         if input.number <= 127'u64:
-            s.write input.number and 0x7
+            s.writeDataBE(addr input.number, 4)
         elif input.number <= 16383'u64 :
+            s.write uint8(0)
+            s.write uint8(0)
             s.write uint8 input.number shr 8 and 0x3f or 0x80
-            s.write input.number.uint8
+            s.write uint8 input.number
         elif input.number <= 1073741823'u64 :
             s.write uint8 input.number shr 24 and 0x3f or 0xc0
             s.write uint8 input.number shr 16
@@ -104,7 +105,7 @@ createParser(CryptoFrame):
     u16: length
     u8: data[]
 
-createParser(QuicInitialPacket):
+createParser(LongHeader):
     u8: headerType
     u32: version
     u4: dcil 
@@ -112,8 +113,11 @@ createParser(QuicInitialPacket):
     u8: dcid[if dcil != 0: dcil+3 else: 0]
     u8: scid[if scil != 0: scil+3 else: 0]
     *variableLengthEncoding: token
-    u16: length
-    *packetNumber: inner
+    u16: pnlength
+    *packetNumber: pn
+
+createParser(QuicInitialPacket):
+    *LongHeader: header
     *CryptoFrame: frame
 
 proc uintToArray(i: var uint64): seq[uint8] = 
