@@ -37,7 +37,7 @@ type
   ## stint is massive overkill / poor fit - a bloom filter is an array of bits,
   ## not a number
 
-  Payload* = object
+  Payload* = ref object
     ## Payload is what goes in the data field of the Envelope
 
     src*: Option[PrivateKey] ## Optional key used for signing message
@@ -46,13 +46,13 @@ type
     payload*: Bytes ## Application data / message contents
     padding*: Option[Bytes] ## Padding - if unset, will automatically pad up to
                             ## nearest maxPadLen-byte boundary
-  DecodedPayload* = object
+  DecodedPayload* = ref object
     src*: Option[PublicKey] ## If the message was signed, this is the public key
                             ## of the source
     payload*: Bytes ## Application data / message contents
     padding*: Option[Bytes] ## Message padding
 
-  Envelope* = object
+  Envelope* = ref object
     ## What goes on the wire in the whisper protocol - a payload and some
     ## book-keeping
     ## Don't touch field order, there's lots of macro magic that depends on it
@@ -62,7 +62,7 @@ type
     data*: Bytes ## Payload, as given by user
     nonce*: uint64 ## Nonce used for proof-of-work calculation
 
-  Message* = object
+  Message* = ref object
     ## An Envelope with a few cached properties
 
     env*: Envelope
@@ -72,7 +72,7 @@ type
     bloom*: Bloom ## Filter sent to direct peers for topic-based filtering
     isP2P: bool
 
-  ReceivedMessage* = object
+  ReceivedMessage* = ref object
     decoded*: DecodedPayload
     timestamp*: uint32
     ttl*: uint32
@@ -80,7 +80,7 @@ type
     pow*: float64
     hash*: Hash
 
-  Queue* = object
+  Queue* = ref object
     ## Bounded message repository
     ##
     ## Whisper uses proof-of-work to judge the usefulness of a message staying
@@ -102,7 +102,7 @@ type
 
   FilterMsgHandler* = proc(msg: ReceivedMessage) {.gcsafe, closure.}
 
-  Filter* = object
+  Filter* = ref object
     src: Option[PublicKey]
     privateKey: Option[PrivateKey]
     symKey: Option[SymKey]
@@ -116,7 +116,7 @@ type
 
   Filters* = Table[string, Filter]
 
-  WhisperConfig* = object
+  WhisperConfig* = ref object
     powRequirement*: float64
     bloom*: Bloom
     isLightNode*: bool

@@ -1,9 +1,9 @@
-type TimeDelta* = object
+type TimeDelta* = ref object
 
-type QuicTime* = object
+type QuicTime* = ref object
     time: int64
 
-type Delta* = object
+type Delta* = ref object
     timeOffset : int64
 
 proc zero(delta: Delta): Delta = Delta(0)

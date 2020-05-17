@@ -1,1 +1,1 @@
-type Datastore* = object
+type Datastore* = ref object

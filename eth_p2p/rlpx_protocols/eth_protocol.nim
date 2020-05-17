@@ -16,11 +16,11 @@ import
   ../rlpx, ../private/types, ../blockchain_utils, ../../eth_p2p
 
 type
-  NewBlockHashesAnnounce* = object
+  NewBlockHashesAnnounce* = ref object
     hash: KeccakHash
     number: uint
 
-  NewBlockAnnounce* = object
+  NewBlockAnnounce* = ref object
     header*: BlockHeader
     body* {.rlpInline.}: BlockBody
 

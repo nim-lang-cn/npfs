@@ -32,14 +32,14 @@ const
 type
   Nonce* = array[KeyLength, byte]
 
-  AuthMessageV4* = object {.packed.}
+  AuthMessageV4* = ref object {.packed.}
     signature: array[RawSignatureSize, byte]
     keyhash: array[keccak256.sizeDigest, byte]
     pubkey: PublicKey
     nonce: array[keccak256.sizeDigest, byte]
     flag: byte
 
-  AckMessageV4* = object {.packed.}
+  AckMessageV4* = ref object {.packed.}
     pubkey: array[RawPublicKeySize, byte]
     nonce: array[keccak256.sizeDigest, byte]
     flag: byte
@@ -62,7 +62,7 @@ type
     RlpError,       ## Error while decoding RLP stream
     IncompleteError ## Data incomplete error
 
-  Handshake* = object
+  Handshake* = ref object
     version*: uint8             ## protocol version
     flags*: set[HandshakeFlag]  ## handshake flags
     host*: KeyPair              ## host keypair
@@ -73,13 +73,13 @@ type
     responderNonce*: Nonce      ## responder nonce
     expectedLength*: int        ## expected incoming message length
 
-  ConnectionSecret* = object
+  ConnectionSecret* = ref object
     aesKey*: array[aes256.sizeKey, byte]
     macKey*: array[KeyLength, byte]
     egressMac*: keccak256
     ingressMac*: keccak256
 
-  AuthException* = object of Exception
+  AuthException* = ref object of Exception
 
 template toa(a, b, c: untyped): untyped =
   toOpenArray((a), (b), (b) + (c) - 1)

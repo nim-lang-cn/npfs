@@ -5,7 +5,7 @@ import exchange/bitswap/notifications/notifications
 
 type blockRequest = JsonNode
 
-type counters* = object
+type counters* = ref object
     blocksRecvd :   uint64
     dupBlocksRecvd: uint64
     dupDataRecvd :  uint64
@@ -15,7 +15,7 @@ type counters* = object
     messagesRecvd:  uint64
     
 #Bitswap instances implement the bitswap protocol.
-type Bitswap* = object
+type Bitswap* = ref object
     findKeys : Channel[blockRequest] 
     wm : WantManager
     engine :  Engine

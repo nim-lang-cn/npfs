@@ -19,7 +19,7 @@ const
   maxUInt24 = (not uint32(0)) shl 8
 
 type
-  SecretState* = object
+  SecretState* = ref object
     ## Object represents current encryption/decryption context.
     aesenc*: CTR[aes256]
     aesdec*: CTR[aes256]

@@ -23,18 +23,18 @@ type
     IncorrectUri,         ## Incorrect URI supplied
     IncompleteENode       ## Incomplete ENODE object
 
-  Address* = object
+  Address* = ref object
     ## Network address object
     ip*: IpAddress        ## IPv4/IPv6 address
     udpPort*: Port        ## UDP discovery port number
     tcpPort*: Port        ## TCP port number
 
-  ENode* = object
+  ENode* = ref object
     ## ENode object
     pubkey*: PublicKey    ## Node public key
     address*: Address     ## Node address
 
-  ENodeException* = object of Exception
+  ENodeException* = ref object of Exception
 
 proc raiseENodeError(status: ENodeStatus) =
   if status == IncorrectIP:

@@ -1,6 +1,6 @@
 import posix, net
 
-type IPEndPoint* = object
+type IPEndPoint* = ref object
     address*: IpAddress
     port*: uint16
 

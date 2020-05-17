@@ -1,1 +1,1 @@
-type BitSwapMessage* = object
+type BitSwapMessage* = ref object

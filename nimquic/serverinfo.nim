@@ -15,7 +15,7 @@ type FailureReason* = enum
     PARSE_DATA_DECODE_FAILURE = 11,
     NUM_OF_FAILURES = 12,
 
-type State* = object
+type State* = ref object
     serverConfig*: string
     sourceAddressToken*: string
     certSct*: string
@@ -23,7 +23,7 @@ type State* = object
     certs*: seq[string]
     serverConfigSig*: string
 
-type QuicServerInfo* = object
+type QuicServerInfo* = ref object
     state*: State
     serverId*: QuicServerId
 
@@ -36,8 +36,8 @@ proc parse*(data: string): bool =
 
 const kQuicCryptoConfigVersion* = "2"
 
-type Pickle* = object
-type PickleIterator* = object
+type Pickle* = ref object
+type PickleIterator* = ref object
 
 proc parseInner(state:  var State , data: string): bool =
     var op = initOptParser()

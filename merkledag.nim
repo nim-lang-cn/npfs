@@ -1,1 +1,1 @@
-type DAGService* = object
+type DAGService* = ref object

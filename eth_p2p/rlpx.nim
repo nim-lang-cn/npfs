@@ -999,7 +999,7 @@ macro p2pProtocolImpl(name: static[string],
   outTypes.add quote do:
     # Create a type acting as a pseudo-object representing the protocol
     # (e.g. p2p)
-    type `protoNameIdent`* = object
+    type `protoNameIdent`* = ref object
 
   if peerState != nil:
     outTypes.add quote do:

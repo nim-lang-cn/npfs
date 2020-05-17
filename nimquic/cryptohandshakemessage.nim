@@ -1,6 +1,6 @@
 import tables
 
-type CryptoHandshakeMessage* = object
+type CryptoHandshakeMessage* = ref object
     tag: uint32
     tagValueMap: Table[uint32, string]
     minimumSize: uint

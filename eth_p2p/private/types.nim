@@ -57,30 +57,30 @@ type
     listenPort*: Port
     observers*: Table[int, PeerObserver]
 
-  PeerObserver* = object
+  PeerObserver* = ref object
     onPeerConnected*: proc(p: Peer) {.gcsafe.}
     onPeerDisconnected*: proc(p: Peer) {.gcsafe.}
 
-  Capability* = object
+  Capability* = ref object
     name*: string
     version*: int
 
-  UnsupportedProtocol* = object of Exception
+  UnsupportedProtocol* = ref object of Exception
     # This is raised when you attempt to send a message from a particular
     # protocol to a peer that doesn't support the protocol.
 
-  MalformedMessageError* = object of Exception
+  MalformedMessageError* = ref object of Exception
 
-  PeerDisconnected* = object of Exception
+  PeerDisconnected* = ref object of Exception
     reason*: DisconnectionReason
 
-  UselessPeerError* = object of Exception
+  UselessPeerError* = ref object of Exception
 
   ##
   ## Quasy-private types. Use at your own risk.
   ##
 
-  ProtocolInfoObj* = object
+  ProtocolInfoObj* = ref object
     name*: string
     version*: int
     messages*: seq[MessageInfo]
@@ -95,7 +95,7 @@ type
 
   ProtocolInfo* = ptr ProtocolInfoObj
 
-  MessageInfo* = object
+  MessageInfo* = ref object
     id*: int
     name*: string
 
@@ -126,7 +126,7 @@ type
   ## Private types:
   ##
 
-  OutstandingRequest* = object
+  OutstandingRequest* = ref object
     id*: int
     future*: FutureBase
     timeoutAt*: uint64

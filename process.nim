@@ -1,1 +1,1 @@
-type Process* = object 
+type Process* = ref object 

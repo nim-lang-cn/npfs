@@ -1,6 +1,6 @@
 import merkledag, format
 
-type Batch* = object
+type Batch* = ref object
     ds : DAGService
     cancel : func()
     activeCommits : int

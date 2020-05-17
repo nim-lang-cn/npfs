@@ -25,7 +25,7 @@ type  QuicApplicationErrorCode = uint16
 type  QuicConnectionIdSequenceNumber = uint64
 
 # A type for functions which consume data payloads and fins.
-type QuicConsumedData = object 
+type QuicConsumedData = ref object 
   # By default, gtest prints the raw bytes of an object. The bool data
   # member causes this object to have padding bytes, which causes the
   # default gtest object printer to read uninitialize memory. So we need
@@ -61,11 +61,11 @@ proc IsWriteError(status: WriteStatus ): bool =
 
 # A type used to return the result of write calls including either the number
 # of bytes written or the error code, depending upon the status.
-type writeResultUnion {.union.} = object
+type writeResultUnion {.union.} = ref object
     bytes_written: int  # only valid when status is WRITE_STATUS_OK
     error_code:int      # only valid when status is WRITE_STATUS_ERROR
 
-type WriteResult* = object
+type WriteResult* = ref object
   status: WriteStatus
   union: writeResultUnion
    
@@ -322,7 +322,7 @@ type PacketHeaderFormat {.pure.} = enum
   GOOGLE_QUIC_PACKET,
 
 # Information about a newly acknowledged packet.
-type AckedPacket* = object
+type AckedPacket* = ref object
   packetNumber: QuicPacketNumber
   # Number of bytes sent in the packet that was acknowledged.
    bytesAcked: QuicPacketLength
@@ -335,7 +335,7 @@ type AckedPacket* = object
 type  AckedPacketVector = seq[AckedPacket]
 
 # Information about a newly lost packet.
-type LostPacket = object
+type LostPacket = ref object
     packetNumber: QuicPacketNumber
     bytesLost : QuicPacketLength
 
@@ -411,7 +411,7 @@ type MessageStatus {.pure.}= enum
                                   # reaches an invalid state.
 
 # Used to return the result of SendMessage calls
-type MessageResult {.pure.}= object
+type MessageResult {.pure.}= ref object
   status: MessageStatus
   # Only valid when status is MESSAGE_STATUS_SUCCESS.
   messageId: QuicMessageId

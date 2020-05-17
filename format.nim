@@ -1,1 +1,1 @@
-type Node* = object
+type Node* = ref object

@@ -1,17 +1,17 @@
 import quictime, constants, quictime, errorcodes, tables
 
-type QuicFixedTagVector = object
+type QuicFixedTagVector = ref object
     sendValues: seq[uint32]
     hasSendValues: bool
     receive_values: seq[uint32]
     has_receive_values: bool
 
-type QuicNegotiableUint32* = object
+type QuicNegotiableUint32* = ref object
 
-type QuicFixedUint32* = object 
+type QuicFixedUint32* = ref object 
 
 
-type QuicConfig* = object
+type QuicConfig* = ref object
     maxTimeBeforeCryptoHandshake: Delta
     maxIdleTimeBeforeCryptoHandshake: Delta
     maxUndecryptablePackets: uint
@@ -30,7 +30,7 @@ type QuicConfig* = object
     statelessResetToken : QuicFixedUint128
     createSessionTagIndicators : seq[uint32]
 
-type QuicSocketAddress* = object
+type QuicSocketAddress* = ref object
 
 proc setInitialRoundTripTimeUsToSend(rtt_us : uint32) = initialRoundTripTimeus.setSendValue(rtt)
 
@@ -109,7 +109,7 @@ proc toHandshakeMessage(out: CryptoHandshakeMessage) =
     supportMaxHeaderListSize.toHandshakeMessage out
     statelessResetToken.toHandshakeMessage out
 
-type helloType* = object
+type helloType* = ref object
 
 
 
@@ -142,14 +142,14 @@ proc processPeerHello*(config: QuicConfig,
     if error == QUIC_NO_ERROR:
         error = statelessResetToken.processPeerHello(peerHello, helloType, errorDetails)
 
-type Perspective* = object
-type QuicVersionLabel* = object
+type Perspective* = ref object
+type QuicVersionLabel* = ref object
 
-type optionalParam[T] = object
+type optionalParam[T] = ref object
         present: bool
         value: T
 
-type TransportParameters* = object
+type TransportParameters* = ref object
     perspective: Perspective
     version : QuicVersionLabel
     supportedVersions : QuicVersionLabelVector

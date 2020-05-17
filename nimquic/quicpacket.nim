@@ -2,7 +2,7 @@ import quictypes, strutils
 
 
     
-type QuicData* = object of RootObj
+type QuicData* = ref object of RootObj
     buffer: ptr char
     length: uint
     ownsBuffer: bool
@@ -11,7 +11,7 @@ type QuicConnectionIdLength = enum
   PACKET_0BYTE_CONNECTION_ID = 0,
   PACKET_8BYTE_CONNECTION_ID = 8
 
-type QuicPacket* = object of QuicData
+type QuicPacket* = ref object of QuicData
     buffer* : ptr char
     destinationConnectionIdLength: QuicConnectionIdLength
     sourceConnectionIdLength: QuicConnectionIdLength
@@ -19,13 +19,13 @@ type QuicPacket* = object of QuicData
     includesDiversificationNonce: bool
     packetNumberLength: QuicPacketNumberLength
 
-type QuicEncryptedPacket* = object of QuicData
+type QuicEncryptedPacket* = ref object of QuicData
 
-type QuicReceivedPacket* = object of QuicEncryptedPacket
+type QuicReceivedPacket* = ref object of QuicEncryptedPacket
     receiptTime*: QuicTime
     ttl*: int
 
-type SerializedPacket* = object
+type SerializedPacket* = ref object
     encryptedBuffer*: ptr char
     encryptedLength*: QuicPacketLength
     retransimittableFrames*: QuicFrames
@@ -40,7 +40,7 @@ type SerializedPacket* = object
     originalPacketNumber*: QuicPacketNumber
     largestAcked*: QuicPacketNumber
 
-type QuicPacketHeader* = object
+type QuicPacketHeader* = ref object
     destinationConnectionId*: uint64
     destinationConnectionIdLength*: QuicConnectionIdLength
     sourceConnectionId*: uint64
@@ -56,7 +56,7 @@ type QuicPacketHeader* = object
     longPacketType* : QuicLongHeaderType
     possibleStatelessResetToken*: QuicUint128
 
-type SerializedPacketDeleter* = object
+type SerializedPacketDeleter* = ref object
 
 
 type OwningSerializedPacketPointer = ptr SerializedPacket|SerializedPacketDeleter

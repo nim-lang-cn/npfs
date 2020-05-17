@@ -1,1 +1,1 @@
-type Keystore* = object
+type Keystore* = ref object

@@ -13,7 +13,7 @@ type Object = ref object
 	Size:  string
 
 #Adder holds the switches passed to the `add` command.
-type Adder* = object
+type Adder* = ref object
     blockstore: BasicBlock
     dagService: DAGService
     out: Channel[AddedObject]

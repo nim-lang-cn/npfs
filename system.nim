@@ -1,7 +1,7 @@
 import node, unixfs, routing, datastore, keystore, key, merkledag
 import times
 
-type Republisher = object
+type Republisher = ref object
     r:   ptr ValueStore
     ds:  ptr Datastore
     self: ptr PrivKey
@@ -9,7 +9,7 @@ type Republisher = object
     Interval: ptr Duration
     RecordLifetime: ptr Duration
 
-type Root* = object
+type Root* = ref object
     node: ptr ProtoNode
     val: ptr FSNode
     repub: ptr Republisher

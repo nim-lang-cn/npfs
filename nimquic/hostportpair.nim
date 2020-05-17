@@ -1,12 +1,12 @@
 import strutils, strformat
 
-type HostPortPair* = object
+type HostPortPair* = ref object
     host*: string
     port*: uint16
 
-type GURL* = object
+type GURL* = ref object
 
-type IPEndPoint* = object
+type IPEndPoint* = ref object
 
 proc fromUrl(pair: HostPortPair, url: GURL): HostPortPair = discard
 

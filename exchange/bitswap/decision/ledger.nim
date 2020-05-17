@@ -1,17 +1,17 @@
 import tables
 
-type Receipt* = object
+type Receipt* = ref object
     Peer:      string
     Value:     float64
     Sent:      uint64
     Recv:      uint64
     Exchanged: uint64
 
-type debtRatio* = object
+type debtRatio* = ref object
     BytesSent: uint64
     BytesRecv: uint64
 
-type ledger* = object
+type ledger* = ref object
     Partner : string
     Accounting : debtRatio
     lastExchange: string

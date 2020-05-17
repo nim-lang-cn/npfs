@@ -1,4 +1,4 @@
-type EpollCallbackInterface* = object of RootObj
+type EpollCallbackInterface* = ref object of RootObj
 
 proc onRegistration(eci: EpollCallbackInterface, eps: epollServer, fd: int,
         eventMask: int) = discard
@@ -15,7 +15,7 @@ proc name(eci: EpollCallbackInterface): string = discard
 
 type AlarmCBMap = seq[ptr AlarmCB]
 
-type EpollServer* = object
+type EpollServer* = ref object
     epollFD*: int
     cbMap*: FDToCBMap
     allAlarms*: AlarmCBMap
@@ -102,7 +102,7 @@ proc epollWaitImpl(eps: EpollServer,
                    maxEvents: int,
                    timeoutInms: int): int = discard
 
-type CBAndEventMask* = object
+type CBAndEventMask* = ref object
     cb*: EpollCallbackInterface
     entry*: LIST_ENTRY(CBAndEventMask)
     fd*: int
@@ -111,7 +111,7 @@ type CBAndEventMask* = object
     eventsToFake: int
     inUse: bool
 
-type CBAndEventMaskHash* = object
+type CBAndEventMaskHash* = ref object
 
 type FDToCBMap = set[CBAndEventMask]
 
@@ -138,7 +138,7 @@ proc cleanupFDToCBMap(eps: EpollServer) = discard
 
 proc cleanupTimeToAlarmCBMap(eps: EpollServer) = discard
 
-type EpollAlarmCallbackInterface* = object of RootObj
+type EpollAlarmCallbackInterface* = ref object of RootObj
 
 proc onAlarm*(eci: EpollAlarmCallbackInterface): int64 = discard
 
@@ -149,7 +149,7 @@ proc onUnregistration(eci: EpollAlarmCallbackInterface) = discard
 
 proc onShutDown(eps: EpollServer) = discard
 
-type EpollAlarm* = object of EpollAlarmCallbackInterface
+type EpollAlarm* = ref object of EpollAlarmCallbackInterface
     token*: AlarmRegToken
     eps*: EpollServer
     registered*: bool

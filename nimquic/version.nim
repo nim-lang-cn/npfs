@@ -77,7 +77,7 @@ enum HandshakeProtocol* = enum
   PROTOCOL_TLS1_3,
 
 
-type ParsedQuicVersion* = object
+type ParsedQuicVersion* = ref object
     handshakeProtocol: HandshakeProtocol
     transportVersion: QuicTransportVersion
 

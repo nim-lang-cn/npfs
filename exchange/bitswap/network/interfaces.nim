@@ -1,1 +1,1 @@
-type BitSwapNetwork* = object
+type BitSwapNetwork* = ref object

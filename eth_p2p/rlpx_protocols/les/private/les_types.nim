@@ -11,16 +11,16 @@ packageTypes:
       Signed,
       Unspecified
 
-    ReqCostInfo = object
+    ReqCostInfo = ref object
       msgId: int
       baseCost, reqCost: ReqCostInt
 
-    FlowControlState = object
+    FlowControlState = ref object
       bufValue, bufLimit: int
       minRecharge: int
       lastUpdate: LesTime
 
-    StatsRunningAverage = object
+    StatsRunningAverage = ref object
       sumX, sumY, sumXX, sumXY: float64
       count: int
 
@@ -93,11 +93,11 @@ packageTypes:
 
       lastUpdate: LesTime
 
-    KeyValuePair = object
+    KeyValuePair = ref object
       key: string
       value: Blob
 
-    HandshakeError = object of Exception
+    HandshakeError = ref object of Exception
 
     LesTime = int # this is in milliseconds
     BufValueInt = int

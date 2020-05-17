@@ -1,4 +1,4 @@
 import lists
 
-type Bucket* = object
+type Bucket* = ref object
     list: DoubleLinkedList[]

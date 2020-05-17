@@ -1,1 +1,1 @@
-type Histogram* = object
+type Histogram* = ref object

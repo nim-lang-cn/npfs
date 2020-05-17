@@ -1,1 +1,1 @@
-type PubSub* = object
+type PubSub* = ref object

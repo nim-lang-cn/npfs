@@ -1,7 +1,7 @@
 import message
 import exchange/bitswap/network/interfaces
 
-type msgQueue* = object
+type msgQueue* = ref object
     p: string
     `out`:   BitSwapMessage
     network: BitSwapNetwork
@@ -11,7 +11,7 @@ type msgQueue* = object
     work Channel[string]
     done Channel[string]
 
-type WantManager* = object
+type WantManager* = ref object
     incoming:     Channel[ptr wantSet] 
     connectEvent: Channel[peerStatus]     
     peerReqs     Channel[seq[string]] 

@@ -42,9 +42,9 @@ const kQuicStreamMaxRecvWindowSize: int32 = 6 * 1024 * 1024
 const kQuicSocketReceiveBufferSize = 1024 * 1024
 const kMaxUndecryptablePackets = 100
 
-type Stream* = object
+type Stream* = ref object
 
-type Value* = object
+type Value* = ref object
 
 
 proc NetLogQuicStreamFactoryJobCallback(serverId : QuicServerId, captureMode: NetLogCaptureMode): TableRef[string,string] = 
@@ -55,12 +55,12 @@ proc NetLogQuicConnectionMigrationTriggerCallback(trigger: string, captureMode: 
     result = initTable[string, string]()
     result["trigger"] = trigger
 
-type ScopedConnectionMigrationEventLog* = object
+type ScopedConnectionMigrationEventLog* = ref object
     netLog : NetLogWithSource
 
-type UMA_HISTOGRAM_ENUMERATION* = object
+type UMA_HISTOGRAM_ENUMERATION* = ref object
     space: string
-type UMA_HISTOGRAM_BOOLEAN* = object
+type UMA_HISTOGRAM_BOOLEAN* = ref object
 
 proc histogramCreateSessionFailure*(error: CreateSessionFailure) = discard
     UMA_HISTOGRAM_ENUMERATION("Net.QuicSession.CreationError", error, CREATION_ERROR_MAX)

@@ -1,25 +1,25 @@
 import net, winlean, deques, nativeSockets, os
 include transport_parameters
 
-type QuicServerId* = object
+type QuicServerId* = ref object
     host*: string
     port*: uint16
     privacyModeEnabled*: bool
 
-type SocketTag* = object
+type SocketTag* = ref object
 
-type QuicSessionKey* = object
+type QuicSessionKey* = ref object
     serverId: QuicServerId
     socketTag: SocketTag
 
 
-type SessionRunner* = object
+type SessionRunner* = ref object
 
 proc onHandshakeComplete*(s: SessionRunner) = discard
 proc retireConnectionID*(id: uint64) = discard
 proc removeConnectionID*(id: uint64) = discard
 
-type Config* = object
+type Config* = ref object
     Versions: seq[uint64]
     ConnectionIDLength: int
     HandshakeTimeout: uint64
@@ -30,13 +30,13 @@ type Config* = object
     MaxIncomingUniStreams:int
     keepalive: bool
 
-type Cookie* = object
+type Cookie* = ref object
 
 proc AcceptCookie*(config: Config, clientAddr: SockAddr, cookie:Cookie):bool = discard
 
-type streamManager* = object
+type streamManager* = ref object
 
-type Stream* = object
+type Stream* = ref object
 proc GetOrOpenSendStream*(sm: streamManager, streamId: uint64) = discard
 proc GetOrOpenReceiveStream*(sm: streamManager, streamId: uint64) = discard
 proc OpenStream*(sm: streamManager, stream: Stream) = discard
@@ -51,30 +51,30 @@ proc HandleMaxStreamsFrame*(sm: streamManager, stream: Stream) = discard
 proc CloseWithError*(sm: streamManager, stream: Stream) = discard
 
 
-type RTTStats* = object
+type RTTStats* = ref object
     minRTT: uint64
     latestRTT: uint64
     smoothedRTT: uint64
     meanDeviation: uint64
     
 
-type cryptoStreamManager = object 
+type cryptoStreamManager = ref object 
 
-type SentPacketHandler = object
-type ReceivedPacketHandler = object
-type framer = object
+type SentPacketHandler = ref object
+type ReceivedPacketHandler = ref object
+type framer = ref object
 
-type ConnectionFlowController* = object
+type ConnectionFlowController* = ref object
 
-type unpacker* = object
-type packer* = object
-type cryptoStreamHandler* = object
-type receivedPacket* = object
+type unpacker* = ref object
+type packer* = ref object
+type cryptoStreamHandler* = ref object
+type receivedPacket* = ref object
     remoteAddr: SockAddr
 
 
-type packedPacket = object
-type Session*[T] = object
+type packedPacket = ref object
+type Session*[T] = ref object
     sessionRunner*: SessionRunner
     destConnID*: uint64
     srcConnID*: uint64

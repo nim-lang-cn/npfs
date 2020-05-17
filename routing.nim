@@ -1,1 +1,1 @@
-type ValueStore* = object
+type ValueStore* = ref object

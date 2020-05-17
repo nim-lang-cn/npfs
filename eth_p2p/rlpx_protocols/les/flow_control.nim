@@ -410,7 +410,7 @@ when defined(testing):
           performTest(1, 4, 200.0, 1000.0)
 
       suite "buffer value calculations":
-        type TestReq = object
+        type TestReq = ref object
           peer: LesPeer
           msgId, quantity: int
           accepted: bool

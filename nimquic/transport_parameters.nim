@@ -17,7 +17,7 @@ var
     disableMigrationParameterID = 0xc
 
 
-# type TransportParameters* = object
+# type TransportParameters* = ref object
 #     initialMaxStreamDataBidiLocal*: uint64
 #     initialMaxStreamDataBidiRemote*: uint64
 #     initialMaxStreamDataUni*: uint64

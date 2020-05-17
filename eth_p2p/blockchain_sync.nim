@@ -20,7 +20,7 @@ type
     Received,
     Persisted
 
-  WantedBlocks = object
+  WantedBlocks = ref object
     startIndex: BlockNumber
     numBlocks: uint
     state: WantedBlocksState

@@ -1,4 +1,4 @@
-type QuicCryptoServerConfig* = object
+type QuicCryptoServerConfig* = ref object
     expiryTime*: QuicWallTime
     channelIdEnabled: bool
     tokenBindingParams: seq[uint32]

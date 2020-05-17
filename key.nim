@@ -1,6 +1,6 @@
 import random
 
-type PrivKey* = object
+type PrivKey* = ref object
 
 const
     RSA* = 0

@@ -16,7 +16,7 @@ const
   emptyMac* = array[0, byte]([])
 
 type
-  EciesException* = object of Exception
+  EciesException* = ref object of Exception
   EciesStatus* = enum
     Success,        ## Operation was successful
     BufferOverrun,  ## Output buffer size is too small
@@ -27,7 +27,7 @@ type
     IncorrectTag,   ## ECIES tag verification failed
     IncompleteError ## Decryption needs more data
 
-  EciesHeader* = object {.packed.}
+  EciesHeader* = ref object {.packed.}
     version*: byte
     pubkey*: array[RawPublicKeySize, byte]
     iv*: array[aes128.sizeBlock, byte]

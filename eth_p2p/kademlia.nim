@@ -33,7 +33,7 @@ type
     node*: ENode
     id*: NodeId
 
-  RoutingTable = object
+  RoutingTable = ref object
     thisNode: Node
     buckets: seq[KBucket]
 

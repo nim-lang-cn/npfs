@@ -1,6 +1,6 @@
 import ipendpoint, posix, net
 
-type QuicSocketAddressImpl* = object
+type QuicSocketAddressImpl* = ref object
     socketAddress: IPEndPoint
     
 proc isInitialized*(address: QuicSocketAddressImpl): bool = discard
@@ -17,7 +17,7 @@ proc port(address: QuicSocketAddressImpl): uint16 = discard
 
 proc genericAddress*(address: QuicSocketAddressImpl): Sockaddr_storage = discard
 
-type QuicSocketAddress* = object
+type QuicSocketAddress* = ref object
     impl*: QuicSocketAddressImpl
 
 

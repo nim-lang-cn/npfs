@@ -1,4 +1,4 @@
 import cid
-type BasicBlock* = object
+type BasicBlock* = ref object
     cid : Cid
     data : seq[byte]

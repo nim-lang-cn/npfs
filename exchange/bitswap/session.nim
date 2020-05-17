@@ -5,28 +5,28 @@ import ../../bitswap
 import ../../cid
 import notifications/notifications
 
-type cidQueue* = object
+type cidQueue* = ref object
     elems*:  seq[Cid] 
-    eset*:   ptr Set
+    eset*:   ref Set
 
-type Loggable* = object
+type Loggable* = ref object
 
-type Session* = object
-    tofetch:  ptr cidQueue
+type Session* = ref object
+    tofetch:  ref cidQueue
     activePeers: Table[string,string]
     activePeersArr: seq[string]
-    bs  : ptr Bitswap
+    bs  : ref Bitswap
     incoming: Channel[blkRecv] 
     newReqs: Channel[seq[Cid]] 
     cancelKeys: Channel[seq[Cid]] 
     interestReqs: Channel[interestReq] 
-    interest:  ptr Cache
+    interest:  ref Cache
     liveWants: Table[string,string]
     tick: string 
     baseTickDelay : Duration
     latTotal :Duration
     fetchcnt :int
-    notif : ptr PubSub
-    uuid : ptr Loggable
+    notif : ref PubSub
+    uuid : ref Loggable
     id  :uint64
     tag :string

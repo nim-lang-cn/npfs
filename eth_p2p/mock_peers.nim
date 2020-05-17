@@ -6,11 +6,11 @@ import
 type
   Action = proc (p: Peer, data: Rlp): Future[void] {.gcsafe.}
 
-  ProtocolMessagePair = object
+  ProtocolMessagePair = ref object
     protocol: ProtocolInfo
     id: int
 
-  ExpectedMsg = object
+  ExpectedMsg = ref object
     msg: ProtocolMessagePair
     response: Action
 

@@ -1,6 +1,6 @@
 import epollserver, nativesockets
 
-type QuicServer* = object of EpollCallbackInterface
+type QuicServer* = ref object of EpollCallbackInterface
     dispatcher* : ptr QuicDispatcher
     epollServer*: EpollServer
     port*: int

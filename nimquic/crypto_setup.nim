@@ -3,7 +3,7 @@ import binaryparse
 import streams
 
 
-type cryptoSetup* = object
+type cryptoSetup* = ref object
     tlsConf: Config
     messageChan: Channel[seq[uint8]]
     readEncLevel: int

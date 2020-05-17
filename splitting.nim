@@ -5,7 +5,7 @@ var DefaultBlockSize = 1024 * 256
 
 template `&`(t:type):untyped = cast[ptr t](alloc0(sizeof(t)))
 type
-    sizeSplitterv2 = object
+    sizeSplitterv2 = ref object
         f   : File
         size : uint32
         err  : string
@@ -61,16 +61,16 @@ proc prevPowerOfTwo*(num: var uint32): uint32 =
 
 
   
-type blockstore* = object
+type blockstore* = ref object
     datastore : Batching
     rehash : bool
 
-type blockService* = object
+type blockService* = ref object
     blockstore : Blockstore
     exchange   : Interface
     checkFirst : bool
 
-type FSRepo* = object
+type FSRepo* = ref object
     closed :bool
     path :string
     lockfile : Closer
