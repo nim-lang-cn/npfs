@@ -1,4 +1,4 @@
-import cid
+import cid,add
 type Link* = ref object
     Name :string
     Size :uint64
@@ -11,4 +11,4 @@ type ProtoNode* = ref object
     data:  seq[byte]
     encoded: seq[byte]
     cached: Cid
-    Prefix: Prefix
+    builder: V1Builder

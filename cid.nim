@@ -13,6 +13,30 @@ type Prefix* = ref object
     MhLength: int
     
 type Cid* = ref object 
-    version* :uint64
-    codec*   :uint64
-    hash* : Multihash
+    str: string
+
+const
+    Raw = 0x55
+    DagProtobuf* = 0x70
+    DagCBOR     = 0x71
+    Libp2pKey   = 0x72
+    GitRaw = 0x78
+    EthBlock              = 0x90
+    EthBlockList          = 0x91
+    EthTxTrie             = 0x92
+    EthTx                 = 0x93
+    EthTxReceiptTrie      = 0x94
+    EthTxReceipt          = 0x95
+    EthStateTrie          = 0x96
+    EthAccountSnapshot    = 0x97
+    EthStorageTrie        = 0x98
+    BitcoinBlock          = 0xb0
+    BitcoinTx             = 0xb1
+    ZcashBlock            = 0xc0
+    ZcashTx               = 0xc1
+    DecredBlock           = 0xe0
+    DecredTx              = 0xe1
+    DashBlock             = 0xf0
+    DashTx                = 0xf1
+    FilCommitmentUnsealed = 0xf101
+    FilCommitmentSealed   = 0xf102
