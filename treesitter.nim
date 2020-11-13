@@ -1138,27 +1138,6 @@ var identDef = newTable[string, TSNode]()
 
 var found:int
 
-proc parallelFind(p:string) =
-  {.gcsafe.}:
-      var state = State()
-      state.code = readFile(p)
-      withCodeAst(state.code, "cpp"):
-          var def = root.anyChildInTree("function_definition")
-          if def.isNil:
-              state.code = readFile(p)
-              var f: File
-              if open(f,p.replace(".h",".cc")):
-                state.code &= f.readAll 
-              elif open(f, p.replace(".h",".c")):
-                state.code &= f.readAll 
-              withCodeAst(state.code, "cpp"):
-                  var def = root.anyChildInTree("function_definition")
-                  if not def.isNil:
-                      var defIdent = state.getNodeVal def.anyChildInTree("identifier")
-                      if identDef.hasKey(defIdent) and not identDef[defIdent].isNil:
-                          identDef[defIdent] = def
-                          found.inc
-
 var hAndC: seq[string]
 
 proc findDefinition(root:TSNode, oldState: State):TSNode = 
@@ -1182,27 +1161,48 @@ proc findDefinition(root:TSNode, oldState: State):TSNode =
         elif incl[0].getName == "system_lib_string":
           h = gState.getNodeVal incl[0]
           h = h[1..^2]
-          for f in hAndC:
-            if h in f:#如果当前源文件中包含的头文件在指定的搜索目录中,读取头文件对应的源文件（如果有）
-              spawn parallelFind(f)
-            else:
-              echo h,":",f
+          # for f in hAndC:
+          #   if h in f:#如果当前源文件中包含的头文件在指定的搜索目录中,读取头文件对应的源文件（如果有）
+          #     spawn eachFind(f)
+          #   else:
+          #     echo h,":",f
                 
-    if not result.isNil:
-      found.inc
 
 
 proc findhAndC() {.thread.} =
   {.gcsafe.}:
     var csources = @["/mnt/c/openssl","/mnt/c/nghttp3","/mnt/c/ngtcp2"]
-    for dir in gState.includeDirs & csources:
+    for dir in csources:
       for f in walkDirRec(dir):
         let(path,name,ext) = splitFile f
         if "test" notin path and "test" notin name and
-            "client" notin name and "demos" notin path and ext in [".c",".cc",".cpp",".h",".hpp"]:
+            "client" notin name and "demos" notin path and ext in [".h",".c",".cc"]:
           hAndC.add(f)
-    echo hAndC.len
-    echo "finish"
+    for hc in hAndC:
+      var state = State()
+      state.code = readFile(hc)
+      withCodeAst(state.code, "cpp"):
+          var def = root.anyChildInTree("function_definition")
+          if def.isNil:
+              state.code = readFile(hc)
+              var f: File
+              if open(f, hc.replace(".h",".cc")):
+                state.code &= f.readAll 
+              elif open(f, hc.replace(".h",".c")):
+                state.code &= f.readAll 
+              else:
+                echo "no such file:",hc.replace(".h",".cc") ,":",hc.replace(".h",".c")
+              withCodeAst(state.code, "cpp"):
+                for i in 0..root.len - 1:
+                  var def = root[i].anyChildInTree("function_definition")
+                  if not def.isNil:
+                      var defIdent = state.getNodeVal def.anyChildInTree("identifier")
+                      if not identDef.hasKey(defIdent):
+                          identDef[defIdent] = def
+                          found.inc
+                      else:
+                        echo "duplicated identDef"
+    
   
 
 proc process(gState: State, path: string) =
@@ -1233,15 +1233,17 @@ proc process(gState: State, path: string) =
 
 
 var source: seq[string] = @["server.cc"]
+init(Weave)
 findhAndC()
-# init(Weave)
-# for src in source:
-#     let
-#         src = src.expandSymlinkAbs()
-#     if src notin gState.headersProcessed:
-#         gState.process(src)
-#         gState.headersProcessed.incl src
-# exit(Weave)
+echo "finish"
+echo toSeq identDef.keys
+for src in source:
+    let
+        src = src.expandSymlinkAbs()
+    if src notin gState.headersProcessed:
+        gState.process(src)
+        gState.headersProcessed.incl src
+exit(Weave)
 
 echo found
 # import nimterop/[build,cImport]
