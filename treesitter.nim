@@ -1082,17 +1082,26 @@ proc searchTree(gState: State, root: TSNode) =
     if node == root:
       break
 
-proc anyChildInTree*(node: TSNode, ntype: string): TSNode =
+proc all*(node: TSNode, ntype: varargs[string]):seq[TSNode] =
+  if not node.isNil:
+    if node.getName in ntype:
+      # echo gState.getNodeVal node
+      # echo node.getName
+      result.add node
+    for i in 0..< node.len:
+      result.add all(node[i],ntype)
+
+proc any*(node: TSNode, ntype: string): TSNode =
   # Search for node type anywhere in tree - depth first
   var
     cnode = node
-  while not cnode.tsNodeIsNull:
+  while not cnode.isNil:
     if cnode.getName() == ntype:
       return cnode
     for i in 0 ..< cnode.len:
       let
-        ccnode = cnode[i].anyChildInTree(ntype)
-      if not ccnode.tsNodeIsNull:
+        ccnode = cnode[i].any(ntype)
+      if not ccnode.isNil:
         return ccnode
     if cnode != node:
       cnode = cnode.tsNodeNextNamedSibling()
@@ -1101,7 +1110,7 @@ proc anyChildInTree*(node: TSNode, ntype: string): TSNode =
 
 proc getNodeError*(gState: State, node: TSNode): bool =
   let
-    err = node.anyChildInTree("ERROR")
+    err = node.any("ERROR")
   if not err.tsNodeIsNull:
     # Bail on errors
     echo &"# tree-sitter parse error: '{gState.getNodeVal(node).splitLines()[0]}', skipped"
@@ -1136,7 +1145,6 @@ proc mostNestedChildInTree*(node: TSNode): TSNode =
 
 var identDef = newTable[string, TSNode]()
 
-var found:int
 
 var hAndC: seq[string]
 
@@ -1145,7 +1153,7 @@ proc findDefinition(root:TSNode, oldState: State):TSNode =
     var h = ""
 
     for i in 0..root.len - 1:
-      var incl = root[i].anyChildInTree("preproc_include")
+      var incl = root[i].any("preproc_include")
       if not incl.isNil:
         if incl[0].getName == "string_literal":
           h = gState.getNodeVal incl[0]
@@ -1153,10 +1161,9 @@ proc findDefinition(root:TSNode, oldState: State):TSNode =
             h = h[1..^2]
             nState.code = readFile(h)
             # echo "old:",root.len
-            withCodeAst(nState.code, "cpp"):
+            # withCodeAst(nState.code, "cpp"):
               # echo "new:",state.code.len
-              # echo state.getNodeVal root.anyChildInTree("preproc_include")
-              result = findDefinition(root, nState)
+              # echo state.getNodeVal root.any("preproc_include")
 
         elif incl[0].getName == "system_lib_string":
           h = gState.getNodeVal incl[0]
@@ -1178,65 +1185,47 @@ proc findhAndC() {.thread.} =
         if "test" notin path and "test" notin name and
             "client" notin name and "demos" notin path and ext in [".h",".c",".cc"]:
           hAndC.add(f)
+    echo hAndC.len
     for hc in hAndC:
       var state = State()
       state.code = readFile(hc)
       withCodeAst(state.code, "cpp"):
-          var def = root.anyChildInTree("function_definition")
-          if def.isNil:
-              state.code = readFile(hc)
-              var f: File
-              if open(f, hc.replace(".h",".cc")):
-                state.code &= f.readAll 
-              elif open(f, hc.replace(".h",".c")):
-                state.code &= f.readAll 
-              else:
-                echo "no such file:",hc.replace(".h",".cc") ,":",hc.replace(".h",".c")
-              withCodeAst(state.code, "cpp"):
-                for i in 0..root.len - 1:
-                  var def = root[i].anyChildInTree("function_definition")
-                  if not def.isNil:
-                      var defIdent = state.getNodeVal def.anyChildInTree("identifier")
-                      if not identDef.hasKey(defIdent):
-                          identDef[defIdent] = def
-                          found.inc
-                      else:
-                        echo "duplicated identDef"
-    
-  
+        var defs = root.all("type_definition","function_definition")
+        for def in defs:
+            var ident = state.getNodeVal(if def.getName == "call_expression":  def.firstChildInTree("identifier") else: def.firstChildInTree("type_identifier"))
+            if ident != "" and not identDef.hasKey(ident):
+                identDef[ident] = def
 
+var stdCall: HashSet[string] = {""}  
+var notFound: HashSet[string]
+var found: HashSet[string]
 proc process(gState: State, path: string) =
     if gState.mode == "":
         gState.mode = "cpp"#getCompilerMode(path)
 
     gState.code = readFile(path)
     withCodeAst(gState.code, gState.mode):
-        # echo gState.getNodeVal(root)
         # echo gState.printLisp(root)
         # echo gState.code
-        for i in 0..root.len - 1:
-            var call = root[i].anyChildInTree("call_expression")
-            if not call.isNil:
-                # echo gState.getNodeVal call
-                var callIdent = gState.getNodeVal call.firstChildInTree("identifier")
-                # echo callIdent
-                # echo "call_expression:",callIdent
-                if not identDef.hasKey callIdent:
-                    identDef[callIdent] = findDefinition(root,gState)
-            var def = root[i].anyChildInTree("function_definition")
-            if not def.isNil:
-                var defIdent = gState.getNodeVal def.anyChildInTree("identifier")
-                # echo "function_definition:",defIdent
-                identDef[defIdent] = def
-        # for i,d in identDef:
-        #     echo i,":", gState.getNodeVal d
+        var defs = root.all("type_identifier","call_expression")
+        for def in defs:
+          echo gState.getNodeVal def
+          var ident = gState.getNodeVal(if def.getName == "call_expression":  def.firstChildInTree("identifier") else: def)
+          if ident != "":
+            if not identDef.hasKey ident:
+              notFound.incl ident
+            else:
+              found.incl ident
 
+        echo "found: ",found
+        echo "not found: ",notFound
 
 var source: seq[string] = @["server.cc"]
 init(Weave)
 findhAndC()
 echo "finish"
-echo toSeq identDef.keys
+var ids = toSeq identDef.keys
+echo ids.len
 for src in source:
     let
         src = src.expandSymlinkAbs()
@@ -1245,7 +1234,6 @@ for src in source:
         gState.headersProcessed.incl src
 exit(Weave)
 
-echo found
 # import nimterop/[build,cImport]
 
 # const csources = @["debug.cc","http.cc","keylog.cc","shared.cc","util.cc","http-parser/http_parser.c",	"nghttp3_rcbuf.c","nghttp3_mem.c","nghttp3_str.c","nghttp3_conv.c","nghttp3_buf.c","nghttp3_ringbuf.c","nghttp3_pq.c","nghttp3_map.c","nghttp3_ksl.c","nghttp3_qpack.c","nghttp3_qpack_huffman.c","nghttp3_qpack_huffman_data.c",
@@ -1293,7 +1281,7 @@ echo found
 #     for i in 0..root.len - 1:
 #       if root[i].getName in ["namespace_definition","ERROR"]:
 #         preprocFunctionDef.add gState.getNodeVal(root[i]) & "\n"
-#       elif not root[i].anyChildInTree("linkage_specification").isNil :
+#       elif not root[i].any("linkage_specification").isNil :
 #         preprocFunctionDef.add gState.getNodeVal(root[i]) & "\n"
 #       elif getName(root[i]) in ["preproc_def","preproc_function_def"] :
 #         preprocFunctionDef.add gState.getNodeVal(root[i]) & "\n"
