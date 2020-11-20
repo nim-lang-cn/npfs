@@ -7,8 +7,9 @@ import json
 import osproc
 import hashes
 import sequtils
-import weave
 import macros
+import streams
+import algorithm
 import compiler/[ast, idents, modulegraphs, options]
 
 macro defineEnum(typ: untyped): untyped =
@@ -235,7 +236,8 @@ when nimvm:
     gStateCT* {.compileTime, used.} = new(State)
 else:
   var
-    gState* = State(includeDirs: @["/mnt/c/openssl/include","/mnt/c/nghttp3/lib/includes","/mnt/c/ngtcp2/crypto/includes","/mnt/c/ngtcp2/lib/includes","/mnt/c/ngtcp2/third-party"])
+    gState* = State(includeDirs: @["/mnt/c/openssl","/mnt/c/openssl/ssl","/mnt/c/openssl/include","/mnt/c/nghttp3/lib/includes","/mnt/c/nghttp3/lib","/mnt/c/ngtcp2/crypto/includes",
+      "/mnt/c/ngtcp2/crypto","/mnt/c/ngtcp2/lib","/mnt/c/ngtcp2/lib/includes","/mnt/c/ngtcp2/third-party","/mnt/c/ngtcp2/third-party/http-parser"])
 
 proc querySettingSeq*(setting: MultipleValueSetting): seq[string] {.
   compileTime, noSideEffect.} = discard
@@ -543,6 +545,7 @@ when defined(Linux) and defined(gcc):
 {.compile: sourcePath / "src" / "lib.c".}
 {.push hint[ConvFromXtoItselfNotNeeded]: off.}
 {.pragma: impapiHdr, header: sourcePath / "include" / "tree_sitter" / "api.h".}
+{.pragma: imptreeHdr, header: sourcePath / "include" / "tree_sitter" / "tree.h".}
 
 type
   TSSymbol* {.importc, impapiHdr.} = uint16
@@ -754,6 +757,8 @@ proc ts_language_field_id_for_name*(a1: ptr TSLanguage; a2: cstring; a3: uint32)
 proc ts_language_symbol_type*(a1: ptr TSLanguage; a2: TSSymbol): TSSymbolType {.
     importc, cdecl, impapiHdr.}
 proc ts_language_version*(a1: ptr TSLanguage): uint32 {.importc, cdecl, impapiHdr.}
+# proc ts_tree_get_cached_parent*(t: ptr TSTree , n:TSNode ):TSNode {.importc, cdecl, imptreeHdr.}
+
 {.pop.}
 
 
@@ -980,7 +985,7 @@ template withCodeAst*(code: string, mode: string, body: untyped): untyped =
   mixin treeSitterC
   mixin treeSitterCpp
 
-  var parser = tsParserNew()
+  var parser {.inject.} = tsParserNew()
   defer:
     parser.tsParserDelete()
 
@@ -992,7 +997,7 @@ template withCodeAst*(code: string, mode: string, body: untyped): untyped =
     doAssert false, "Invalid parser " & mode
 
   var
-    tree = parser.tsParserParseString(nil, code.cstring, code.len.uint32)
+    tree {.inject.} = parser.tsParserParseString(nil, code.cstring, code.len.uint32)
     root {.inject.} = tree.tsTreeRootNode()
   body
   defer:
@@ -1005,8 +1010,7 @@ proc getNodeError*(gState: State, node: TSNode): bool;
 proc processNode(gState: State, node: TSNode): Status =
   const
     known = ["preproc_def", "type_definition",
-      "struct_specifier", "union_specifier", "enum_specifier",
-      "declaration"].toHashSet()
+      "struct_specifier", "union_specifier", "enum_specifier","declaration"].toHashSet()
 
   result = success
   let
@@ -1078,43 +1082,10 @@ proc searchTree(gState: State, root: TSNode) =
           break
     else:
       node = nextnode
-
     if node == root:
       break
 
-proc all*(node: TSNode, ntype: varargs[string]):seq[TSNode] =
-  if not node.isNil:
-    if node.getName in ntype:
-      # echo gState.getNodeVal node
-      # echo node.getName
-      result.add node
-    for i in 0..< node.len:
-      result.add all(node[i],ntype)
 
-proc any*(node: TSNode, ntype: string): TSNode =
-  # Search for node type anywhere in tree - depth first
-  var
-    cnode = node
-  while not cnode.isNil:
-    if cnode.getName() == ntype:
-      return cnode
-    for i in 0 ..< cnode.len:
-      let
-        ccnode = cnode[i].any(ntype)
-      if not ccnode.isNil:
-        return ccnode
-    if cnode != node:
-      cnode = cnode.tsNodeNextNamedSibling()
-    else:
-      break
-
-proc getNodeError*(gState: State, node: TSNode): bool =
-  let
-    err = node.any("ERROR")
-  if not err.tsNodeIsNull:
-    # Bail on errors
-    echo &"# tree-sitter parse error: '{gState.getNodeVal(node).splitLines()[0]}', skipped"
-    result = true
 
 
 proc firstChildInTree*(node: TSNode, ntype: string): TSNode =
@@ -1141,179 +1112,359 @@ proc mostNestedChildInTree*(node: TSNode): TSNode =
     cnode = cnode[0]
   result = cnode
 
+proc anyChildInTree*(node: TSNode, ntype: string): TSNode =
+  # Search for node type anywhere in tree - depth first
+  var
+    cnode = node
+  while not cnode.isNil:
+    if cnode.getName() == ntype:
+      return cnode
+    for i in 0 ..< cnode.len:
+      let
+        ccnode = cnode[i].anyChildInTree(ntype)
+      if not ccnode.isNil:
+        return ccnode
+    if cnode != node:
+      cnode = cnode.tsNodeNextNamedSibling()
+    else:
+      break
+
+  
+proc any*(node: TSNode, ntype: varargs[string]): seq[TSNode] =
+  # Search for node type anywhere in tree - depth first
+  var cnode = node
+  while not cnode.isNil:
+    if cnode.getName() in ntype:
+      result.add cnode
+    for i in 0 ..< cnode.len:
+      let ccnode = cnode[i].any(ntype)
+      result.add ccnode
+    if cnode != node:
+      cnode = cnode.tsNodeNextNamedSibling()
+    else:
+      break
+
+proc getNodeError*(gState: State, node: TSNode): bool =
+  let err = node.any("ERROR")
+  echo &"# tree-sitter parse error: '{gState.getNodeVal(node).splitLines()[0]}', skipped"
+  result = true
+
+proc allRec*(node: TSNode, ntype: varargs[string]):seq[TSNode] =
+  if not node.isNil:
+    if node.getName in ntype:
+      result.add node
+    for i in 0..< node.len:
+      result.add allRec(node[i],ntype)
+
+proc getGccModeArg*(mode: string): string =
+  ## Produces a GCC argument that explicitly sets the language mode to be used by the compiler.
+  if mode == "cpp":
+    result = "-xc++"
+  elif mode == "c":
+    result = "-xc"
+
+proc getCompiler*(): string =
+  var
+    compiler =
+      when defined(gcc):
+        "gcc"
+      elif defined(clang):
+        "clang"
+      else:
+        doAssert false, "Nimterop only supports gcc and clang at this time"
+  result = getEnv("CC", compiler)
+
+proc isIncluded(gState: State, file: string): bool {.inline.} =
+  # Check if the specified file should be excluded from wrapped output
+  for excl in gState.exclude:
+    if file.startsWith(excl):
+      return
+  result = true
 
 
-var identDef = newTable[string, TSNode]()
+proc getPreprocessor*(gState: State, fullpath: string) =
+  # Get preprocessed output from the C/C++ compiler
+  var
+    args: seq[string]
+    start = false
+    sfile = fullpath.sanitizePath(noQuote = true)
+
+    sfileName = sfile.extractFilename()
+    pDir = sfile.expandFilename().parentDir()
+    includeDirs: seq[string]
+
+  args.add @["-E", "-dD", getGccModeArg(gState.mode), "-w"]
+  if not gState.noComments:
+    args.add "-CC"
+
+  for inc in gState.includeDirs:
+    args.add &"-I{inc.sanitizePath}"
+    includeDirs.add inc.absolutePath().sanitizePath(noQuote = true)
+
+  for def in gState.defines:
+    args.add &"-D{def}"
+
+  args.add @["-D__attribute__(x)=", "-D__restrict=", "-D__restrict__=", "-D__extension__=", "-D__inline__=inline","-D__inline=inline", "-D_Noreturn=", &"{fullpath.sanitizePath}"]
+  args.add @[&"{fullpath.sanitizePath}"]
+
+  # Include content only from file
+  var
+    p = startProcess(getCompiler(), args = args, options = {poStdErrToStdOut, poUsePath})
+    outp = p.outputStream()
+    line = ""
+    newHeaders: HashSet[string]
+
+  # Include content only from file
+  gState.code = ""
+  while true:
+    if outp.readLine(line):
+      # We want to keep blank lines here for comment processing
+      if line.len > 10 and line[0] == '#' and line[1] == ' ' and line.contains('"'):
+        # # 1 "path/to/file.h" 1
+        start = false
+        line = line.split('"')[1].sanitizePath(noQuote = true)
+        if sfile == line or (DirSep notin line and sfileName == line):
+          start = true
+        elif gState.recurse:
+          if (pDir == "" or pDir in line) and line notin gState.headersProcessed:
+            newHeaders.incl line
+            start = gState.isIncluded(line)
+          else:
+            for inc in includeDirs:
+              if line.startsWith(inc) and line notin gState.headersProcessed:
+                newHeaders.incl line
+                start = gState.isIncluded(line)
+                if start:
+                  break
+      elif ": fatal error:" in line:
+        doAssert false,
+          "\n\nFailed in preprocessing, check if `cIncludeDir()` is needed or compiler `mode` is correct (c/cpp)" &
+          "\n\nERROR:$1\n" % line.split(": fatal error:")[1]
+      else:
+        if start:
+          if "#undef" in line:
+            continue
+          gState.code.add line & "\n"
+    elif not p.running(): break
+  p.close()
+  gState.headersProcessed.incl newHeaders
+
+var typeDeclaration,funcDeclaration: string
 
 
+proc topParent(n:TSNode,ntype: string):TSNode =
+  result = n
+  while not result.isNil:
+    result = result.tsNodeParent
+    if result.getName == ntype:
+      break
+
+var stdTypes: seq[string] = @["string","unordered_map","string_view","array","vector","pair","FILE","sockaddr","socklen_t","cmsghdr","T","operator","F","in6_addr","nanoseconds","ifstream","ostream"]
+
+import dag
+
+var funcState = State(mode:"cpp")
+
+var funcGraph: OrderedTable[string, Vertex]
+var typeGraph: OrderedTable[string, Vertex]
+var funcDef: Table[string, TSNode]
+var processedCall: HashSet[string]
+
+var preprocessedFuncs: string
+
+proc getAnyMostChildren*(node:TSNode, ntype:string):TSNode =
+  result = (var anyType = node.any(ntype); anyType.sort(proc(x,y:TSNode):int = int x.len < y.len); anyType[0])
+
+proc find(gRoot:TSNode, funcRoot:TSNode, state:State) = 
+  var r = gRoot
+  var calls = r.allRec("call_expression")
+
+  for call in calls:
+    var callIdent = state.getNodeVal call.firstChildInTree("identifier")
+    if callIdent == "":
+      callIdent = state.getNodeVal call.firstChildInTree("field_expression")
+    if callIdent == "": 
+      callIdent = state.getNodeVal call.firstChildInTree("scoped_identifier")
+    if funcDef.hasKey callIdent:
+      if not funcGraph.hasKey callIdent:
+          funcGraph.initVertex(callIdent)
+      else:
+          var functionDeclarator = call.topParent("function_definition").any("function_declarator")
+          if functionDeclarator.len != 0:
+            var def = state.getNodeVal functionDeclarator[0]
+            funcGraph.initVertex(def)
+            funcGraph.addEdge(def, callIdent)
+      if callIdent notin processedCall:
+        processedCall.incl callIdent
+        
+        r = funcDef[callIdent]
+        find(r, funcRoot, funcState)
+
+
+proc findFunctionDefinition() = 
+  funcState.code = readFile("funcs.cpp")
+  gState.code = readFile("server.cpp")
+  var parser = tsParserNew()
+  defer: parser.tsParserDelete()
+
+  if parser.tsParserSetLanguage(treeSitterCpp()):
+    var gTree = parser.tsParserParseString(nil, gState.code.cstring, gState.code.len.uint32)
+    var gRoot = gTree.tsTreeRootNode()
+    defer: gTree.tsTreeDelete()
+    var funcTree = parser.tsParserParseString(nil, funcState.code.cstring, funcState.code.len.uint32)
+    var funcRoot = funcTree.tsTreeRootNode()
+    defer: funcTree.tsTreeDelete()
+
+    for i in 0..<funcRoot.len:
+      if funcRoot[i].getName == "function_definition":
+        var ident = funcState.getNodeVal funcRoot[i].any("identifier")[0]
+        funcDef[ident] = funcRoot[i]
+
+    find(gRoot, funcRoot, gState)
+    echo funcGraph.topoSort()
+
+proc findTypeSpecifiers(n:TSNode): seq[TSNode] =
+  var specifiers = n.any("struct_specifier","enum_specifier","union_specifier")
+  for s in specifiers:
+    if s.tsNodeParent.getName in ["type_definition","field_declaration"]:
+      continue
+    if s.getName in ["struct_specifier","union_specifier"]:
+      if s.any("field_declaration_list").len > 0:
+        result.add s
+    elif s.getName == "enum_specifier":
+      if s.any("enumerator_list").len > 0:
+        result.add s
+
+
+var typeDefs: Table[string, string]
+var funcDefs: Table[string,string]
+
+var typeCalls, funcCalls: Table[string,string]
+var typeSpecifier: Table[string,string]
+
+proc addTypeCalls(state:State, typeIdent:string, n:TSNode) =
+    var typeIdentifier = n.any("type_identifier")
+    for t in typeIdentifier:
+      var childTypeIdent = state.getNodeVal t
+      if not typeCalls.hasKey childTypeIdent:
+        typeGraph.initVertex childTypeIdent
+        typeCalls[childTypeIdent] = typeIdent
+
+proc process(source: string) =
+    var state = State(mode:"cpp",includeDirs: @["/mnt/c/openssl","/mnt/c/openssl/ssl","/mnt/c/openssl/include","/mnt/c/nghttp3/lib/includes","/mnt/c/nghttp3/lib","/mnt/c/ngtcp2/crypto/includes",
+      "/mnt/c/ngtcp2/crypto","/mnt/c/ngtcp2/lib","/mnt/c/ngtcp2/lib/includes","/mnt/c/ngtcp2/third-party","/mnt/c/ngtcp2/third-party/http-parser"])
+    state.code &= readFile(source)
+    # preprocessedFuncs &= state.code
+    # 把所有type_definition的最后一个节点type_identifier和function_definition的any identifier的第一个放入definition表里, 把type_identifier和call_expression按照topParent:call的形式放入call表
+    #与definition表匹配，匹配到的将topParent->definition的边加入DAG中，完成后进行排序
+    #将排序的结果倒着写入文件
+    withCodeAst(state.code, state.mode):
+      var preprocInclude = root.any("preproc_include")
+
+      var definitions = root.any("type_definition","function_definition")
+      for def in definitions:
+        case def.getName
+        of "type_definition":
+          # echo state.getNodeVal def
+          var typeIdentNode = def[0].tsNodeNextNamedSibling
+          if typeIdentNode.len > 0:  #形如typedef void (*sk_X509_ALGOR_freefunc)(X509_ALGOR *a);
+            var typeIdent = state.getNodeVal typeIdentNode.anyChildInTree("type_identifier")
+            if not typeDefs.hasKey typeIdent:
+              typeGraph.initVertex typeIdent
+              typeDefs[typeIdent] = state.getNodeVal def 
+            else:
+              echo fmt"duplicated typeDefs: {state.getNodeVal def}, old value: {typeDefs[typeIdent]}"
+          else: #形如typedef struct/union/enum {} X;
+            var typeIdent = state.getNodeVal typeIdentNode
+            if not typeDefs.hasKey typeIdent:
+              typeGraph.initVertex typeIdent
+              typeDefs[typeIdent] = state.getNodeVal def
+            else:
+              echo fmt"duplicated typeDefs: {state.getNodeVal def}, old value: {typeDefs[typeIdent]}"
+            state.addTypeCalls(typeIdent, def)
+        of "function_definition":
+          var identifier = def.anyChildInTree("identifier")
+          if not identifier.isNil:
+            var funcIdent = state.getNodeVal identifier
+            funcGraph.initVertex funcIdent
+            funcDefs[funcIdent] = state.getNodeVal def
+
+      var specifiers = root.findTypeSpecifiers()#找到不是字段声明的struct/union/enum关键字,可能包含定义
+      for s in specifiers:
+        var specifier = state.getNodeVal s
+        var specifierIdent = state.getNodeVal s[0]
+        if typeDefs.hasKey(specifierIdent) and typeDefs[specifierIdent] != specifier:
+          typeDefs[specifierIdent] = typeDefs[specifierIdent] & specifier
+        else:
+          typeGraph.initVertex specifierIdent
+          echo fmt"duplicated typeSpecifier: {state.getNodeVal s}, old value: {typeSpecifier[specifierIdent]}"
+        state.addTypeCalls(specifierIdent, s)
+
+      for parent,ident in typeCalls:
+        if typeDefs.hasKey ident:
+          typeGraph.addEdge(parent,ident)
+
+      var calls = root.any("call_expression")
+      for call in calls:
+          var callIdent = state.getNodeVal call.firstChildInTree("identifier")
+          var functionDefinition = call.topParent("function_definition")
+          if not functionDefinition.isNil:
+            var functionDeclarator = functionDefinition.anyChildInTree("function_declarator")
+            if not functionDeclarator.isNil:
+              var callParentIdent = state.getNodeVal functionDeclarator[0]
+              funcGraph.initVertex callParentIdent
+              if not funcCalls.hasKey callParentIdent:
+                funcCalls[callParentIdent] = callIdent
+          # else:
+            # echo "call_expression not from function_definition: ", state.getNodeVal call
+      
+      for parent,ident in funcCalls:
+        if funcDefs.hasKey(ident):
+          funcGraph.addEdge(parent, ident)
+
+
+var source: seq[string] = @["test.cpp"]
+var all: string
 var hAndC: seq[string]
 
-proc findDefinition(root:TSNode, oldState: State):TSNode = 
-    var nState = State()
-    var h = ""
+var enablePreprocessing = true
+if enablePreprocessing:
+  var csources = @["/mnt/c/nghttp3/lib","/mnt/c/ngtcp2/crypto","/mnt/c/ngtcp2/lib","/mnt/c/ngtcp2/third-party/http-parser","/mnt/c/ngtcp2/examples"]
+  for dir in csources:
+    for f in walkDirRec(dir):
+      let(path,name,ext) = splitFile f
+      if "test" notin path and "test" notin name and "client" notin name and "h09" notin name and "demos" notin path and "gnutls" notin path and ext in [".c",".cc"]:
+        hAndC.add f
 
-    for i in 0..root.len - 1:
-      var incl = root[i].any("preproc_include")
-      if not incl.isNil:
-        if incl[0].getName == "string_literal":
-          h = gState.getNodeVal incl[0]
-          if h.startsWith("\""):
-            h = h[1..^2]
-            nState.code = readFile(h)
-            # echo "old:",root.len
-            # withCodeAst(nState.code, "cpp"):
-              # echo "new:",state.code.len
-              # echo state.getNodeVal root.any("preproc_include")
+  for hc in hAndC:
+    all &= readFile(hc)
+    # preprocess(hc) 
+  writeFile("all.cpp",all)
+  quit()
+  process("all.cpp") 
 
-        elif incl[0].getName == "system_lib_string":
-          h = gState.getNodeVal incl[0]
-          h = h[1..^2]
-          # for f in hAndC:
-          #   if h in f:#如果当前源文件中包含的头文件在指定的搜索目录中,读取头文件对应的源文件（如果有）
-          #     spawn eachFind(f)
-          #   else:
-          #     echo h,":",f
-                
+  # var sorted = funcGraph.topoSort()
+  # echo sorted.join("->")
+  # var sortedFunc: string
+  # while sorted.len > 0:
+  #   var s = sorted.pop
+  #   if funcDefs.hasKey s:
+  #     sortedFunc &= funcDefs[s]
+  # writeFile("sortedFunc.cpp", sortedFunc)
+  var sortedTypes = typeGraph.topoSort()
+  var sortedType: string
+  while sortedTypes.len > 0:
+    var s = sortedTypes.pop
+    if typeDefs.hasKey(s):
+      sortedType &= typeDefs[s]
 
+  writeFile("sortedType.cpp", sortedType)
+  
+  # writeFile("funcsPreprocessed.cpp", preprocessedFuncs)
+  # findFunctionDefinition()
+else:
+  for src in source:
+      let src = src.expandSymlinkAbs()
+      process(src)
 
-proc findhAndC() {.thread.} =
-  {.gcsafe.}:
-    var csources = @["/mnt/c/openssl","/mnt/c/nghttp3","/mnt/c/ngtcp2"]
-    for dir in csources:
-      for f in walkDirRec(dir):
-        let(path,name,ext) = splitFile f
-        if "test" notin path and "test" notin name and
-            "client" notin name and "demos" notin path and ext in [".h",".c",".cc"]:
-          hAndC.add(f)
-    echo hAndC.len
-    for hc in hAndC:
-      var state = State()
-      state.code = readFile(hc)
-      withCodeAst(state.code, "cpp"):
-        var defs = root.all("type_definition","function_definition")
-        for def in defs:
-            var ident = state.getNodeVal(if def.getName == "call_expression":  def.firstChildInTree("identifier") else: def.firstChildInTree("type_identifier"))
-            if ident != "" and not identDef.hasKey(ident):
-                identDef[ident] = def
-
-var stdCall: HashSet[string] = {""}  
-var notFound: HashSet[string]
-var found: HashSet[string]
-proc process(gState: State, path: string) =
-    if gState.mode == "":
-        gState.mode = "cpp"#getCompilerMode(path)
-
-    gState.code = readFile(path)
-    withCodeAst(gState.code, gState.mode):
-        # echo gState.printLisp(root)
-        # echo gState.code
-        var defs = root.all("type_identifier","call_expression")
-        for def in defs:
-          echo gState.getNodeVal def
-          var ident = gState.getNodeVal(if def.getName == "call_expression":  def.firstChildInTree("identifier") else: def)
-          if ident != "":
-            if not identDef.hasKey ident:
-              notFound.incl ident
-            else:
-              found.incl ident
-
-        echo "found: ",found
-        echo "not found: ",notFound
-
-var source: seq[string] = @["server.cc"]
-init(Weave)
-findhAndC()
 echo "finish"
-var ids = toSeq identDef.keys
-echo ids.len
-for src in source:
-    let
-        src = src.expandSymlinkAbs()
-    if src notin gState.headersProcessed:
-        gState.process(src)
-        gState.headersProcessed.incl src
-exit(Weave)
-
-# import nimterop/[build,cImport]
-
-# const csources = @["debug.cc","http.cc","keylog.cc","shared.cc","util.cc","http-parser/http_parser.c",	"nghttp3_rcbuf.c","nghttp3_mem.c","nghttp3_str.c","nghttp3_conv.c","nghttp3_buf.c","nghttp3_ringbuf.c","nghttp3_pq.c","nghttp3_map.c","nghttp3_ksl.c","nghttp3_qpack.c","nghttp3_qpack_huffman.c","nghttp3_qpack_huffman_data.c",
-# 	"nghttp3_err.c",
-# 	"nghttp3_debug.c",
-# 	"nghttp3_conn.c",
-# 	"nghttp3_stream.c",
-# 	"nghttp3_frame.c",
-# 	"nghttp3_tnode.c",
-# 	"nghttp3_vec.c",
-# 	"nghttp3_gaptr.c",
-# 	"nghttp3_idtr.c",
-# 	"nghttp3_range.c",
-# 	"nghttp3_http.c",
-# 	"nghttp3_version.c"]
-# const headers = @["nghttp3/version.h","nghttp3/nghttp3.h","util.h","server.h","network.h","shared.h","debug.h","http.h","keylog.h","template.h","nghttp3_rcbuf.h","nghttp3_mem.h","nghttp3_str.h","nghttp3_conv.h","nghttp3_buf.h","nghttp3_ringbuf.h","nghttp3_pq.h","nghttp3_map.h" ,"nghttp3_ksl.h" ,"nghttp3_qpack.h" ,"nghttp3_qpack_huffman.h","nghttp3_err.h" 
-# ,"nghttp3_debug.h" 
-# ,"nghttp3_conn.h" 
-# ,"nghttp3_stream.h" 
-# ,"nghttp3_frame.h" 
-# ,"nghttp3_tnode.h" 
-# ,"nghttp3_vec.h" 
-# ,"nghttp3_gaptr.h" 
-# ,"nghttp3_idtr.h" 
-# ,"nghttp3_range.h" 
-# ,"nghttp3_http.h"]
-
-
-# var allInOne: string
-
-# var preprocFunctionDef: string
-# var declarations: string
-# var typeDefinitions: string
-# var functionDefinitions: string
-
-# var preprocFunctionDefFile = open("preprocFunctionDefs.h", fmWrite)
-# var declarationsDefFile = open("declarations.h", fmWrite)
-# var typeDefinitionsFile = open("typeDefinitions.h", fmWrite)
-# var functionDefinitionsFile = open("functionDefinitions.cc", fmWrite)
-
-
-# for h in headers:
-#   gState.code = h.readFile()
-#   withCodeAst(gState.code, "cpp"):
-#     for i in 0..root.len - 1:
-#       if root[i].getName in ["namespace_definition","ERROR"]:
-#         preprocFunctionDef.add gState.getNodeVal(root[i]) & "\n"
-#       elif not root[i].any("linkage_specification").isNil :
-#         preprocFunctionDef.add gState.getNodeVal(root[i]) & "\n"
-#       elif getName(root[i]) in ["preproc_def","preproc_function_def"] :
-#         preprocFunctionDef.add gState.getNodeVal(root[i]) & "\n"
-#       elif getName(root[i]) == "declaration":
-#         declarations.add gState.getNodeVal(root[i]) & "\n"
-#       elif getName(root[i]) == "type_definition": 
-#         typeDefinitions.add gState.getNodeVal(root[i]) & "\n"
-#       elif getName(root[i]) == "function_definition":
-#         functionDefinitions.add gState.getNodeVal(root[i]) & "\n"
-
-# preprocFunctionDefFile.write(preprocFunctionDef) 
-# declarationsDefFile.write(declarations) 
-# typeDefinitionsFile.write(typeDefinitions) 
-# functionDefinitionsFile.write(functionDefinitions) 
-
-# for c in csources:
-#   gState.code = c.readFile()
-#   withCodeAst(gState.code, "cpp"):
-#     for i in 0..root.len - 1:
-#       if root[i].getName in ["namespace_definition","ERROR"]:
-#         preprocFunctionDef.add gState.getNodeVal(root[i]) & "\n"
-#       elif getName(root[i]) in ["preproc_def","preproc_function_def"]:
-#         preprocFunctionDef.add gState.getNodeVal(root[i]) & "\n"
-#       elif getName(root[i]) == "declaration":
-#         declarations.add gState.getNodeVal(root[i]) & "\n"
-#       elif getName(root[i]) == "type_definition":
-#         typeDefinitions.add gState.getNodeVal(root[i]) & "\n"
-#       elif getName(root[i]) == "function_definition":
-#         functionDefinitions.add gState.getNodeVal(root[i]) & "\n"
-
-
-# preprocFunctionDefFile.write(preprocFunctionDef) 
-# declarationsDefFile.write(declarations) 
-# typeDefinitionsFile.write(typeDefinitions) 
-# functionDefinitionsFile.write(functionDefinitions) 
