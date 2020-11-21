@@ -1,81 +1,178 @@
-/*
- * ngtcp2
- *
- * Copyright (c) 2017 ngtcp2 contributors
- *
- * Permission is hereby granted, free of charge, to any person obtaining
- * a copy of this software and associated documentation files (the
- * "Software"), to deal in the Software without restriction, including
- * without limitation the rights to use, copy, modify, merge, publish,
- * distribute, sublicense, and/or sell copies of the Software, and to
- * permit persons to whom the Software is furnished to do so, subject to
- * the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
- * LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
- * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
-#include <cstdlib>
-#include <cassert>
-#include <cerrno>
-#include <iostream>
-#include <algorithm>
-#include <memory>
-#include <fstream>
 
-#include <unistd.h>
-#include <getopt.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <sys/mman.h>
-
-#include <openssl/bio.h>
-#include <openssl/err.h>
-
-#include <http-parser/http_parser.h>
-
-#include "client.h"
-#include "network.h"
-#include "debug.h"
-#include "util.h"
-#include "shared.h"
-#include "template.h"
-#include "keylog.h"
-
+#include "common.cpp"
 using namespace ngtcp2;
-using namespace std::literals;
 
-namespace {
-auto randgen = util::make_mt19937();
-} // namespace
+namespace
+{
+  auto randgen = util::make_mt19937();
+}
+
+struct Request {
+  std::string_view scheme;
+  std::string authority;
+  std::string path;
+};
+
+struct Config {
+  ngtcp2_cid dcid;
+  ngtcp2_cid scid;
+  bool scid_present;
+  // tx_loss_prob is probability of losing outgoing packet.
+  double tx_loss_prob;
+  // rx_loss_prob is probability of losing incoming packet.
+  double rx_loss_prob;
+  // fd is a file descriptor to read input for streams.
+  int fd;
+  // ciphers is the list of enabled ciphers.
+  const char *ciphers;
+  // groups is the list of supported groups.
+  const char *groups;
+  // nstreams is the number of streams to open.
+  size_t nstreams;
+  // data is the pointer to memory region which maps file denoted by
+  // fd.
+  uint8_t *data;
+  // datalen is the length of file denoted by fd.
+  size_t datalen;
+  // version is a QUIC version to use.
+  uint32_t version;
+  // quiet suppresses the output normally shown except for the error
+  // messages.
+  bool quiet;
+  // timeout is an idle timeout for QUIC connection.
+  ngtcp2_duration timeout;
+  // session_file is a path to a file to write, and read TLS session.
+  const char *session_file;
+  // tp_file is a path to a file to write, and read QUIC transport
+  // parameters.
+  const char *tp_file;
+  // show_secret is true if transport secrets should be printed out.
+  bool show_secret;
+  // change_local_addr is the duration after which client changes
+  // local address.
+  ngtcp2_duration change_local_addr;
+  // key_update is the duration after which client initiates key
+  // update.
+  ngtcp2_duration key_update;
+  // delay_stream is the duration after which client sends the first
+  // 1-RTT stream.
+  ngtcp2_duration delay_stream;
+  // nat_rebinding is true if simulated NAT rebinding is enabled.
+  bool nat_rebinding;
+  // no_preferred_addr is true if client do not follow preferred
+  // address offered by server.
+  bool no_preferred_addr;
+  std::string_view http_method;
+  // download is a path to a directory where a downloaded file is
+  // saved.  If it is empty, no file is saved.
+  std::string_view download;
+  // requests contains URIs to request.
+  std::vector<Request> requests;
+  // no_quic_dump is true if hexdump of QUIC STREAM and CRYPTO data
+  // should be disabled.
+  bool no_quic_dump;
+  // no_http_dump is true if hexdump of HTTP response body should be
+  // disabled.
+  bool no_http_dump;
+  // qlog_file is the path to write qlog.
+  std::string_view qlog_file;
+  // qlog_dir is the path to directory where qlog is stored.  qlog_dir
+  // and qlog_file are mutually exclusive.
+  std::string_view qlog_dir;
+  // max_data is the initial connection-level flow control window.
+  uint64_t max_data;
+  // max_stream_data_bidi_local is the initial stream-level flow
+  // control window for a bidirectional stream that the local endpoint
+  // initiates.
+  uint64_t max_stream_data_bidi_local;
+  // max_stream_data_bidi_remote is the initial stream-level flow
+  // control window for a bidirectional stream that the remote
+  // endpoint initiates.
+  uint64_t max_stream_data_bidi_remote;
+  // max_stream_data_uni is the initial stream-level flow control
+  // window for a unidirectional stream.
+  uint64_t max_stream_data_uni;
+  // max_streams_bidi is the number of the concurrent bidirectional
+  // streams.
+  uint64_t max_streams_bidi;
+  // max_streams_uni is the number of the concurrent unidirectional
+  // streams.
+  uint64_t max_streams_uni;
+  // max_window is the maximum connection-level flow control window
+  // size if auto-tuning is enabled.
+  uint64_t max_window;
+  // max_stream_window is the maximum stream-level flow control window
+  // size if auto-tuning is enabled.
+  uint64_t max_stream_window;
+  // exit_on_first_stream_close is the flag that if it is true, client
+  // exits when a first HTTP stream gets closed.  It is not
+  // necessarily the same time when the underlying QUIC stream closes
+  // due to the QPACK synchronization.
+  bool exit_on_first_stream_close;
+  // exit_on_all_streams_close is the flag that if it is true, client
+  // exits when all HTTP streams get closed.
+  bool exit_on_all_streams_close;
+  // disable_early_data disables early data.
+  bool disable_early_data;
+  // static_secret is used to derive keying materials for Stateless
+  // Retry token.
+  std::array<uint8_t, 32> static_secret;
+  // cc is the congestion controller algorithm.
+  std::string_view cc;
+  // token_file is a path to file to read or write token from
+  // NEW_TOKEN frame.
+  std::string_view token_file;
+  // sni is the value sent in TLS SNI, overriding DNS name of the
+  // remote host.
+  std::string_view sni;
+  // initial_rtt is an initial RTT.
+  ngtcp2_duration initial_rtt;
+};
 
 namespace {
 Config config{};
 } // namespace
 
+
+
+struct Buffer {
+  Buffer(const uint8_t *data, size_t datalen);
+  explicit Buffer(size_t datalen);
+
+  size_t size() const { return tail - buf.data(); }
+  size_t left() const { return buf.data() + buf.size() - tail; }
+  uint8_t *const wpos() { return tail; }
+  const uint8_t *rpos() const { return buf.data(); }
+  void push(size_t len) { tail += len; }
+  void reset() { tail = buf.data(); }
+
+  std::vector<uint8_t> buf;
+  // tail points to the position of the buffer where write should
+  // occur.
+  uint8_t *tail;
+};
+
 Buffer::Buffer(const uint8_t *data, size_t datalen)
     : buf{data, data + datalen}, tail(buf.data() + datalen) {}
 Buffer::Buffer(size_t datalen) : buf(datalen), tail(buf.data()) {}
 
+struct Stream {
+  Stream(const Request &req, int64_t stream_id);
+  ~Stream();
+
+  int open_file(const std::string_view &path);
+
+  Request req;
+  int64_t stream_id;
+  int fd;
+};
 Stream::Stream(const Request &req, int64_t stream_id)
     : req(req), stream_id(stream_id), fd(-1) {}
-
 Stream::~Stream() {
   if (fd != -1) {
     close(fd);
   }
 }
-
 int Stream::open_file(const std::string_view &path) {
   assert(fd == -1);
 
@@ -104,6 +201,136 @@ int Stream::open_file(const std::string_view &path) {
 
   return 0;
 }
+struct Crypto {
+  /* data is unacknowledged data. */
+  std::deque<Buffer> data;
+  /* acked_offset is the size of acknowledged crypto data removed from
+     |data| so far */
+  uint64_t acked_offset;
+};
+
+class Client {
+public:
+  Client(struct ev_loop *loop, SSL_CTX *ssl_ctx);
+  ~Client();
+
+  int init(int fd, const Address &local_addr, const Address &remote_addr,
+           const char *addr, const char *port, uint32_t version);
+  int init_ssl();
+  void disconnect();
+  void close();
+
+  void start_wev();
+
+  int on_read();
+  int on_write();
+  int write_streams();
+  int feed_data(const sockaddr *sa, socklen_t salen, const ngtcp2_pkt_info *pi,
+                uint8_t *data, size_t datalen);
+  int handle_expiry();
+  void schedule_retransmit();
+  int handshake_completed();
+  int handshake_confirmed();
+
+  void write_client_handshake(ngtcp2_crypto_level level, const uint8_t *data,
+                              size_t datalen);
+
+  int recv_crypto_data(ngtcp2_crypto_level crypto_level, const uint8_t *data,
+                       size_t datalen);
+
+  ngtcp2_conn *conn() const;
+  void update_remote_addr(const ngtcp2_addr *addr, const ngtcp2_pkt_info *pi);
+  int send_packet();
+  void remove_tx_crypto_data(ngtcp2_crypto_level crypto_level, uint64_t offset,
+                             uint64_t datalen);
+  int on_stream_close(int64_t stream_id, uint64_t app_error_code);
+  int on_extend_max_streams();
+  int handle_error();
+  int make_stream_early();
+  int change_local_addr();
+  void start_change_local_addr_timer();
+  int update_key(uint8_t *rx_secret, uint8_t *tx_secret,
+                 ngtcp2_crypto_aead_ctx *rx_aead_ctx, uint8_t *rx_iv,
+                 ngtcp2_crypto_aead_ctx *tx_aead_ctx, uint8_t *tx_iv,
+                 const uint8_t *current_rx_secret,
+                 const uint8_t *current_tx_secret, size_t secretlen);
+  int initiate_key_update();
+  void start_key_update_timer();
+  void start_delay_stream_timer();
+
+  int on_key(ngtcp2_crypto_level level, const uint8_t *rx_secret,
+             const uint8_t *tx_secret, size_t secretlen);
+
+  void set_tls_alert(uint8_t alert);
+
+  int select_preferred_address(Address &selected_addr,
+                               const ngtcp2_preferred_addr *paddr);
+
+  int setup_httpconn();
+  int submit_http_request(const Stream *stream);
+  int recv_stream_data(uint32_t flags, int64_t stream_id, const uint8_t *data,
+                       size_t datalen);
+  int acked_stream_data_offset(int64_t stream_id, uint64_t datalen);
+  int http_acked_stream_data(int64_t stream_id, size_t datalen);
+  void http_consume(int64_t stream_id, size_t nconsumed);
+  void http_write_data(int64_t stream_id, const uint8_t *data, size_t datalen);
+  int on_stream_reset(int64_t stream_id);
+  int extend_max_stream_data(int64_t stream_id, uint64_t max_data);
+  int send_stop_sending(int64_t stream_id, uint64_t app_error_code);
+  int http_stream_close(int64_t stream_id, uint64_t app_error_code);
+
+  void reset_idle_timer();
+
+  void write_qlog(const void *data, size_t datalen);
+
+  void idle_timeout();
+
+private:
+  Address local_addr_;
+  Address remote_addr_;
+  unsigned int ecn_;
+  size_t max_pktlen_;
+  ev_io wev_;
+  ev_io rev_;
+  ev_timer timer_;
+  ev_timer rttimer_;
+  ev_timer change_local_addr_timer_;
+  ev_timer key_update_timer_;
+  ev_timer delay_stream_timer_;
+  ev_signal sigintev_;
+  struct ev_loop *loop_;
+  SSL_CTX *ssl_ctx_;
+  SSL *ssl_;
+  int fd_;
+  std::map<int64_t, std::unique_ptr<Stream>> streams_;
+  Crypto crypto_[3];
+  FILE *qlog_;
+  ngtcp2_conn *conn_;
+  nghttp3_conn *httpconn_;
+  // addr_ is the server host address.
+  const char *addr_;
+  // port_ is the server port.
+  const char *port_;
+  QUICError last_error_;
+  // common buffer used to store packet data before sending
+  Buffer sendbuf_;
+  // nstreams_done_ is the number of streams opened.
+  size_t nstreams_done_;
+  // nstreams_closed_ is the number of streams get closed.
+  size_t nstreams_closed_;
+  // nkey_update_ is the number of key update occurred.
+  size_t nkey_update_;
+  uint32_t version_;
+  // early_data_ is true if client attempts to do 0RTT data transfer.
+  bool early_data_;
+  // should_exit_ is true if client should exit rather than waiting
+  // for timeout.
+  bool should_exit_;
+  // handshake_confirmed_ gets true after handshake has been
+  // confirmed.
+  bool handshake_confirmed_;
+};
+
 
 namespace {
 int write_transport_params(const char *path,
@@ -368,6 +595,9 @@ void siginthandler(struct ev_loop *loop, ev_signal *w, int revents) {
 }
 } // namespace
 
+#define NGTCP2_MAX_PKTLEN_IPV4 1252
+#define NGTCP2_MAX_PKTLEN_IPV6 1232
+#define NGTCP2_SECONDS ((uint64_t)1000000000ULL)
 Client::Client(struct ev_loop *loop, SSL_CTX *ssl_ctx)
     : local_addr_{},
       remote_addr_{},
@@ -541,6 +771,9 @@ int handshake_completed(ngtcp2_conn *conn, void *user_data) {
 }
 } // namespace
 
+# define SSL_EARLY_DATA_NOT_SENT    0
+# define SSL_EARLY_DATA_REJECTED    1
+# define SSL_EARLY_DATA_ACCEPTED    2
 int Client::handshake_completed() {
   if (!config.quiet) {
     // SSL_get_early_data_status works after handshake completes.
@@ -555,8 +788,7 @@ int Client::handshake_completed() {
       }
     }
 
-    std::cerr << "Negotiated cipher suite is " << SSL_get_cipher_name(ssl_)
-              << std::endl;
+    std::cerr << "Negotiated cipher suite is " << SSL_CIPHER_get_name(SSL_get_current_cipher(ssl_)) << std::endl;
 
     const unsigned char *alpn = nullptr;
     unsigned int alpnlen;
@@ -604,7 +836,6 @@ int Client::handshake_confirmed() {
   return 0;
 }
 
-namespace {
 int stream_close(ngtcp2_conn *conn, int64_t stream_id, uint64_t app_error_code,
                  void *user_data, void *stream_user_data) {
   auto c = static_cast<Client *>(user_data);
@@ -615,9 +846,7 @@ int stream_close(ngtcp2_conn *conn, int64_t stream_id, uint64_t app_error_code,
 
   return 0;
 }
-} // namespace
 
-namespace {
 int stream_reset(ngtcp2_conn *conn, int64_t stream_id, uint64_t final_size,
                  uint64_t app_error_code, void *user_data,
                  void *stream_user_data) {
@@ -629,9 +858,7 @@ int stream_reset(ngtcp2_conn *conn, int64_t stream_id, uint64_t final_size,
 
   return 0;
 }
-} // namespace
 
-namespace {
 int extend_max_streams_bidi(ngtcp2_conn *conn, uint64_t max_streams,
                             void *user_data) {
   auto c = static_cast<Client *>(user_data);
@@ -642,18 +869,14 @@ int extend_max_streams_bidi(ngtcp2_conn *conn, uint64_t max_streams,
 
   return 0;
 }
-} // namespace
 
-namespace {
 int rand(uint8_t *dest, size_t destlen, const ngtcp2_rand_ctx *rand_ctx,
          ngtcp2_rand_usage usage) {
   auto dis = std::uniform_int_distribution<uint8_t>(0, 255);
   std::generate(dest, dest + destlen, [&dis]() { return dis(randgen); });
   return 0;
 }
-} // namespace
 
-namespace {
 int get_new_connection_id(ngtcp2_conn *conn, ngtcp2_cid *cid, uint8_t *token,
                           size_t cidlen, void *user_data) {
   auto dis = std::uniform_int_distribution<uint8_t>(0, 255);
@@ -670,7 +893,6 @@ int get_new_connection_id(ngtcp2_conn *conn, ngtcp2_cid *cid, uint8_t *token,
 
   return 0;
 }
-} // namespace
 
 namespace {
 int remove_connection_id(ngtcp2_conn *conn, const ngtcp2_cid *cid,
@@ -679,19 +901,21 @@ int remove_connection_id(ngtcp2_conn *conn, const ngtcp2_cid *cid,
 }
 } // namespace
 
-namespace {
-int do_hp_mask(uint8_t *dest, const ngtcp2_crypto_cipher *hp,
-               const ngtcp2_crypto_cipher_ctx *hp_ctx, const uint8_t *sample) {
-  if (ngtcp2_crypto_hp_mask(dest, hp, hp_ctx, sample) != 0) {
-    return NGTCP2_ERR_CALLBACK_FAILURE;
+namespace
+{
+  int do_hp_mask(uint8_t *dest, const ngtcp2_crypto_cipher *hp,
+                 const ngtcp2_crypto_cipher_ctx *hp_ctx, const uint8_t *sample)
+  {
+    if (ngtcp2_crypto_hp_mask(dest, hp, hp_ctx, sample) != 0)
+    {
+      return NGTCP2_ERR_CALLBACK_FAILURE;
+    }
+    if (!config.quiet && config.show_secret)
+    {
+      debug::print_hp_mask(dest, 5, sample, 16);
+    }
+    return 0;
   }
-
-  if (!config.quiet && config.show_secret) {
-    debug::print_hp_mask(dest, NGTCP2_HP_MASKLEN, sample, NGTCP2_HP_SAMPLELEN);
-  }
-
-  return 0;
-}
 } // namespace
 
 namespace {
@@ -787,13 +1011,19 @@ int recv_new_token(ngtcp2_conn *conn, const ngtcp2_vec *token,
 }
 } // namespace
 
+# define TLSEXT_NAMETYPE_host_name 0
+# define SSL_CTRL_SET_TLSEXT_HOSTNAME            55
+# define SSL_set_tlsext_host_name(s,name) \
+        SSL_ctrl(s,SSL_CTRL_SET_TLSEXT_HOSTNAME,TLSEXT_NAMETYPE_host_name,\
+                (void *)name)
+
 int Client::init_ssl() {
   if (ssl_) {
     SSL_free(ssl_);
   }
 
   ssl_ = SSL_new(ssl_ctx_);
-  SSL_set_app_data(ssl_, this);
+  (SSL_set_ex_data(ssl_, 0, (char *)(this)));
   SSL_set_connect_state(ssl_);
 
   auto alpn = reinterpret_cast<const uint8_t *>(H3_ALPN);
@@ -850,6 +1080,18 @@ void Client::write_qlog(const void *data, size_t datalen) {
   assert(qlog_);
   fwrite(data, 1, datalen, qlog_);
 }
+
+#ifndef OPENSSL_FILE
+# ifdef OPENSSL_NO_FILENAMES
+#  define OPENSSL_FILE ""
+#  define OPENSSL_LINE 0
+# else
+#  define OPENSSL_FILE __FILE__
+#  define OPENSSL_LINE __LINE__
+# endif
+#endif
+# define OPENSSL_free(addr) \
+        CRYPTO_free(addr, OPENSSL_FILE, OPENSSL_LINE)
 
 int Client::init(int fd, const Address &local_addr, const Address &remote_addr,
                  const char *addr, const char *port, uint32_t version) {
@@ -1078,14 +1320,12 @@ int Client::on_read() {
   msg_iov.iov_base = buf.data();
   msg_iov.iov_len = buf.size();
 
-  printf("%d\n",sizeof(msg_iov));
   msghdr msg{};
   msg.msg_name = &su;
   msg.msg_iov = &msg_iov;
-  msg.msg_iovlen = 25;
+  msg.msg_iovlen = 1;
 
   uint8_t msg_ctrl[CMSG_SPACE(sizeof(uint8_t))];
-  // uint8_t msg_ctrl[65536];
   msg.msg_control = msg_ctrl;
 
   for (;;) {
@@ -1147,7 +1387,8 @@ void Client::reset_idle_timer() {
           : 1e-9;
 
   if (!config.quiet) {
-    std::cerr << "Set idle timer=" << std::fixed << timer_.repeat << "s"<< std::defaultfloat << std::endl;
+    std::cerr << "Set idle timer=" << std::fixed << timer_.repeat << "s"
+              << std::defaultfloat << std::endl;
   }
 
   ev_timer_again(loop_, &timer_);
@@ -1156,7 +1397,8 @@ void Client::reset_idle_timer() {
 int Client::handle_expiry() {
   auto now = util::timestamp(loop_);
   if (auto rv = ngtcp2_conn_handle_expiry(conn_, now); rv != 0) {
-    std::cerr << "ngtcp2_conn_handle_expiry: " << ngtcp2_strerror(rv)<< std::endl;
+    std::cerr << "ngtcp2_conn_handle_expiry: " << ngtcp2_strerror(rv)
+              << std::endl;
     last_error_ = quic_err_transport(NGTCP2_ERR_INTERNAL);
     disconnect();
     return -1;
@@ -1209,7 +1451,8 @@ int Client::write_streams() {
       sveccnt = nghttp3_conn_writev_stream(httpconn_, &stream_id, &fin,
                                            vec.data(), vec.size());
       if (sveccnt < 0) {
-        std::cerr << "nghttp3_conn_writev_stream: " << nghttp3_strerror(sveccnt)<< std::endl;
+        std::cerr << "nghttp3_conn_writev_stream: " << nghttp3_strerror(sveccnt)
+                  << std::endl;
         last_error_ = quic_err_app(sveccnt);
         disconnect();
         return -1;
@@ -1643,6 +1886,7 @@ void Client::remove_tx_crypto_data(ngtcp2_crypto_level crypto_level,
   ::remove_tx_stream_data(crypto.data, crypto.acked_offset, offset + datalen);
 }
 
+#define NGHTTP3_H3_NO_ERROR 0x0100
 int Client::on_stream_close(int64_t stream_id, uint64_t app_error_code) {
   if (httpconn_) {
     if (app_error_code == 0) {
@@ -2215,6 +2459,7 @@ int new_session_cb(SSL *ssl, SSL_SESSION *session) {
 }
 } // namespace
 
+# define SSL_get_app_data(s)             (SSL_get_ex_data(s,0))
 namespace {
 int set_encryption_secrets(SSL *ssl, OSSL_ENCRYPTION_LEVEL ossl_level,
                            const uint8_t *read_secret,
@@ -2260,37 +2505,51 @@ auto quic_method = SSL_QUIC_METHOD{
 };
 } // namespace
 
+# define TLS1_3_VERSION                  0x0304
+# define SSL_SESS_CACHE_OFF                      0x0000
+# define SSL_SESS_CACHE_CLIENT                   0x0001
+# define SSL_SESS_CACHE_SERVER                   0x0002
+# define SSL_SESS_CACHE_BOTH     (SSL_SESS_CACHE_CLIENT|SSL_SESS_CACHE_SERVER)
+# define SSL_SESS_CACHE_NO_AUTO_CLEAR            0x0080
+/* enough comments already ... see SSL_CTX_set_session_cache_mode(3) */
+# define SSL_SESS_CACHE_NO_INTERNAL_LOOKUP       0x0100
+# define SSL_SESS_CACHE_NO_INTERNAL_STORE        0x0200
+# define SSL_CTRL_SET_SESS_CACHE_MODE            44
+
+
+# define SSL_SESS_CACHE_NO_INTERNAL \
+        (SSL_SESS_CACHE_NO_INTERNAL_LOOKUP|SSL_SESS_CACHE_NO_INTERNAL_STORE)
+        # define SSL_CTX_set_session_cache_mode(ctx,m) \
+        SSL_CTX_ctrl(ctx,SSL_CTRL_SET_SESS_CACHE_MODE,m,NULL)
 namespace {
 SSL_CTX *create_ssl_ctx(const char *private_key_file, const char *cert_file) {
   auto ssl_ctx = SSL_CTX_new(TLS_client_method());
 
-  SSL_CTX_set_min_proto_version(ssl_ctx, TLS1_3_VERSION);
-  SSL_CTX_set_max_proto_version(ssl_ctx, TLS1_3_VERSION);
+      SSL_CTX_ctrl(ssl_ctx, 123, 0x0304,__null);
+    SSL_CTX_ctrl(ssl_ctx, 124, 0x0304,__null);
 
   SSL_CTX_set_default_verify_paths(ssl_ctx);
 
   if (SSL_CTX_set_ciphersuites(ssl_ctx, config.ciphers) != 1) {
-    std::cerr << "SSL_CTX_set_ciphersuites: "
-              << ERR_error_string(ERR_get_error(), nullptr) << std::endl;
+    std::cerr << "SSL_CTX_set_ciphersuites: " << "error" << std::endl;
     exit(EXIT_FAILURE);
   }
 
-  if (SSL_CTX_set1_groups_list(ssl_ctx, config.groups) != 1) {
+  if (SSL_CTX_ctrl(ssl_ctx, 92, 0, (char *)(config.groups)) != 1) {
     std::cerr << "SSL_CTX_set1_groups_list failed" << std::endl;
     exit(EXIT_FAILURE);
   }
 
   if (private_key_file && cert_file) {
-    if (SSL_CTX_use_PrivateKey_file(ssl_ctx, private_key_file,
-                                    SSL_FILETYPE_PEM) != 1) {
+    if (SSL_CTX_use_PrivateKey_file(ssl_ctx, private_key_file,1) != 1) {
       std::cerr << "SSL_CTX_use_PrivateKey_file: "
-                << ERR_error_string(ERR_get_error(), nullptr) << std::endl;
+                << "error" << std::endl;
       exit(EXIT_FAILURE);
     }
 
     if (SSL_CTX_use_certificate_chain_file(ssl_ctx, cert_file) != 1) {
       std::cerr << "SSL_CTX_use_certificate_file: "
-                << ERR_error_string(ERR_get_error(), nullptr) << std::endl;
+                << "error" << std::endl;
       exit(EXIT_FAILURE);
     }
   }
@@ -2413,6 +2672,8 @@ void print_usage() {
 }
 } // namespace
 
+#define NGTCP2_PROTO_VER_MIN 0xff00001du
+
 namespace {
 void config_set_default(Config &config) {
   config = Config{};
@@ -2427,7 +2688,7 @@ void config_set_default(Config &config) {
   config.datalen = 0;
   config.version = NGTCP2_PROTO_VER_MIN;
   config.timeout = 30 * NGTCP2_SECONDS;
-  config.http_method = "GET"sv;
+  config.http_method = "GET";
   config.max_data = 1_m;
   config.max_stream_data_bidi_local = 256_k;
   config.max_stream_data_bidi_remote = 256_k;
@@ -2435,8 +2696,8 @@ void config_set_default(Config &config) {
   config.max_window = 6_m;
   config.max_stream_window = 6_m;
   config.max_streams_uni = 100;
-  config.cc = "cubic"sv;
-  config.initial_rtt = NGTCP2_DEFAULT_INITIAL_RTT;
+  config.cc = "cubic";
+ config.initial_rtt = (333 * ((uint64_t)1000000ULL));
 }
 } // namespace
 
