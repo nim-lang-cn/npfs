@@ -1,0 +1,35 @@
+type IpfsNode = object
+    Identity: ID 
+    repo:Repo
+    pinning:         Pinner             
+    mounts:          Mounts                
+    privateKey:      PrivKey             
+    pNetFingerprint: PNetFingerprint 
+    peerstore:       Peerstore          
+    filestore:       Filestore      
+    baseBlocks:      BaseBlocks           
+    blocks:          BlockService        
+    dag:             DAGService           
+    resolver:        Resolver        
+    reporter:        BandwidthCounter 
+    discovery:       Service         
+    filesRoot:       Root
+    recordValidator: Validator
+    peerHost:      Host            
+    peering:       PeeringService  
+    filters:       Filters             
+    bootstrapper:  Closer              
+    routing:       Routing         
+    exchange:      Interface      
+    namesys:       NameSystem      
+    provider:      System         
+    ipnsRepub:     Republisher     
+    graphExchange: GraphExchange 
+    pubSub:   PubSub             
+    psRouter: PubsubValueStore 
+    dht:      DHT                  
+    p2p:      P2P                   
+    process: Process
+    proc stop():error
+    isOnline: bool 
+    isDaemon: bool 
