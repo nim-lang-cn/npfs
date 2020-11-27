@@ -4,6 +4,13 @@ import deques
 import binaryparse
 import streams
 import posix
+import strutils
+import bitops
+import sugar
+import strformat
+import unicode
+import rationals
+import times
 
 const
   AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX* = 0x00000001
@@ -100,9 +107,7 @@ type
 
 
 type
-  AVRational* = ref object
-    num*: int
-    den*: int
+
 
   av_intfloat32* {.union.}  = ref object 
     i*: uint32
@@ -129,22 +134,22 @@ type
   AVOptionUnion* {.bycopy,union.} = object 
     i64*: int64
     dbl*: cdouble
-    str*: cstring
-    q*: AVRational
+    str*: string
+    q*: Rational[int]
 
   AVOption* = ref object
-    name*: cstring
-    help*: cstring
+    name*: string
+    help*: string
     offset*: int
     t*: AVOptionType
-    default_val*: AVOptionUnion
-    min*: cdouble
-    max*: cdouble
+    defaultVal*: AVOptionUnion
+    min*: int
+    max*: int
     flags*: int
-    unit*: cstring
+    unit*: string
 
   AVOptionRange* = ref object
-    str*: cstring
+    str*: string
     value_min*: cdouble
     value_max*: cdouble
     component_min*: cdouble
@@ -157,9 +162,9 @@ type
     nb_components*: int
 
   AVClass* = ref object
-    class_name*: cstring
-    item_name*: proc (ctx: pointer): cstring
-    option*: AVOption
+    className*: string
+    itemName*: proc (ctx: pointer): string
+    option*: seq[AVOption]
     version*: int
     log_level_offset_offset*: int
     parent_log_context_offset*: int
@@ -167,7 +172,7 @@ type
     child_class_next*: proc (prev: AVClass): AVClass
     category*: AVClassCategory
     get_category*: proc (ctx: pointer): AVClassCategory
-    query_ranges*: proc (a1: AVOptionRanges; obj: pointer; key: cstring;flags: int): int
+    query_ranges*: proc (a1: AVOptionRanges; obj: pointer; key: string;flags: int): int
     child_class_iterate*: proc (iter: pointer): AVClass
 
   AVPixelFormat* = enum
@@ -277,17 +282,17 @@ type
     offset_plus1: int
 
   AVPixFmtDescriptor* = ref object
-    name*: cstring
+    name*: string
     nb_components*: uint8
     log2_chroma_w*: uint8
     log2_chroma_h*: uint8
     flags*: uint64
     comp*: seq[AVComponentDescriptor]
-    alias*: cstring
+    alias*: string
 
   AVDictionaryEntry* = ref object
-    key*: cstring
-    value*: cstring
+    key*: string
+    value*: string
 
   AVSampleFormat* = enum
     AV_SAMPLE_FMT_NONE = -1, AV_SAMPLE_FMT_U8, AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_S32,
@@ -308,7 +313,7 @@ type
 type
   AVBufferRef* = ref object
     buffer*: AVBuffer
-    data*: ptr uint8
+    data*: string
     size*: int
 
   AVMatrixEncoding* = enum
@@ -340,10 +345,10 @@ type
 type
   AVFrameSideData* = ref object
     t*: AVFrameSideDataType
-    data*: uint8
+    data*: string
     size*: int
     metadata*: OrderedTable[string,string]
-    buf*: AVBufferRef
+    buf*: string
 
   AVRegionOfInterest* = ref object
     self_size*: uint32
@@ -351,19 +356,19 @@ type
     bottom*: int
     left*: int
     right*: int
-    qoffset*: AVRational
+    qoffset*: Rational[int]
 
   AVFrame* = ref object
-    data*: seq[ptr uint8]
+    data*: string
     linesize*: seq[int]
-    extended_data*: seq[uint8]
+    extended_data*: string
     width*: int
     height*: int
     nb_samples*: int
     format*: int
     key_frame*: int
     pict_type*: AVPictureType
-    sample_aspect_ratio*: AVRational
+    sample_aspect_ratio*: Rational[int]
     pts*: int64
     pkt_pts*: int64
     pkt_dts*: int64
@@ -379,10 +384,10 @@ type
     reordered_opaque*: int64
     sample_rate*: int
     channel_layout*: uint64
-    buf*: seq[AVBufferRef]
-    extended_buf*: seq[AVBufferRef]
+    buf*: string
+    extended_buf*: string
     nb_extended_buf*: int
-    side_data*: AVFrameSideData
+    side_data*: seq[AVFrameSideData]
     nb_side_data*: int
     flags*: int
     color_range*: AVColorRange
@@ -393,21 +398,21 @@ type
     best_effort_timestamp*: int64
     pkt_pos*: int64
     pkt_duration*: int64
-    metadata*: OrderedTable[string,string]
+    metadata*: OrderedTableRef[string,string]
     decode_error_flags*: int
     channels*: int
     pkt_size*: int
     qscale_table*: int8
     qstride*: int
     qscale_type*: int
-    qp_table_buf*: AVBufferRef
-    hw_frames_ctx*: AVBufferRef
-    opaque_ref*: AVBufferRef
+    qp_table_buf*: string
+    hwFramesCtx*: string
+    opaque_ref*: string
     crop_top*: uint
     crop_bottom*: uint
     crop_left*: uint
     crop_right*: uint
-    private_ref*: AVBufferRef
+    private_ref*: string
 
   AVHWDeviceType* = enum
     AV_HWDEVICE_TYPE_NONE, AV_HWDEVICE_TYPE_VDPAU, AV_HWDEVICE_TYPE_CUDA,
@@ -422,44 +427,34 @@ type
 
   HWContextType* = ref object
     t*: AVHWDeviceType
-    name*: cstring 
+    name*: string 
     pixFmts*: AVPixelFormat 
     deviceHwctxSize*: uint  
     devicePrivSize*: uint 
     deviceHwconfigSize*: uint 
     framesHwctxSize*: uint  
     framesPrivSize*: uint
-    deviceCreate*: proc (ctx: AVHWDeviceContext; device: cstring;
-                       opts: OrderedTableRef[string,string]; flags: cint): cint
-    deviceDerive*: proc (dstCtx: AVHWDeviceContext;
-                       srcCtx: AVHWDeviceContext; opts: OrderedTableRef[string,string];
-                       flags: cint): cint
+    deviceCreate*: proc (ctx: AVHWDeviceContext; device: string;opts: OrderedTableRef[string,string]; flags: cint): cint
+    deviceDerive*: proc (dstCtx: AVHWDeviceContext;srcCtx: AVHWDeviceContext; opts: OrderedTableRef[string,string];flags: cint): cint
     deviceInit*: proc (ctx: AVHWDeviceContext): cint
     deviceUninit*: proc (ctx: AVHWDeviceContext)
-    framesGetConstraints*: proc (ctx: AVHWDeviceContext; hwconfig: pointer;
-                               constraints: AVHWFramesConstraints): cint
+    framesGetConstraints*: proc (ctx: AVHWDeviceContext; hwconfig: pointer; constraints: AVHWFramesConstraints): cint
     framesInit*: proc (ctx: AVHWFramesContext): cint
     framesUninit*: proc (ctx: AVHWFramesContext)
     framesGetBuffer*: proc (ctx: AVHWFramesContext; frame: AVFrame): cint
     transferGetFormats*: proc (ctx: AVHWFramesContext;dir: AVHWFrameTransferDirection;formats: AVPixelFormat): cint
-    transferDataTo*: proc (ctx: AVHWFramesContext; dst: AVFrame;
-                         src: AVFrame): cint
-    transferDataFrom*: proc (ctx: AVHWFramesContext; dst: AVFrame;
-                           src: AVFrame): cint
-    mapTo*: proc (ctx: ptr AVHWFramesContext; dst: AVFrame; src: AVFrame;
-                flags: cint): cint
-    mapFrom*: proc (ctx: ptr AVHWFramesContext; dst: AVFrame; src: AVFrame;
-                  flags: cint): cint
-    framesDeriveTo*: proc (dstCtx: AVHWFramesContext;
-                         srcCtx: AVHWFramesContext; flags: cint): cint
-    framesDeriveFrom*: proc (dstCtx: AVHWFramesContext;
-                           srcCtx: AVHWFramesContext; flags: cint): cint
+    transferDataTo*: proc (ctx: AVHWFramesContext; dst: AVFrame;src: AVFrame): cint
+    transferDataFrom*: proc (ctx: AVHWFramesContext; dst: AVFrame; src: AVFrame): cint
+    mapTo*: proc (ctx: ptr AVHWFramesContext; dst: AVFrame; src: AVFrame;flags: cint): cint
+    mapFrom*: proc (ctx: ptr AVHWFramesContext; dst: AVFrame; src: AVFrame;flags: cint): cint
+    framesDeriveTo*: proc (dstCtx: AVHWFramesContext;srcCtx: AVHWFramesContext; flags: cint): cint
+    framesDeriveFrom*: proc (dstCtx: AVHWFramesContext; srcCtx: AVHWFramesContext; flags: cint): cint
 
 
   AVHWDeviceInternal* = ref object
     hwType*: HWContextType
     priv*: pointer 
-    sourceDevice*: AVBufferRef
+    sourceDevice*: string
 
   AVHWDeviceContext* = ref object
     av_class*: AVClass
@@ -469,15 +464,14 @@ type
     free*: proc (ctx: AVHWDeviceContext)
     user_opaque*: pointer
 
+  BufferPoolEntry* = ref object
+    data*: string
+    pool*: AVBufferPool
+    next*: BufferPoolEntry
+
   AVBufferPool* = ref object
-    # mutex*: AVMutex
-    # pool*: ptr BufferPoolEntry
-    refcount*: int
+    pool*: BufferPoolEntry
     size*: cint
-    opaque*: pointer
-    alloc*: proc (size: cint): ptr AVBufferRef
-    alloc2*: proc (opaque: pointer; size: cint): ptr AVBufferRef
-    poolFree*: proc (opaque: pointer)
 
 
 
@@ -485,14 +479,14 @@ type
     hwType*: HWContextType
     priv*: pointer
     poolInternal*: AVBufferPool 
-    sourceFrames*: AVBufferRef 
+    sourceFrames*: string 
     sourceAllocationMapFlags*: cint
 
 
   AVHWFramesContext* = ref object
     av_class*: AVClass
     internal*: AVHWFramesInternal
-    device_ref*: AVBufferRef
+    device_ref*: string
     device_ctx*: AVHWDeviceContext
     hwctx*: pointer
     free*: proc (ctx: AVHWFramesContext)
@@ -684,20 +678,20 @@ type
 
 type
   AVCodecParameters* = ref object
-    codec_type*: AVMediaType
-    codec_id*: AVCodecID
-    codec_tag*: uint32
+    codecType*: AVMediaType
+    codecId*: AVCodecID
+    codecTag*: uint32
     extradata*: uint8
-    extradata_size*: int
+    extradataSize*: int
     format*: int
-    bit_rate*: int64
+    bitRate*: int64
     bits_per_coded_sample*: int
     bits_per_raw_sample*: int
     profile*: int
     level*: int
     width*: int
     height*: int
-    sample_aspect_ratio*: AVRational
+    sample_aspect_ratio*: Rational[int]
     field_order*: AVFieldOrder
     color_range*: AVColorRange
     color_primaries*: AVColorPrimaries
@@ -737,10 +731,10 @@ type
     t*: AVPacketSideDataType
 
   AVPacket* = ref object
-    buf*: AVBufferRef
+    buf*: string
     pts*: int64
     dts*: int64
-    data*: uint8
+    data*: ptr uint8
     size*: int
     stream_index*: int
     flags*: int
@@ -762,18 +756,23 @@ type
 
 
 type
+  AVBSFInternal* = ref object
+    bufferPkt*: AVPacket
+    eof*: cint
+
+
   AVBSFContext* = ref object
     av_class*: AVClass
     filter*: AVBitStreamFilter
-    # internal*: AVBSFInternal
+    internal*: AVBSFInternal
     priv_data*: pointer
     par_in*: AVCodecParameters
     par_out*: AVCodecParameters
-    time_base_in*: AVRational
-    time_base_out*: AVRational
+    time_base_in*: Rational[int]
+    time_base_out*: Rational[int]
 
   AVBitStreamFilter* = ref object
-    name*: cstring
+    name*: string
     codec_ids*: AVCodecID
     priv_class*: AVClass
     priv_data_size*: int
@@ -784,7 +783,7 @@ type
 
   AVProfile* = ref object
     profile*: int
-    name*: cstring
+    name*: string
 
 
 
@@ -795,15 +794,15 @@ type
     quality_factor*: cfloat
 
   AVCodecHWConfig* = ref object
-    pix_fmt*: AVPixelFormat
+    pixFmt*: AVPixelFormat
     methods*: int
-    device_type*: AVHWDeviceType
+    deviceType*: AVHWDeviceType
 
   AVCodecDescriptor* = ref object
     id*: AVCodecID
     t*: AVMediaType
-    name*: cstring
-    long_name*: cstring
+    name*: string
+    long_name*: string
     props*: int
     mime_types*: cstringArray
     profiles*: AVProfile
@@ -819,7 +818,7 @@ type
     isCopy*: cint 
     lastAudioFrame*: cint
     toFree*: AVFrame
-    pool*: AVBufferRef
+    pool*: string
     threadCtx*: pointer
     ds*: DecodeSimpleContext
     bsf*: AVBSFContext 
@@ -852,14 +851,13 @@ type
     initialChannels*: cint
     initialChannelLayout*: uint64
 
-
-  AVHWAccel* {.bycopy.} = object
-    name*: cstring
+  AVHWAccel*  = ref object
+    name*: string
     t*: AVMediaType
     id*: AVCodecID
     pixFmt*: AVPixelFormat
     capabilities*: cint
-    allocFrame*: proc (avctx: ptr AVCodecContext; frame: ptr AVFrame): cint
+    allocFrame*: proc (avctx: AVCodecContext; frame: var AVFrame): cint
     startFrame*: proc (avctx: ptr AVCodecContext; buf: ptr uint8; bufSize: uint32): cint
     decodeParams*: proc (avctx: ptr AVCodecContext; t: cint; buf: ptr uint8;
                        bufSize: uint32): cint
@@ -867,109 +865,109 @@ type
     endFrame*: proc (avctx: ptr AVCodecContext): cint
     framePrivDataSize*: cint
     # decodeMb*: proc (s: ptr MpegEncContext)
-    init*: proc (avctx: ptr AVCodecContext): cint
-    uninit*: proc (avctx: ptr AVCodecContext): cint
+    init*: proc (avctx: var AVCodecContext): cint
+    uninit*: proc (avctx: var AVCodecContext): cint
     privDataSize*: cint
     capsInternal*: cint
-    frameParams*: proc (avctx: ptr AVCodecContext; hwFramesCtx: ptr AVBufferRef): cint
+    frameParams*: proc (avctx: ptr AVCodecContext; hwFramesCtx: ptr string): cint
 
 
   AVCodecContext* = ref object
-    av_class*: AVClass
-    log_level_offset*: int
-    codec_type*: AVMediaType
+    avClass*: AVClass
+    logLevelOffset*: int
+    codecType*: AVMediaType
     codec*: AVCodec
-    codec_id*: AVCodecID
-    codec_tag*: cuint
-    priv_data*: pointer
+    codecId*: AVCodecID
+    codecTag*: cuint
+    privData*: pointer
     internal*: AVCodecInternal
     opaque*: pointer
-    bit_rate*: int64
-    bit_rate_tolerance*: int
-    global_quality*: int
-    compression_level*: int
+    bitRate*: int64
+    bitRateTolerance*: int
+    globalQuality*: int
+    compressionLevel*: int
     flags*: int
     flags2*: int
     extradata*: uint8
-    extradata_size*: int
-    time_base*: AVRational
-    ticks_per_frame*: int
+    extradataSize*: int
+    timeBase*: Rational[int]
+    ticksPerFrame*: int
     delay*: int
     width*: int
     height*: int
-    coded_width*: int
-    coded_height*: int
-    gop_size*: int
-    pix_fmt*: AVPixelFormat
-    draw_horiz_band*: proc (s: AVCodecContext; src: AVFrame;offset: array[8, int]; y: int; t: int; height: int)
-    get_format*: proc (s: AVCodecContext; fmt: AVPixelFormat): AVPixelFormat
-    max_b_frames*: int
-    b_quant_factor*: cfloat
-    b_frame_strategy*: int
-    b_quant_offset*: cfloat
-    has_b_frames*: int
-    mpeg_quant*: int
-    i_quant_factor*: cfloat
-    i_quant_offset*: cfloat
-    lumi_masking*: cfloat
-    temporal_cplx_masking*: cfloat
-    spatial_cplx_masking*: cfloat
-    p_masking*: cfloat
-    dark_masking*: cfloat
-    slice_count*: int
-    prediction_method*: int
-    slice_offset*: int
-    sample_aspect_ratio*: AVRational
-    me_cmp*: int
-    me_sub_cmp*: int
-    mb_cmp*: int
-    ildct_cmp*: int
-    dia_size*: int
-    last_predictor_count*: int
-    pre_me*: int
-    me_pre_cmp*: int
-    pre_dia_size*: int
-    me_subpel_quality*: int
-    me_range*: int
-    slice_flags*: int
-    mb_decision*: int
-    intra_matrix*: uint16
-    inter_matrix*: uint16
-    scenechange_threshold*: int
-    noise_reduction*: int
-    intra_dc_precision*: int
-    skip_top*: int
-    skip_bottom*: int
-    mb_lmin*: int
-    mb_lmax*: int
-    me_penalty_compensation*: int
-    bidir_refine*: int
-    brd_scale*: int
-    keyint_min*: int
+    codedWidth*: int
+    codedHeight*: int
+    gopSize*: int
+    pixFmt*: AVPixelFormat
+    drawHorizBand*: proc (s: AVCodecContext; src: AVFrame;offset: array[8, int]; y: int; t: int; height: int)
+    getFormat*: proc (s: AVCodecContext; fmt: ptr UncheckedArray[AVPixelFormat]): AVPixelFormat
+    maxBFrames*: int
+    bQuantFactor*: cfloat
+    bFrameFtrategy*: int
+    bQuantOffset*: cfloat
+    hasBFrames*: int
+    mpegQuant*: int
+    iQuantFactor*: cfloat
+    iQuantFffset*: cfloat
+    lumiMasking*: cfloat
+    temporalCplxMasking*: cfloat
+    spatialCplxMasking*: cfloat
+    pMasking*: cfloat
+    darkMasking*: cfloat
+    sliceCount*: int
+    predictionMethod*: int
+    sliceOffset*: int
+    sampleAspectRatio*: Rational[int]
+    meCmp*: int
+    meSubCmp*: int
+    mbCmp*: int
+    ildctCmp*: int
+    diaSize*: int
+    lastPredictorCount*: int
+    preMe*: int
+    mePreCmp*: int
+    preDiaSize*: int
+    meSubpelQuality*: int
+    meRange*: int
+    sliceFlags*: int
+    mbDecision*: int
+    intraMatrix*: uint16
+    interMatrix*: uint16
+    scenechangeThreshold*: int
+    noiseReduction*: int
+    intraDcPrecision*: int
+    skipTop*: int
+    skipBottom*: int
+    mbLmin*: int
+    mbLmax*: int
+    mePenaltyCompensation*: int
+    bidirRefine*: int
+    brdScale*: int
+    keyintMin*: int
     refs*: int
     chromaoffset*: int
-    mv0_threshold*: int
-    b_sensitivity*: int
-    color_primaries*: AVColorPrimaries
-    color_trc*: AVColorTransferCharacteristic
+    mv0Threshold*: int
+    bSensitivity*: int
+    colorPrimaries*: AVColorPrimaries
+    colorTrc*: AVColorTransferCharacteristic
     colorspace*: AVColorSpace
-    color_range*: AVColorRange
-    chroma_sample_location*: AVChromaLocation
+    colorRange*: AVColorRange
+    chromaSampleLocation*: AVChromaLocation
     slices*: int
-    field_order*: AVFieldOrder
-    sample_rate*: int
+    fieldOrder*: AVFieldOrder
+    sampleRate*: int
     channels*: int
-    sample_fmt*: AVSampleFormat
-    frame_size*: int
-    frame_number*: int
-    block_align*: int
+    sampleFmt*: AVSampleFormat
+    frameSize*: int
+    frameNumber*: int
+    blockAlign*: int
     cutoff*: int
-    channel_layout*: uint64
-    request_channel_layout*: uint64
-    audio_service_type*: AVAudioServiceType
-    request_sample_fmt*: AVSampleFormat
-    get_buffer2*: proc (s: AVCodecContext; frame: AVFrame; flags: int): int
-    refcounted_frames*: int
+    channelLayout*: uint64
+    requestChannelLayout*: uint64
+    audioServiceType*: AVAudioServiceType
+    requestSampleFmt*: AVSampleFormat
+    getBuffer2*: proc (s: var AVCodecContext; frame: var AVFrame; flags: int): int
+    refcountedFrames*: int
     qcompress*: cfloat
     qblur*: cfloat
     qmin*: int
@@ -1004,8 +1002,8 @@ type
     skip_count*: int
     misc_bits*: int
     frame_bits*: int
-    stats_out*: cstring
-    stats_in*: cstring
+    stats_out*: string
+    stats_in*: string
     workaround_bugs*: int
     strict_std_compliance*: int
     error_concealment*: int
@@ -1020,52 +1018,52 @@ type
     bits_per_coded_sample*: int
     bits_per_raw_sample*: int
     lowres*: int
-    coded_frame*: AVFrame
-    thread_count*: int
-    thread_type*: int
+    codedFrame*: AVFrame
+    threadCount*: int
+    threadType*: int
     active_thread_type*: int
     thread_safe_callbacks*: int
     execute*: proc (c: AVCodecContext;
-                  `func`: proc (c2: AVCodecContext; arg: pointer): int;
+                  f: proc (c2: AVCodecContext; arg: pointer): int;
                   arg2: pointer; result: int; count: int; size: int): int
-    execute2*: proc (c: AVCodecContext; `func`: proc (c2: AVCodecContext;
+    execute2*: proc (c: AVCodecContext; f: proc (c2: AVCodecContext;
         arg: pointer; jobnr: int; threadnr: int): int; arg2: pointer; result: int;
                    count: int): int
-    nsse_weight*: int
+    nsseWeight*: int
     profile*: int
     level*: int
-    skip_loop_filter*: AVDiscard
-    skip_idct*: AVDiscard
-    skip_frame*: AVDiscard
-    subtitle_header*: uint8
-    subtitle_header_size*: int
-    vbv_delay*: uint64
-    side_data_only_packets*: int
-    initial_padding*: int
-    framerate*: AVRational
-    sw_pix_fmt*: AVPixelFormat
-    pkt_timebase*: AVRational
-    codec_descriptor*: AVCodecDescriptor
-    pts_correction_num_faulty_pts*: int64
-    pts_correction_num_faulty_dts*: int64
-    pts_correction_last_pts*: int64
-    pts_correction_last_dts*: int64
-    sub_charenc*: cstring
-    sub_charenc_mode*: int
-    skip_alpha*: int
-    seek_preroll*: int
-    debug_mv*: int
-    chroma_intra_matrix*: uint16
-    dump_separator*: uint8
-    codec_whitelist*: cstring
+    skipLoopFilter*: AVDiscard
+    skipIdct*: AVDiscard
+    skipFrame*: AVDiscard
+    subtitleHeader*: uint8
+    subtitleHeaderSize*: int
+    vbvDelay*: uint64
+    sideDataOnlyPackets*: int
+    initialPadding*: int
+    framerate*: Rational[int]
+    swPixFmt*: AVPixelFormat
+    pktTimebase*: Rational[int]
+    codecDescriptor*: AVCodecDescriptor
+    ptsCorrectionNumFaultyPts*: int64
+    ptsCorrectionNumFaultyDts*: int64
+    ptsCorrectionLastPts*: int64
+    ptsCorrectionLastDts*: int64
+    subCharenc*: string
+    subCharencMode*: int
+    skipAlpha*: int
+    seekPreroll*: int
+    debugMv*: int
+    chromaIntraMatrix*: uint16
+    dumpSeparator*: uint8
+    codecWhitelist*: string
     properties*: cuint
-    coded_side_data*: AVPacketSideData
+    codedSideData*: AVPacketSideData
     nb_coded_side_data*: int
-    hw_frames_ctx*: AVBufferRef
+    hw_frames_ctx*: string
     sub_text_format*: int
     trailing_padding*: int
     max_pixels*: int64
-    hw_device_ctx*: AVBufferRef
+    hwDeviceCtx*: string
     hwaccel_flags*: int
     apply_cropping*: int
     extra_hw_frames*: int
@@ -1079,63 +1077,63 @@ type
 
   AVCodecHWConfigInternal*  = ref object
     public*: AVCodecHWConfig
-    hwaccel*: ptr AVHWAccel
+    hwaccel*: AVHWAccel
 
   AVSubtitleRect* = ref object
     x*: int
     y*: int
     w*: int
     h*: int
-    nb_colors*: int
+    nbColors*: int
     pict*: AVPicture
     data*: array[4, uint8]
     linesize*: array[4, int]
     t*: AVSubtitleType
-    text*: cstring
-    ass*: cstring
+    text*: string
+    ass*: string
     flags*: int
 
   AVSubtitle* = ref object
     format*: uint16
-    start_display_time*: uint32
-    end_display_time*: uint32
-    num_rects*: cuint
-    rects*: AVSubtitleRect
+    startDisplayTime*: uint32
+    endDisplayTime*: uint32
+    numRects*: cuint
+    rects*: seq[AVSubtitleRect]
     pts*: int64
 
   AVCodec* = ref object
-    name*: cstring
-    long_name*: cstring
+    name*: string
+    longName*: string
     t*: AVMediaType
     id*: AVCodecID
     capabilities*: int
-    supported_framerates*: AVRational
-    pix_fmts*: AVPixelFormat
-    supported_samplerates*: int
-    sample_fmts*: AVSampleFormat
-    channel_layouts*: uint64
-    max_lowres*: uint8
-    priv_class*: AVClass
+    supportedFramerates*: Rational[int]
+    pixFmts*: AVPixelFormat
+    supportedSamplerates*: int
+    sampleFmts*: AVSampleFormat
+    channelLayouts*: uint64
+    maxLowres*: uint8
+    privClass*: AVClass
     profiles*: AVProfile
-    wrapper_name*: cstring
-    priv_data_size*: int
+    wrapperName*: string
+    privDataSize*: int
     next*: AVCodec
-    update_thread_context*: proc (dst: AVCodecContext; src: AVCodecContext): int
+    updateThreadContext*: proc (dst: AVCodecContext; src: AVCodecContext): int
     defaults*: AVCodecDefault
-    init_static_data*: proc (codec: AVCodec)
+    initStaticData*: proc (codec: AVCodec)
     init*: proc (a1: AVCodecContext): int
-    encode_sub*: proc (a1: AVCodecContext; buf: uint8; buf_size: int;sub: AVSubtitle): int
+    encodeSub*: proc (a1: AVCodecContext; buf: uint8; buf_size: int;sub: AVSubtitle): int
     encode2*: proc (avctx: AVCodecContext; avpkt: AVPacket; frame: AVFrame;
                   got_packet_ptr: int): int
     decode*: proc (a1: AVCodecContext; outdata: pointer; outdata_size: int;
                  avpkt: AVPacket): int
     close*: proc (a1: AVCodecContext): int
-    receive_packet*: proc (avctx: AVCodecContext; avpkt: AVPacket): int
-    receive_frame*: proc (avctx: AVCodecContext; frame: AVFrame): int
+    receivePacket*: proc (avctx: AVCodecContext; avpkt: AVPacket): int
+    receiveFrame*: proc (avctx: AVCodecContext; frame: AVFrame): int
     flush*: proc (a1: AVCodecContext)
-    caps_internal*: int
-    bsfs*: cstring
-    hw_configs*: AVCodecHWConfigInternal
+    capsInternal*: int
+    bsfs*: string
+    hwConfigs*: ptr AVCodecHWConfigInternal
     codec_tags*: uint32
 
   AVPanScan* = ref object
@@ -1145,11 +1143,11 @@ type
     position*: array[3, array[2, int16]]
 
   AVCPBProperties* = ref object
-    max_bitrate*: int
-    min_bitrate*: int
-    avg_bitrate*: int
-    buffer_size*: int
-    vbv_delay*: uint64
+    maxBitrate*: int
+    minBitrate*: int
+    avgBitrate*: int
+    bufferSize*: int
+    vbvDelay*: uint64
 
   AVProducerReferenceTime* = ref object
     wallclock*: int64
@@ -1222,22 +1220,22 @@ type
     format*: int
 
   AVCodecParser* = ref object
-    codec_ids*: array[5, int]
-    priv_data_size*: int
-    parser_init*: proc (s: AVCodecParserContext): int
-    parser_parse*: proc (s: AVCodecParserContext; avctx: AVCodecContext;
+    codecDds*: array[5, int]
+    privDataSize*: int
+    parserInit*: proc (s: AVCodecParserContext): int
+    parserParse*: proc (s: AVCodecParserContext; avctx: AVCodecContext;
                        poutbuf: uint8; poutbuf_size: int;
                        buf: uint8; buf_size: int): int
-    parser_close*: proc (s: AVCodecParserContext)
+    parserClose*: proc (s: AVCodecParserContext)
     split*: proc (avctx: AVCodecContext; buf: uint8; buf_size: int): int
     next*: AVCodecParser
 
   AVBitStreamFilterContext* = ref object
-    priv_data*: pointer
+    privData*: pointer
     filter*: AVBitStreamFilter
     parser*: AVCodecParserContext
     next*: AVBitStreamFilterContext
-    args*: cstring
+    args*: string
 
   AVLockOp* = enum
     AV_LOCK_CREATE, AV_LOCK_OBTAIN, AV_LOCK_RELEASE, AV_LOCK_DESTROY
@@ -1248,38 +1246,38 @@ type
     opaque*: pointer
 
   AVIODirEntry* = ref object
-    name*: cstring
+    name*: string
     t*: int
     utf8*: int
     size*: int64
-    modification_timestamp*: int64
-    access_timestamp*: int64
-    status_change_timestamp*: int64
-    user_id*: int64
-    group_id*: int64
+    modificationTimestamp*: int64
+    accessTimestamp*: int64
+    statusChangeTimestamp*: int64
+    userId*: int64
+    groupId*: int64
     filemode*: int64
 
 
   AVIOContext* = ref object
-    av_class*: AVClass
+    avClass*: AVClass
     buffer*: cuchar
-    buffer_size*: int
-    buf_ptr*: cuchar
-    buf_end*: cuchar
+    bufferSize*: int
+    bufPtr*: cuchar
+    bufEnd*: cuchar
     opaque*: pointer
-    read_packet*: proc (opaque: pointer; buf: uint8; buf_size: int): int
-    write_packet*: proc (opaque: pointer; buf: uint8; buf_size: int): int
+    readPacket*: proc (opaque: pointer; buf: uint8; buf_size: int): int
+    writePacket*: proc (opaque: pointer; buf: uint8; buf_size: int): int
     seek*: proc (opaque: pointer; offset: int64; whence: int): int64
     pos*: int64
-    eof_reached*: int
-    write_flag*: int
-    max_packet_size*: int
+    eofReached*: int
+    writeFlag*: int
+    maxPacketSize*: int
     checksum*: culong
-    checksum_ptr*: cuchar
-    update_checksum*: proc (checksum: culong; buf: uint8; size: cuint): culong
+    checksumPtr*: cuchar
+    updateChecksum*: proc (checksum: culong; buf: uint8; size: cuint): culong
     error*: int
-    read_pause*: proc (opaque: pointer; pause: int): int
-    read_seek*: proc (opaque: pointer; stream_index: int; timestamp: int64;
+    readPause*: proc (opaque: pointer; pause: int): int
+    readSeek*: proc (opaque: pointer; stream_index: int; timestamp: int64;
                     flags: int): int64
     seekable*: int
     maxsize*: int64
@@ -1289,8 +1287,8 @@ type
     writeout_count*: int
     orig_buffer_size*: int
     short_seek_threshold*: int
-    protocol_whitelist*: cstring
-    protocol_blacklist*: cstring
+    protocol_whitelist*: string
+    protocol_blacklist*: string
     write_data_type*: proc (opaque: pointer; buf: uint8; buf_size: int;
                           t: AVIODataMarkerType; time: int64): int
     ignore_boundary_point*: int
@@ -1302,10 +1300,10 @@ type
     min_packet_size*: int
 
   AVProbeData* = ref object
-    filename*: cstring
+    filename*: string
     buf*: cuchar
     buf_size*: int
-    mime_type*: cstring
+    mime_type*: string
 
   AVCodecTag* = ref object
     id*: AVCodecID
@@ -1322,26 +1320,98 @@ type
     size* {.bitsize: 30.}: int
     min_distance*: int
 
+const
+  MAX_STD_TIMEBASES* = (30 * 12 + 30 + 3 + 6)
+  MAX_REORDER_DELAY* = 16
+
+type
+  AVStreamInternalExtractExtradata* = ref object
+    bsf*: ptr AVBSFContext
+    pkt*: ptr AVPacket
+    inited*: cint
+
+  AVStreamInternalInfo* = ref object
+    lastDts*: int64
+    durationGcd*: int64
+    durationCount*: cint
+    rfpsDurationSum*: int64
+    durationError*: array[2, array[MAX_STD_TIMEBASES, cdouble]]
+    codecInfoDuration*: int64
+    codecInfoDurationFields*: int64
+    frameDelayEvidence*: cint
+    foundDecoder*: cint
+    lastDuration*: int64
+    fpsFirstDts*: int64
+    fpsFirstDtsIdx*: cint
+    fpsLastDts*: int64
+    fpsLastDtsIdx*: cint
+
+  FFFrac*  = ref object
+    val*: int64
+    num*: int64
+    den*: int64
+
+  AVStreamInternal* = ref object
+    reorder*: cint
+    bsfc*: ptr AVBSFContext
+    bitstreamChecked*: cint
+    avctx*: ptr AVCodecContext
+    avctxInited*: cint
+    origCodecId*: AVCodecID
+    extractExtradata*: AVStreamInternalExtractExtradata
+    needContextUpdate*: cint
+    isIntraOnly*: cint
+    privPts*: ptr FFFrac
+    info*: ptr AVStreamInternalInfo
+    indexEntries*: ptr AVIndexEntry
+    nbIndexEntries*: cint
+    indexEntriesAllocatedSize*: cuint
+    interleaverChunkSize*: int64
+    interleaverChunkDuration*: int64
+    requestProbe*: cint
+    skipToKeyframe*: cint
+    skipSamples*: cint
+    startSkipSamples*: int64
+    firstDiscardSample*: int64
+    lastDiscardSample*: int64
+    nbDecodedFrames*: cint
+    muxTsOffset*: int64
+    ptsWrapReference*: int64
+    ptsWrapBehavior*: cint
+    updateInitialDurationsDone*: cint
+    ptsReorderError*: array[MAX_REORDER_DELAY + 1, int64]
+    ptsReorderErrorCount*: array[MAX_REORDER_DELAY + 1, uint8]
+    ptsBuffer*: array[MAX_REORDER_DELAY + 1, int64]
+    lastDtsForOrderCheck*: int64
+    dtsOrdered*: uint8
+    dtsMisordered*: uint8
+    injectGlobalSideData*: cint
+    displayAspectRatio*: Rational[int]
+    probeData*: AVProbeData
+    lastInPacketBuffer*: ptr AVPacketList
+
+
+
   AVStream* = ref object
     index*: int
     id*: int
     codec*: AVCodecContext
     priv_data*: pointer
-    time_base*: AVRational
+    time_base*: Rational[int]
     start_time*: int64
     duration*: int64
     nb_frames*: int64
     disposition*: int
     `discard`*: AVDiscard
-    sample_aspect_ratio*: AVRational
+    sample_aspect_ratio*: Rational[int]
     metadata*: OrderedTable[string,string]
-    avg_frame_rate*: AVRational
+    avg_frame_rate*: Rational[int]
     attached_pic*: AVPacket
     side_data*: AVPacketSideData
     nb_side_data*: int
     event_flags*: int
-    r_frame_rate*: AVRational
-    recommended_encoder_configuration*: cstring
+    r_frame_rate*: Rational[int]
+    recommended_encoder_configuration*: string
     codecpar*: AVCodecParameters
     unused*: pointer
     pts_wrap_bits*: int
@@ -1363,11 +1433,11 @@ type
     program_num*: int
     pmt_version*: int
     pmt_stream_idx*: int
-    # internal*: AVStreamInternal
+    internal*: AVStreamInternal
 
   AVDeviceInfo* = ref object
-    device_name*: cstring
-    device_description*: cstring
+    device_name*: string
+    device_description*: string
 
   AVDeviceInfoList* = ref object
     devices*: AVDeviceInfo
@@ -1387,16 +1457,16 @@ type
     window_height*: int
     frame_width*: int
     frame_height*: int
-    fps*: AVRational
+    fps*: Rational[int]
 
   AVInputFormat* = ref object
-    name*: cstring
-    long_name*: cstring
+    name*: string
+    long_name*: string
     flags*: int
-    extensions*: cstring
+    extensions*: string
     codec_tag*: AVCodecTag
     priv_class*: AVClass
-    mime_type*: cstring
+    mime_type*: string
     next*: AVInputFormat
     raw_codec_id*: int
     priv_data_size*: int
@@ -1426,7 +1496,7 @@ type
     nb_streams*: cuint
     streams*: AVStream
     filename*: array[1024, char]
-    url*: cstring
+    url*: string
     start_time*: int64
     duration*: int64
     bit_rate*: int64
@@ -1470,8 +1540,8 @@ type
     flush_packets*: int
     probe_score*: int
     format_probesize*: int
-    codec_whitelist*: cstring
-    format_whitelist*: cstring
+    codec_whitelist*: string
+    format_whitelist*: string
     # internal*: AVFormatInternal
     io_repositioned*: int
     video_codec*: AVCodec
@@ -1484,14 +1554,13 @@ type
     output_ts_offset*: int64
     dump_separator*: uint8
     data_codec_id*: AVCodecID
-    open_cb*: proc (s: AVFormatContext; p: AVIOContext; url: cstring;
+    open_cb*: proc (s: AVFormatContext; p: AVIOContext; url: string;
                   flags: int; int_cb: AVIOInterruptCB;
                   options: OrderedTable[string,string]): int
-    protocol_whitelist*: cstring
-    io_open*: proc (s: AVFormatContext; pb: AVIOContext; url: cstring;
-                  flags: int; options: OrderedTable[string,string]): int
+    protocol_whitelist*: string
+    io_open*: proc (s: AVFormatContext; pb: AVIOContext; url: string;flags: int; options: OrderedTable[string,string]): int
     io_close*: proc (s: AVFormatContext; pb: AVIOContext)
-    protocol_blacklist*: cstring
+    protocol_blacklist*: string
     max_streams*: int
     skip_estimate_duration_from_pts*: int
     max_probe_packets*: int
@@ -1514,10 +1583,10 @@ type
 
 
   AVOutputFormat* = ref object
-    name*: cstring
-    long_name*: cstring
-    mime_type*: cstring
-    extensions*: cstring
+    name*: string
+    long_name*: string
+    mime_type*: string
+    extensions*: string
     audio_codec*: AVCodecID
     video_codec*: AVCodecID
     subtitle_codec*: AVCodecID
@@ -1565,9 +1634,9 @@ type
 
   AVChapter* = ref object
     id*: int
-    time_base*: AVRational
+    time_base*: Rational[int]
     start*: int64
-    `end`*: int64
+    e*: int64
     metadata*: OrderedTable[string,string]
 
   AVDurationEstimationMethod* = enum
@@ -1621,8 +1690,8 @@ const
 
 type
   AVFilter* = ref object
-    name*: cstring
-    description*: cstring
+    name*: string
+    description*: string
     # inputs*: AVFilterPad
     # outputs*: AVFilterPad
     priv_class*: AVClass
@@ -1635,32 +1704,53 @@ type
     priv_size*: int
     flags_internal*: int
     next*: AVFilter
-    process_command*: proc (a1: AVFilterContext; cmd: cstring; arg: cstring;
-                          res: cstring; res_len: int; flags: int): int
+    process_command*: proc (a1: AVFilterContext; cmd: string; arg: string;
+                          res: string; res_len: int; flags: int): int
     init_opaque*: proc (ctx: AVFilterContext; opaque: pointer): int
     activate*: proc (ctx: AVFilterContext): int
+
+  AvfilterActionFunc* = proc (ctx: ptr AVFilterContext; arg: pointer; jobnr: cint;
+                           nbJobs: cint): cint
+
+  AvfilterExecuteFunc* = proc (ctx: ptr AVFilterContext;
+                            `func`: ptr AvfilterActionFunc; arg: pointer;
+                            result: ptr cint; nbJobs: cint): cint
+
+  FFFrameQueueGlobal* = ref object
+    dummy*: char               
+
+
+  AVFilterGraphInternal* = ref object
+    thread*: pointer
+    threadExecute*: ptr AvfilterExecuteFunc
+    frameQueues*: FFFrameQueueGlobal
+
+  AVFilterInternal* = ref object
+    execute*: ptr AvfilterExecuteFunc
+
+
 
   AVFilterGraph* = ref object
     avClass*: AVClass
     filters*: AVFilterContext
     nbFilters*: cuint
-    scaleSwsOpts*: cstring     
-    resampleLavrOpts*: cstring 
+    scaleSwsOpts*: string     
+    resampleLavrOpts*: string 
     threadType*: cint
     nbThreads*: cint
-    # internal*: AVFilterGraphInternal
+    internal*: AVFilterGraphInternal
     opaque*: pointer
     # execute*: AvfilterExecuteFunc
-    aresampleSwrOpts*: cstring
+    aresampleSwrOpts*: string
     # sinkLinks*: AVFilterLink
     sinkLinksCount*: cint
     disableAutoConvert*: cuint
 
 
   AVFilterContext* = ref object
-    av_class*: AVClass
+    avClass*: AVClass
     filter*: AVFilter
-    name*: cstring
+    name*: string
     # input_pads*: AVFilterPad
     # inputs*: AVFilterLink
     nb_inputs*: cuint
@@ -1669,17 +1759,17 @@ type
     nb_outputs*: cuint
     priv*: pointer
     graph*: AVFilterGraph
-    thread_type*: int
-    # internal*: AVFilterInternal
+    threadType*: int
+    internal*: AVFilterInternal
     # command_queue*: AVFilterCommand
-    enable_str*: cstring
+    enableStr*: string
     enable*: pointer
-    var_values*: cdouble
-    is_disabled*: int
-    hw_device_ctx*: AVBufferRef
-    nb_threads*: int
+    varValues*: cdouble
+    isSisabled*: int
+    hwDeviceCtx*: string
+    nbThreads*: int
     ready*: cuint
-    extra_hw_frames*: int
+    extraHwFrames*: int
 
   AVFilterFormats* = ref object
     nbFormats*: cuint          ## /< number of formats
@@ -1754,7 +1844,7 @@ type
     width*: cint
     height*: cint
     format*: cint
-    sar*: AVRational
+    sar*: Rational[int]
     uploaded*: cint
     flipV*: cint
 
@@ -1786,9 +1876,9 @@ type
     packetPending*: cint
     # emptyQueueCond*: SDL_cond
     startPts*: int64
-    startPtsTb*: AVRational
+    startPtsTb*: Rational[int]
     nextPts*: int64
-    nextPtsTb*: AVRational
+    nextPtsTb*: Rational[int]
     # decoderTid*: SDL_Thread
 
 
@@ -1863,11 +1953,11 @@ type
     videoStream*: int
     videoSt*: AVStream
     videoq*: PacketQueue
-    maxFrameDuration*: cdouble ##  maximum duration of a frame - above this, we consider the jump a timestamp discontinuity
+    maxFrameDuration*: cdouble 
     # imgConvertCtx*: SwsContext
     # subConvertCtx*: SwsContext
     eof*: int
-    filename*: cstring
+    filename*: string
     width*: int
     height*: int
     xleft*: int
@@ -1901,13 +1991,16 @@ const AV_PIX_FMT_FLAG_BITSTREAM* = 1 shl 2
 const AV_PIX_FMT_FLAG_HWACCEL = 1 shl 3
 const AV_PIX_FMT_FLAG_PLANAR = 1 shl 4
 const AV_NUM_DATA_POINTERS = 8
-
+const FF_COMPLIANCE_EXPERIMENTAL = -2
 
 proc MKTAG(a,b,c,d:auto):int = (a.ord or (b.ord shl 8) or (c.ord shl 16) or (d.ord shl 24))
 template FFERRTAG(a, b, c, d):untyped = -MKTAG(a, b, c, d)
 const AVERROR_INVALIDDATA =  FFERRTAG( 'I','N','D','A')
+const AVERROR_PATCHWELCOME = FFERRTAG( 'P','A','W','E')
+const AVERROR_BUG = FFERRTAG( 'B','U','G','!')
 
 template FFALIGN(x: int, a:int):int = ((x+a-1) and not(a-1))
+template IS_EMPTY(pkt):untyped = (pkt.data == nil and (pkt).side_data_elems == 0)
 var atomicLock*: Pthread_mutex
 
 var avPixFmtDescriptors = newOrderedTable(
@@ -1975,7 +2068,7 @@ proc packetQueueInit*(q: PacketQueue): cint =
   q.abortRequest = 1
   return 0
 
-# proc bufferReplace*(dst: AVBufferRef; src: AVBufferRef) =
+# proc bufferReplace*(dst: string; src: string) =
 #   var b: AVBuffer
 #   b = (dst[]).buffer
 #   if src:
@@ -1987,7 +2080,7 @@ proc packetQueueInit*(q: PacketQueue): cint =
 #     b.free(b.opaque, b.data)
 #     avFreep(b)
 
-# proc avBufferUnref*(buf: AVBufferRef) =
+# proc avBufferUnref*(buf: string) =
 #   bufferReplace(buf, nil)
 
 
@@ -2007,7 +2100,7 @@ proc avPacketUnref*(pkt: var AVPacket) =
   avPacketFreeSideData(pkt)
 #   avBufferUnref(pkt.buf)
   pkt.pos = -1
-  pkt.data = 0
+  pkt.data[] = 0
   pkt.size = 0
 
 proc packetQueueFlush*(q: PacketQueue) =
@@ -2018,7 +2111,7 @@ proc packetQueueFlush*(q: PacketQueue) =
   pkt = q.firstPkt
   while pkt != nil:
     pkt1 = pkt.next
-    avPacketUnref(pkt.pkt)
+    # avPacketUnref(pkt.pkt)
     # avFreep(pkt)
     pkt = pkt1
   q.lastPkt = nil
@@ -2118,7 +2211,7 @@ proc getFrameDefaults*(frame: var AVFrame) =
   frame.pktPos = -1
   frame.pktSize = -1
   frame.keyFrame = 1
-  frame.sample_aspect_ratio = AVRational(num:0, den:1)
+  frame.sample_aspect_ratio = Rational[int](num:0, den:1)
   frame.format = -1
 #   frame.extendedData = frame.data
   frame.colorPrimaries = AVCOL_PRI_UNSPECIFIED
@@ -2155,7 +2248,7 @@ proc avprivPacketListPut*(packetBuffer: var AVPacketList;
   return 0
 
 
-template isEmpty(t:untyped):bool = t.data == 0 and t.side_data_elems == 0
+template isEmpty(t:untyped):bool = t.data[] == 0 and t.side_data_elems == 0
 
 proc avPacketAddSideData*(pkt: var AVPacket; t: AVPacketSideDataType;data: string; size: int): cint =
   var tmp = AVPacketSideData()
@@ -2170,14 +2263,9 @@ proc avPacketAddSideData*(pkt: var AVPacket; t: AVPacketSideDataType;data: strin
   pkt.sideData.add tmp
   return 0
 
-
-
 proc avPacketNewSideData*(pkt: var AVPacket; t: AVPacketSideDataType; size: int): string =
   result = newString(size + AV_INPUT_BUFFER_PADDING_SIZE)
-  if size > int.high - AV_INPUT_BUFFER_PADDING_SIZE:
-    return 
   echo avPacketAddSideData(pkt, t, result, size)
-  return result
 
 
 proc avPacketCopyProps*(dst: var AVPacket; src: AVPacket): cint =
@@ -2211,22 +2299,15 @@ proc avprivPacketListGet*(pktBuffer: var AVPacketList;pktBufferEnd:var AVPacketL
 proc extractPacketProps*(avci: AVCodecInternal; pkt: AVPacket): cint =
   result = avprivPacketListPut(avci.pktProps, avci.pktPropsTail, pkt, nil, 0)
   avci.pktPropsTail.pkt.size = pkt.size
-  avci.pktPropsTail.pkt.data = 1
-  if is_Empty(avci.lastPktProps):
+  avci.pktPropsTail.pkt.data[] = 1
+  if IS_EMPTY(avci.lastPktProps):
     result = avprivPacketListGet(avci.pktProps, avci.pktPropsTail, avci.lastPktProps)
   return result
 
-proc avPacketGetSideData*(pkt: var AVPacket; t: AVPacketSideDataType;size: ptr cint): string =
-    var i: cint
-    i = 0
-    while i < pkt.sideDataElems:
+proc avPacketGetSideData*(pkt: var AVPacket; t: AVPacketSideDataType;): string =
+    for i in 0..<pkt.sideDataElems:
         if pkt.sideData[i].t == t:
-            if size != nil:
-                size[] = cint pkt.sideData[i].size
             return pkt.sideData[i].data
-        inc(i)
-    if size != nil:
-        size[] = 0
     return ""
 
 
@@ -2268,7 +2349,7 @@ proc avPixFmtDescGet(pixFmt:int): AVPixFmtDescriptor = avPixFmtDescriptors[pix_f
 #   ##  max pixel step for each plane
 #   var maxStepComp: array[4, cint]
 #   ##  the component for each plane which has the max pixel step
-#   if not desc or desc.flags and av_Pix_Fmt_Flag_Hwaccel:
+#   if not desc or desc.flags and AV_PIX_FMT_FLAG_HWACCEL:
 #     return -(EINVAL)
 #   avImageFillMaxPixsteps(maxStep, maxStepComp, desc)
 #   return imageGetLinesize(width, plane, maxStep[plane], maxStepComp[plane], desc)
@@ -2302,7 +2383,7 @@ proc avPixFmtDescGet(pixFmt:int): AVPixFmtDescriptor = avPixFmtDescriptors[pix_f
 #       (a + (1 shl b) - 1) shr b
 
 proc ffSetDimensions*(s:var AVCodecContext; width: cint; height: cint): cint =
-#   result = avImageCheckSize2(width, height, s.maxPixels, av_Pix_Fmt_None, 0, s)
+#   result = avImageCheckSize2(width, height, s.maxPixels, AV_PIX_FMT_NONE, 0, s)
 #   if result < 0:
 #     height = 0
 #     width = 0 
@@ -2317,63 +2398,47 @@ proc ffSetDimensions*(s:var AVCodecContext; width: cint; height: cint): cint =
 
 
 proc applyParamChange*(avctx: var AVCodecContext; avpkt: var AVPacket): cint =
-  var size: cint
-  var data = newStringStream avPacketGetSideData(avpkt, AV_PKT_DATA_PARAM_CHANGE, size.addr)
+  var sideData = avPacketGetSideData(avpkt, AV_PKT_DATA_PARAM_CHANGE)
+  var data = newStringStream sideData
   var flags: int32
   var val: int64
   if (avctx.codec.capabilities and AV_CODEC_CAP_PARAM_CHANGE) == 0:
     echo("This decoder does not support parameter changes, but PARAM_CHANGE side data was sent to it.\n")
     result = -EINVAL
-  if size < 4:
-    echo "size < 4"
   
   data.readDataLE(flags.addr, 4)
   echo flags
 #   flags = bytestreamGetLe32(data)
-  dec(size, 4)
   if (flags and AV_SIDE_DATA_PARAM_CHANGE_CHANNEL_COUNT.ord) != 0:
-    if size < 4:
-        echo "size < 4"
     data.readDataLE(val.addr, 4)
     # val = bytestreamGetLe32(data)
     if val <= 0 or val > int.high:
       echo("Invalid channel count")
     avctx.channels = int val
-    dec(size, 4)
   if (flags and AV_SIDE_DATA_PARAM_CHANGE_CHANNEL_LAYOUT.ord) != 0:
-    if size < 8:
-      echo "size < 8"
     data.readDataLE(avctx.channelLayout.addr, 4)
     # avctx.channelLayout = bytestreamGetLe64(data)
-    dec(size, 8)
   if (flags and AV_SIDE_DATA_PARAM_CHANGE_SAMPLE_RATE.ord) != 0:
-    if size < 4:
-      echo "size < 8"
     data.readDataLE(val.addr, 4)
     # val = bytestreamGetLe32(data)
     if val <= 0 or val > int.high:
       echo("Invalid sample rate")
       result = cint AVERROR_INVALIDDATA
+      return 
     avctx.sampleRate = int val
-    dec(size, 4)
   if (flags and AV_SIDE_DATA_PARAM_CHANGE_DIMENSIONS.ord) != 0:
-    if size < 8:
-        echo "size < 8"
-
     data.readDataLE(avctx.width.addr, 4)
     data.readDataLE(avctx.height.addr, 4)
     # avctx.width = bytestreamGetLe32(data)
     # avctx.height = bytestreamGetLe32(data)
-    dec(size, 8)
     result = ffSetDimensions(avctx, avctx.width.cint, avctx.height.cint)
-  return 0
-  echo("PARAM_CHANGE side data too small.\n")
-  result = cint AVERROR_INVALIDDATA
-  if result < 0:
-    echo("Error applying parameter changes.\n")
-    if (avctx.errRecognition and AV_EF_EXPLODE) != 0:
-      return result
-  return 0
+  result = 0
+  # echo("PARAM_CHANGE side data too small.\n")
+  # result = cint AVERROR_INVALIDDATA
+  # if result < 0:
+  #   echo("Error applying parameter changes.\n")
+  #   if (avctx.errRecognition and AV_EF_EXPLODE) != 0:
+  #     return result
 
 
 proc ffDecodeGetPacket*(avctx: var AVCodecContext; pkt: var AVPacket): cint =
@@ -2407,7 +2472,7 @@ const FF_THREAD_SLICE = 2
 type
   PthreadT* {.bycopy.} = object
     handle*: pointer
-    `func`*: proc (arg: pointer): pointer
+    f*: proc (arg: pointer): pointer
     arg*: pointer
     result*: pointer
 
@@ -2422,12 +2487,12 @@ type
     progressMutex*: ptr Pthread_mutex ## /< Mutex used to protect frame progress values and progress_cond.
     avctx*: AVCodecContext  ## /< Context used to decode packets passed to this thread.
     avpkt*: AVPacket           ## /< Input packet (for decoding) or output (for encoding).
-    frame*: ptr AVFrame         ## /< Output frame (for decoding) or input (for encoding).
+    frame*: AVFrame         ## /< Output frame (for decoding) or input (for encoding).
     gotFrame*: cint            ## /< The output of got_picture_ptr from the last avcodec_decode_video() call.
     result*: cint              ## /< The result of the last codec decode/encode() call.
     state*: int 
-    releasedBuffers*: ptr ptr AVFrame
-    numReleasedBuffers*: cint
+    releasedBuffers*: seq[AVFrame]
+    numReleasedBuffers*: int
     releasedBuffersAllocated*: cint
     requestedFrame*: AVFrame ## /< AVFrame the codec passed to get_buffer()
     requestedFlags*: cint      ## /< flags passed to get_buffer() for requested_frame
@@ -2439,7 +2504,7 @@ type
     debugThreads*: int   
 
   FrameThreadContext* = ref object
-    threads*: PerThreadContext ## /< The contexts for each thread.
+    threads*: ptr PerThreadContext ## /< The contexts for each thread.
     prevThread*: PerThreadContext ## /< The last thread submit_packet() was called on.
     bufferMutex*: Pthread_mutex 
     hwaccelMutex*: Pthread_mutex
@@ -2457,80 +2522,7 @@ const
   STATE_GET_FORMAT* = 3
   STATE_SETUP_FINISHED* = 4
 
-# proc updateContextFromUser*(dst: var AVCodecContext; src: AVCodecContext): cint =
-#   dst.flags = src.flags
-#   dst.drawHorizBand = src.drawHorizBand
-#   dst.getBuffer2 = src.getBuffer2
-#   dst.opaque = src.opaque
-#   dst.debug = src.debug
-#   dst.debugMv = src.debugMv
-#   dst.sliceFlags = src.sliceFlags
-#   dst.flags2 = src.flags2
-#   dst.exportSideData = src.exportSideData
-#   dst.skipLoopFilter = src.skipLoopFilter
-#   dst.skipIdct = src.skipIdct
-#   dst.skipFrame = src.skipFrame
-#   dst.frameNumber = src.frameNumber
-#   dst.reorderedOpaque = src.reorderedOpaque
-#   dst.threadSafeCallbacks = src.threadSafeCallbacks
-#   if src.sliceCount != 0 and src.sliceOffset != 0:
-#     if dst.sliceCount < src.sliceCount:
-#       var err: cint = avReallocpArray(addr(dst.sliceOffset), src.sliceCount, sizeof(dst.sliceOffset))
-#       if err < 0:
-#         return err
-#     copyMem(dst.sliceOffset, src.sliceOffset,src.sliceCount * sizeof((dst.sliceOffset[])))
-#   dst.sliceCount = src.sliceCount
-#   return 0
 
-
-# proc updateContextFromThread*(dst: ptr AVCodecContext; src: ptr AVCodecContext; forUser: cint): cint =
-#   var err: cint = 0
-#   if dst != src and (forUser != 0 or src.codec.updateThreadContext != nil):
-#     dst.timeBase = src.timeBase
-#     dst.framerate = src.framerate
-#     dst.width = src.width
-#     dst.height = src.height
-#     dst.pixFmt = src.pixFmt
-#     dst.swPixFmt = src.swPixFmt
-#     dst.codedWidth = src.codedWidth
-#     dst.codedHeight = src.codedHeight
-#     dst.hasBFrames = src.hasBFrames
-#     dst.idctAlgo = src.idctAlgo
-#     dst.bitsPerCodedSample = src.bitsPerCodedSample
-#     dst.sampleAspectRatio = src.sampleAspectRatio
-#     dst.profile = src.profile
-#     dst.level = src.level
-#     dst.bitsPerRawSample = src.bitsPerRawSample
-#     dst.ticksPerFrame = src.ticksPerFrame
-#     dst.colorPrimaries = src.colorPrimaries
-#     dst.colorTrc = src.colorTrc
-#     dst.colorspace = src.colorspace
-#     dst.colorRange = src.colorRange
-#     dst.chromaSampleLocation = src.chromaSampleLocation
-#     dst.hwaccel = src.hwaccel
-#     dst.hwaccelContext = src.hwaccelContext
-#     dst.channels = src.channels
-#     dst.sampleRate = src.sampleRate
-#     dst.sampleFmt = src.sampleFmt
-#     dst.channelLayout = src.channelLayout
-#     dst.internal.hwaccelPrivData = src.internal.hwaccelPrivData
-#     if not not dst.hwFramesCtx != not not src.hwFramesCtx or
-#         (dst.hwFramesCtx and dst.hwFramesCtx.data != src.hwFramesCtx.data):
-#       avBufferUnref(addr(dst.hwFramesCtx))
-#       if src.hwFramesCtx:
-#         dst.hwFramesCtx = avBufferRef(src.hwFramesCtx)
-#         if not dst.hwFramesCtx:
-#           return -(ENOMEM)
-#     dst.hwaccelFlags = src.hwaccelFlags
-#     err = avBufferReplace(addr(dst.internal.pool), src.internal.pool)
-#     if err < 0:
-#       return err
-#   if forUser:
-#     dst.codedFrame = src.codedFrame
-#   else:
-#     if dst.codec.updateThreadContext:
-#       err = dst.codec.updateThreadContext(dst, src)
-#   return err
 
 
 
@@ -2593,7 +2585,7 @@ proc avImageFillPlaneSizes*(sizes: var seq[uint]; pixFmt: int;height: cint; line
       sizes[i] = uint h * linesizes[i]
   return 0
 
-proc avImageFillPointers*(data: var seq[ptr uint8]; pixFmt: int;height: cint; p: ptr uint8; linesizes: seq[int]): cint =
+proc avImageFillPointers*(data: var string; pixFmt: int;height: cint; p: string; linesizes: seq[int]): cint =
   var linesizes1: seq[int] = newSeq[int](4)
   var sizes: seq[uint] = newSeq[uint](4)
   for i in 0..3:
@@ -2601,10 +2593,11 @@ proc avImageFillPointers*(data: var seq[ptr uint8]; pixFmt: int;height: cint; p:
   result = avImageFillPlaneSizes(sizes, pixFmt, height, linesizes1)
   for i in 0..3:
     result += cint sizes[i]
-  data[0] = p
+  data = p
   for i in 1..3:
     if sizes[i] != 0:
-      data[i] = data[i - 1] + sizes[i - 1].uint8
+      data[i] = char data[i - 1].ord + sizes[i - 1].int
+      # data[i] = data[i - 1] + sizes[i - 1].uint8
   return result
 
 
@@ -2643,13 +2636,9 @@ proc getVideoBuffer*(frame: var AVFrame; align:var cint): cint =
     if sizes[i].int > int.high - totalSize:
       return -(EINVAL)
     totalSize += sizes[i].cint
-  # frame.buf[0] = avBufferAlloc(totalSize)
-  if frame.buf[0] == nil:
-    result = -(ENOMEM)
-  result = avImageFillPointers(frame.data, frame.format, paddedHeight, frame.buf[0].data, frame.linesize)
+  result = avImageFillPointers(frame.data, frame.format, paddedHeight, frame.buf, frame.linesize)
   for i in 1..3:
-    if frame.data[i] != 0:
-      inc(frame.data[i], i * planePadding)
+    frame.data[i] = char frame.data[i].ord + i * planePadding
   frame.extendedData = frame.data
   result = 0
   # avFrameUnref(frame)
@@ -2657,7 +2646,7 @@ proc getVideoBuffer*(frame: var AVFrame; align:var cint): cint =
 
 # proc avBufferCreate*(data: ptr uint8; size: cint;
 #                     free: proc (opaque: pointer; data: ptr uint8); opaque: pointer;
-#                     flags: cint): ptr AVBufferRef =
+#                     flags: cint): ptr string =
   
 #   var buf = avMallocz(sizeof(AVBuffer))
 #   buf.data = data
@@ -2672,11 +2661,11 @@ proc getVideoBuffer*(frame: var AVFrame; align:var cint): cint =
 #   result.size = size
 
 
-# proc avBufferAlloc*(size: cint): ptr AVBufferRef =
+# proc avBufferAlloc*(size: cint): ptr string =
 #   var data = avMalloc(size)
 #   result = avBufferCreate(data, size, avBufferDefaultFree, nil, 0)
 
-# proc avBufferRef*(buf: ptr AVBufferRef): ptr AVBufferRef =
+# proc avBufferRef*(buf: ptr string): ptr string =
 #   result = avMallocz(sizeof((result[])))
 #   result[] = buf[]
 #   atomicFetchAddExplicit(addr(buf.buffer.refcount), 1)
@@ -2691,18 +2680,18 @@ type
     altform*: AVSampleFormat   
 
 var  sampleFmtInfos = newOrderedTable({
-    AV_SAMPLE_FMT_U8.ord: SampleFmtInfo(name:"u8", bits:8, planar: 0, altform:AV_SAMPLE_FMT_U8P),
-    # [AV_SAMPLE_FMT_S16]  = { .name =  "s16", .bits = 16, .planar = 0, .altform = AV_SAMPLE_FMT_S16P },
-    # [AV_SAMPLE_FMT_S32]  = { .name =  "s32", .bits = 32, .planar = 0, .altform = AV_SAMPLE_FMT_S32P },
-    # [AV_SAMPLE_FMT_S64]  = { .name =  "s64", .bits = 64, .planar = 0, .altform = AV_SAMPLE_FMT_S64P },
-    # [AV_SAMPLE_FMT_FLT]  = { .name =  "flt", .bits = 32, .planar = 0, .altform = AV_SAMPLE_FMT_FLTP },
-    # [AV_SAMPLE_FMT_DBL]  = { .name =  "dbl", .bits = 64, .planar = 0, .altform = AV_SAMPLE_FMT_DBLP },
-    # [AV_SAMPLE_FMT_U8P]  = { .name =  "u8p", .bits =  8, .planar = 1, .altform = AV_SAMPLE_FMT_U8   },
-    # [AV_SAMPLE_FMT_S16P] = { .name = "s16p", .bits = 16, .planar = 1, .altform = AV_SAMPLE_FMT_S16  },
-    # [AV_SAMPLE_FMT_S32P] = { .name = "s32p", .bits = 32, .planar = 1, .altform = AV_SAMPLE_FMT_S32  },
-    # [AV_SAMPLE_FMT_S64P] = { .name = "s64p", .bits = 64, .planar = 1, .altform = AV_SAMPLE_FMT_S64  },
-    # [AV_SAMPLE_FMT_FLTP] = { .name = "fltp", .bits = 32, .planar = 1, .altform = AV_SAMPLE_FMT_FLT  },
-    # [AV_SAMPLE_FMT_DBLP] = { .name = "dblp", .bits = 64, .planar = 1, .altform = AV_SAMPLE_FMT_DBL  },
+    AV_SAMPLE_FMT_U8.ord: SampleFmtInfo(name:"u8", bits:8, planar: 0, altform: AV_SAMPLE_FMT_U8P),
+    AV_SAMPLE_FMT_S16.ord: SampleFmtInfo(name:"s16", bits:16, planar: 0, altform: AV_SAMPLE_FMT_S16P),
+    AV_SAMPLE_FMT_S32.ord: SampleFmtInfo(name:"s32", bits:32, planar: 0, altform: AV_SAMPLE_FMT_S32P),
+    AV_SAMPLE_FMT_S64.ord: SampleFmtInfo( name:"s64", bits:64, planar: 0, altform: AV_SAMPLE_FMT_S64P),
+    AV_SAMPLE_FMT_FLT.ord: SampleFmtInfo( name:"flt", bits: 32, planar: 0, altform: AV_SAMPLE_FMT_FLTP),
+    AV_SAMPLE_FMT_DBL.ord: SampleFmtInfo( name: "dbl", bits: 64, planar: 0, altform: AV_SAMPLE_FMT_DBLP),
+    AV_SAMPLE_FMT_U8P.ord: SampleFmtInfo( name: "u8p", bits:  8, planar: 1, altform: AV_SAMPLE_FMT_U8),
+    AV_SAMPLE_FMT_S16P.ord: SampleFmtInfo( name:"s16p", bits: 16, planar: 1, altform: AV_SAMPLE_FMT_S16),
+    AV_SAMPLE_FMT_S32P.ord: SampleFmtInfo( name:"s32p", bits: 32, planar: 1, altform: AV_SAMPLE_FMT_S32),
+    AV_SAMPLE_FMT_S64P.ord: SampleFmtInfo( name:"s64p", bits: 64, planar: 1, altform: AV_SAMPLE_FMT_S64),
+    AV_SAMPLE_FMT_FLTP.ord: SampleFmtInfo( name:"fltp", bits: 32, planar: 1, altform: AV_SAMPLE_FMT_FLT),
+    AV_SAMPLE_FMT_DBLP.ord: SampleFmtInfo( name:"dblp", bits: 64, planar: 1, altform: AV_SAMPLE_FMT_DBL),
 })
 
 proc avSampleFmtIsPlanar*(sampleFmt: int): cint =
@@ -2722,10 +2711,10 @@ proc avPopcount64C*(x: uint64): cint {.inline.} =
 proc avGetChannelLayoutNbChannels*(channelLayout: uint64): cint = avPopcount64C(channelLayout)
 
 proc avGetBytesPerSample*(sampleFmt: int): cint =
-  result = if sampleFmt < 0 or sampleFmt >= AV_SAMPLE_FMT_NB.ord: 0 else: sampleFmtInfos[sampleFmt].bits shr 3
+  if sampleFmt < 0 or sampleFmt >= AV_SAMPLE_FMT_NB.ord: 0 
+  else: sampleFmtInfos[sampleFmt].bits shr 3
 
-proc avSamplesGetBufferSize*(linesize: ptr int; nbChannels: cint; nbSamples: cint;
-                            sampleFmt: int; align: var cint): cint =
+proc avSamplesGetBufferSize*(linesize: ptr int; nbChannels: cint; nbSamples: cint; sampleFmt: int; align: var cint): cint =
   var sampleSize: cint = avGetBytesPerSample(sampleFmt.ord)
   var planar: cint = avSampleFmtIsPlanar(sampleFmt.ord)
   if sampleSize == 0 or nbSamples <= 0 or nbChannels <= 0:
@@ -2757,13 +2746,17 @@ proc getAudioBuffer*(frame: var AVFrame; align: var cint): cint =
     frame.nbExtendedBuf = planes - AV_NUM_DATA_POINTERS
   else:
     frame.extendedData = frame.data
-  for i in 0..<min(planes, AV_NUM_DATA_POINTERS):
-    frame.buf[i] = AVBufferRef(size: frame.linesize[0])
-    frame.data[i] = frame.buf[i].data[]
-    frame.extendedData[i] = frame.data[i]
+
+  frame.buf = newString(frame.linesize[0])
+  var rng = 0..<min(planes, AV_NUM_DATA_POINTERS)
+  frame.data[rng] = frame.buf[rng]
+
+  # for i in 0..<min(planes, AV_NUM_DATA_POINTERS):
+  #   frame.data[i] = frame.buf[i]
+  #   frame.extendedData[i] = frame.data[i]
+  frame.extendedBuf = newString(frame.linesize[0])
   for i in 0..<planes - AV_NUM_DATA_POINTERS:
-    frame.extendedBuf[i] = AVBufferRef(size:frame.linesize[0])
-    frame.extendedData[i + AV_NUM_DATA_POINTERS] = frame.extendedBuf[i].data[]
+    frame.extendedData[i + AV_NUM_DATA_POINTERS] = frame.extendedBuf[i]
   return 0
 
 proc avFrameGetBuffer*(frame: var AVFrame; align: var cint): cint =
@@ -2816,34 +2809,37 @@ proc avFrameGetBuffer*(frame: var AVFrame; align: var cint): cint =
 type
   HWMapDescriptor* = ref object
     source*: AVFrame
-    hwFramesCtx*: AVBufferRef
+    hwFramesCtx*: string
     unmap*: proc (ctx: ptr AVHWFramesContext; hwmap: ptr HWMapDescriptor)
     priv*: pointer
+
+template to*[T](s:string):untyped = 
+  cast[ptr T](s[0].addr)
 
 proc avHwframeMap*(dst: var AVFrame; src: AVFrame; flags: cint): cint =
   var
     srcFrames: ptr AVHWFramesContext
     dstFrames: ptr AVHWFramesContext
   var hwmap: ptr HWMapDescriptor
-  if src.hwFramesCtx != nil and dst.hwFramesCtx != nil:
-    srcFrames = cast[ptr AVHWFramesContext](src.hwFramesCtx.data)
-    dstFrames = cast[ptr AVHWFramesContext](dst.hwFramesCtx.data)
+  if src.hwFramesCtx != "" and dst.hwFramesCtx != "":
+    srcFrames = to[AVHWFramesContext](src.hwFramesCtx)
+    dstFrames = to[AVHWFramesContext](dst.hwFramesCtx)
     if (srcFrames == dstFrames and src.format == dstFrames.swFormat.ord and dst.format == dstFrames.format.ord) or
-        (srcFrames.internal.sourceFrames != nil and srcFrames.internal.sourceFrames.data == dstFrames):
-      if src.buf[0] == nil:
+        (srcFrames.internal.sourceFrames != "" and srcFrames.internal.sourceFrames == dst.hwFramesCtx):
+      if src.buf == "":
         echo("Invalid mapping found when attempting unmap.\n")
         return -(EINVAL)
-      hwmap = cast[ptr HWMapDescriptor](src.buf[0].data)
+      hwmap = to[HWMapDescriptor](src.buf)
       dst = hwmap.source
       return 0
-  if src.hwFramesCtx != nil:
-    srcFrames = cast[ptr AVHWFramesContext](src.hwFramesCtx.data)
+  if src.hwFramesCtx != "":
+    srcFrames = to[AVHWFramesContext](src.hwFramesCtx)
     if srcFrames.format.ord == src.format and srcFrames.internal.hwType.mapFrom != nil:
       result = srcFrames.internal.hwType.mapFrom(srcFrames, dst, src, flags)
       if result != -(ENOSYS):
         return result
-  if dst.hwFramesCtx != nil:
-    dstFrames = cast[ptr AVHWFramesContext](dst.hwFramesCtx.data)
+  if dst.hwFramesCtx != "":
+    dstFrames = to[AVHWFramesContext](dst.hwFramesCtx)
     if dstFrames.format.ord == dst.format and dstFrames.internal.hwType.mapTo != nil:
       result = dstFrames.internal.hwType.mapTo(dstFrames, dst, src, flags)
       if result != -(ENOSYS):
@@ -2851,13 +2847,13 @@ proc avHwframeMap*(dst: var AVFrame; src: AVFrame; flags: cint): cint =
   return -(ENOSYS)
 
 
-proc avHwframeGetBuffer*(hwframeRef: AVBufferRef; frame: var AVFrame; flags: cint): cint =
-  var ctx = cast[ptr AVHWFramesContext](hwframeRef.data)
-  if ctx[].internal.sourceFrames != nil:
+proc avHwframeGetBuffer*(hwframeRef: var string; frame: var AVFrame; flags: cint): cint =
+  var ctx = cast[ptr AVHWFramesContext](hwframeRef[0].addr)
+  if ctx[].internal.sourceFrames != "":
     var srcFrame: AVFrame
     frame.format = ctx[].format.ord
     frame.hwFramesCtx = hwframeRef
-    if frame.hwFramesCtx == nil:
+    if frame.hwFramesCtx == "":
       return - ENOMEM
     result = avHwframeGetBuffer(ctx[].internal.sourceFrames, srcFrame, 0)
     if result < 0:
@@ -2872,8 +2868,6 @@ proc avHwframeGetBuffer*(hwframeRef: AVBufferRef; frame: var AVFrame; flags: cin
   if ctx.pool == nil:
     return -(EINVAL)
   frame.hwFramesCtx = hwframeRef
-  if frame.hwFramesCtx == nil:
-    return -(ENOMEM)
   result = ctx.internal.hwType.framesGetBuffer(ctx[], frame)
   if result < 0:
     return result
@@ -2882,19 +2876,20 @@ proc avHwframeGetBuffer*(hwframeRef: AVBufferRef; frame: var AVFrame; flags: cin
 
 type
   FramePool* = ref object
-    pools*: array[4, ptr AVBufferPool] 
+    pools*: array[4, AVBufferPool] 
     format*: cint
     width*: cint
     height*: cint
     strideAlign*: array[AV_NUM_DATA_POINTERS, cint]
-    linesize*: array[4, cint]
+    linesize*: array[4, int]
     planes*: cint
     channels*: cint
     samples*: cint
 
-proc framePoolAlloc*(): ptr AVBufferRef =
+proc framePoolAlloc*(): string =
+  result = newString(sizeof(FramePool))
   var pool = FramePool()
-  result.buffer = AVBuffer(data:cast[ptr uint8](pool) ,size: sizeof(FramePool))
+  copyMem(result[0].addr, pool.addr, sizeof(FramePool))
   # result = avBufferCreate(cast[ptr uint8](pool), sizeof(pool[]), framePoolFree, nil, 0)
 
 const STRIDE_ALIGN = 64
@@ -2983,9 +2978,15 @@ proc avcodecAlignDimensions2*(s: var AVCodecContext; width: var auto; height: va
   for i in 0..3:
     linesizeAlign[i] = STRIDE_ALIGN
 
+proc avBufferPoolInit*(size: cint; alloc: proc (size: cint): ptr string): AVBufferPool =
+  result = AVBufferPool(size:size)
+  # ffMutexInit(addr(pool.mutex), nil)
+  # pool.alloc = if alloc != nil: alloc else: avBufferAlloc
+  # atomicInit(addr(pool.refcount), 1)
+
 
 proc updateFramePool*(avctx: var AVCodecContext; frame: AVFrame): cint =
-  var pool = if avctx.internal.pool != nil: cast[ptr FramePool](avctx.internal.pool.data) else: nil
+  var pool = to[FramePool](avctx.internal.pool)
   var
     ch: cint
     planes: cint
@@ -3001,7 +3002,7 @@ proc updateFramePool*(avctx: var AVCodecContext; frame: AVFrame): cint =
         pool.channels == ch and frame.nbSamples == pool.samples:
       return 0
   var poolBuf = framePoolAlloc()
-  pool = cast[ptr FramePool](poolBuf.data)
+  pool = to[FramePool](poolBuf)
   case avctx.codecType
   of AVMEDIA_TYPE_VIDEO:
     var linesize = newSeq[int](4)
@@ -3032,25 +3033,23 @@ proc updateFramePool*(avctx: var AVCodecContext; frame: AVFrame): cint =
         if size[i] > int.high - (16 + STRIDE_ALIGN - 1):
           result = -(EINVAL)
           return
-        pool.pools[i] = avBufferPoolInit(size[i] + 16 + STRIDE_ALIGN - 1, if config_Memory_Poisoning: nil else: avBufferAllocz)
+        pool.pools[i] = AVBufferPool(size: cint size[i] + 16 + STRIDE_ALIGN - 1)
         if pool.pools[i] == nil:
           result = -(ENOMEM)
           return
-    pool.format = frame.format
-    pool.width = frame.width
-    pool.height = frame.height
+    pool.format = cint frame.format
+    pool.width = cint frame.width
+    pool.height = cint frame.height
   of AVMEDIA_TYPE_AUDIO:
-    result = avSamplesGetBufferSize(addr(pool.linesize[0]), ch, frame.nbSamples,frame.format, 0)
+    var align = 0.cint
+    result = avSamplesGetBufferSize(addr(pool.linesize[0]), ch, frame.nbSamples.cint, frame.format, align)
     if result < 0:
       return
-    pool.pools[0] = avBufferPoolInit(pool.linesize[0], nil)
-    if pool.pools[0] == 0:
-      result = -(ENOMEM)
-      return
-    pool.format = frame.format
+    pool.pools[0] = AVBufferPool(size: cint pool.linesize[0])
+    pool.format = cint frame.format
     pool.planes = planes
     pool.channels = ch
-    pool.samples = frame.nbSamples
+    pool.samples = cint frame.nbSamples
   else:
     discard
   # avBufferUnref(addr(avctx.internal.pool))
@@ -3058,39 +3057,92 @@ proc updateFramePool*(avctx: var AVCodecContext; frame: AVFrame): cint =
   result = 0
   # avBufferUnref(addr(poolBuf))
 
-proc videoGetBuffer*(s: ptr AVCodecContext; pic: ptr AVFrame): cint =
-  var pool: ptr FramePool = cast[ptr FramePool](s.internal.pool.data)
-  var desc: ptr AVPixFmtDescriptor = avPixFmtDescGet(pic.format)
-  var i: cint
-  if pic.data[0] or pic.data[1] or pic.data[2] or pic.data[3]:
-    echo( "pic->data[*]!=NULL in avcodec_default_get_buffer\n")
-    return -1
+proc avGetPixFmtName*(pixFmt: int): string =
+  if pixFmt < AV_PIX_FMT_NB.int: avPixFmtDescriptors[pixFmt].name else: ""
+
+proc avBufferPoolGet*(pool: AVBufferPool): string =
+  var buf = pool.pool
+  result = newString(pool.size)
+  pool.pool = buf.next
+  buf.next = nil
+
+const
+  AV_PIX_FMT_FLAG_PSEUDOPAL* = (1 shl 6)
+  FF_PSEUDOPAL* = AV_PIX_FMT_FLAG_PSEUDOPAL
+
+proc avprivSetSystematicPal2*(pal: ptr UncheckedArray[uint32]; pixFmt: int): cint =
+  for i in 0..255:
+    var
+      r: int
+      g: int
+      b: int
+    case pixFmt
+    of AV_PIX_FMT_RGB8.ord:
+      r = (i shr 5) * 36
+      g = ((i shr 2) and 7) * 36
+      b = (i and 3) * 85
+    of AV_PIX_FMT_BGR8.ord:
+      b = (i shr 6) * 85
+      g = ((i shr 3) and 7) * 36
+      r = (i and 7) * 36
+    of AV_PIX_FMT_RGB4_BYTE.ord:
+      r = (i shr 3) * 255
+      g = ((i shr 1) and 3) * 85
+      b = (i and 1) * 255
+    of AV_PIX_FMT_BGR4_BYTE.ord:
+      b = (i shr 3) * 255
+      g = ((i shr 1) and 3) * 85
+      r = (i and 1) * 255
+    of AV_PIX_FMT_GRAY8.ord:
+      g = i
+      b = i
+      r = i
+    else:
+      return -(EINVAL)
+    pal[i] = uint32 b + (g shl 8) + (r shl 16) + (0x000000FF shl 24)
+  return 0
+
+
+proc videoGetBuffer*(s: var AVCodecContext; pic: var AVFrame): cint =
+  var pool = to[FramePool](s.internal.pool)
+  var desc = avPixFmtDescGet(pic.format)
   if desc == nil:
-    echo("Unable to get pixel format descriptor for format %s\n",
-          avGetPixFmtName(pic.format))
+    echo("Unable to get pixel format descriptor for format %s", avGetPixFmtName(pic.format))
     return -(EINVAL)
   pic.extendedData = pic.data
   for i in 0..3:
-    if pool.pools[i] != nil:
       pic.linesize[i] = pool.linesize[i]
-      pic.buf[i] = avBufferPoolGet(pool.pools[i])
-      if pic.buf[i] == nil:
-        return
-      pic.data[i] = pic.buf[i].data
-  for i in 0..<AV_NUM_DATA_POINTERS:
-    pic.data[i] = nil
+      pic.buf &= avBufferPoolGet(pool.pools[i])
+      pic.data[i] = pic.buf[i]
+  for i in 4..<AV_NUM_DATA_POINTERS:
+    pic.data[i] = ' '
     pic.linesize[i] = 0
-  if (desc.flags and AV_PIX_FMT_FLAG_PAL) != 0 or ((desc.flags and ff_Pseudopal) and pic.data[1] != nil):
-    avprivSetSystematicPal2(cast[ptr uint32](pic.data[1]), pic.format)
-  if (s.debug and ff_Debug_Buffers) != 0:
-    echo("default_get_buffer called on pic %p\n", pic)
-  return 0
-  # avFrameUnref(pic)
-  return -(ENOMEM)
+  if (desc.flags and AV_PIX_FMT_FLAG_PAL) != 0 or ((desc.flags and FF_PSEUDOPAL) != 0 and pic.data != ""):
+    var p = cast[ptr UncheckedArray[uint32]](pic.data[1])
+    result = avprivSetSystematicPal2(p, pic.format)
 
+proc audioGetBuffer*(avctx: var AVCodecContext; frame: var AVFrame): cint =
+  var pool = to[FramePool](avctx.internal.pool)
+  var planes: cint = pool.planes
+  frame.linesize[0] = pool.linesize[0]
+  if planes > AV_NUM_DATA_POINTERS:
+    frame.extendedData.setLen planes
+    frame.nbExtendedBuf = planes - AV_NUM_DATA_POINTERS
+    frame.extendedBuf.setLen frame.nbExtendedBuf
+  else:
+    frame.extendedData = frame.data
+
+  frame.buf = avBufferPoolGet(pool.pools[0])
+  for i in 0..<min(planes, AV_NUM_DATA_POINTERS):
+    frame.data[i] = frame.buf[i]
+    frame.extendedData[i] = frame.buf[i]
+  frame.extendedBuf = avBufferPoolGet(pool.pools[0])
+  for i in 0..<frame.nbExtendedBuf:
+    frame.extendedData[i + AV_NUM_DATA_POINTERS] = frame.extendedBuf[i]
+  return 0
 
 proc avcodecDefaultGetBuffer2*(avctx:var AVCodecContext; frame: var AVFrame;flags: int): int =
-  if avctx.hwFramesCtx != nil:
+  if avctx.hwFramesCtx != "":
     result = avHwframeGetBuffer(avctx.hwFramesCtx, frame, 0)
     frame.width = avctx.codedWidth
     frame.height = avctx.codedHeight
@@ -3106,43 +3158,25 @@ proc avcodecDefaultGetBuffer2*(avctx:var AVCodecContext; frame: var AVFrame;flag
   else:
     return -1
 
-proc audioGetBuffer*(avctx: ptr AVCodecContext; frame: ptr AVFrame): cint =
-  var pool: ptr FramePool = cast[ptr FramePool](avctx.internal.pool.data)
-  var planes: cint = pool.planes
-  frame.linesize[0] = pool.linesize[0]
-  if planes > AV_NUM_DATA_POINTERS:
-    frame.extendedData.setLen planes
-    frame.nbExtendedBuf = planes - AV_NUM_DATA_POINTERS
-    frame.extendedBuf.setLen frame.nbExtendedBuf
-  else:
-    frame.extendedData = frame.data
-  for i in 0..<min(planes, AV_NUM_DATA_POINTERS):
-    frame.buf[i] = avBufferPoolGet(pool.pools[0])
-    frame.data[i] = frame.buf[i].data
-    frame.extendedData[i] = frame.buf[i].data
-  for i in 0..<frame.nbExtendedBuf:
-    frame.extendedBuf[i] = avBufferPoolGet(pool.pools[0])
-    frame.extendedData[i + AV_NUM_DATA_POINTERS] = frame.extendedBuf[i].data
-  if (avctx.debug and ff_Debug_Buffers) != 0:
-    echo("default_get_buffer called on frame %p", frame)
-  return 0
-  
+proc avcodecGetHwConfig*(codec: AVCodec; index: auto): AVCodecHWConfig =
+  var hwConfigs = cast[ptr UncheckedArray[AVCodecHWConfigInternal]](codec.hwConfigs)
+  for i in 0..index:
+    if hwConfigs[i] == nil:
+      return nil
+  result = hwConfigs[index].public
 
 
-proc avcodecDefaultGetFormat*(avctx: AVCodecContext; fmt: AVPixelFormat): AVPixelFormat =
-  var desc: ptr AVPixFmtDescriptor
-  var config: ptr AVCodecHWConfig
-  var
-    i: cint
-    n: cint
-  if avctx.hwDeviceCtx != nil and avctx.codec.hwConfigs != nil:
-    var deviceCtx = cast[ptr AVHWDeviceContext](avctx.hwDeviceCtx.data)
-    i = 0
+proc avcodecDefaultGetFormat*(avctx: AVCodecContext; fmt: ptr UncheckedArray[AVPixelFormat]): AVPixelFormat =
+  var desc: AVPixFmtDescriptor
+  var config: AVCodecHWConfig
+  var n: cint = 0
+  var i = 0
+  if avctx.hwDeviceCtx != "" and avctx.codec.hwConfigs != nil:
+    var deviceCtx = to[AVHWDeviceContext](avctx.hwDeviceCtx)
+    var hwConfig = cast[ptr UncheckedArray[AVCodecHWConfigInternal]](avctx.codec.hwConfigs)
     while true:
-      config = addr(avctx.codec.hwConfigs[i].public)
-      if config == nil:
-        break
-      if (config.methods and av_Codec_Hw_Config_Method_Hw_Device_Ctx) != 0:
+      config = hwConfig[i].public
+      if (config.methods and AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX) != 0:
         continue
       if deviceCtx.t != config.deviceType:
         continue
@@ -3153,48 +3187,241 @@ proc avcodecDefaultGetFormat*(avctx: AVCodecContext; fmt: AVPixelFormat): AVPixe
         inc(n)
       inc(i)
   n = 0
-  while fmt[n] != av_Pix_Fmt_None:
-    nil
+  while fmt[n] != AV_PIX_FMT_NONE:
     inc(n)
-  desc = avPixFmtDescGet(fmt[n - 1])
-  if not (desc.flags and av_Pix_Fmt_Flag_Hwaccel):
+  desc = avPixFmtDescGet(fmt[n - 1].ord)
+  if (desc.flags and AV_PIX_FMT_FLAG_HWACCEL) == 0:
     return fmt[n - 1]
   n = 0
-  while fmt[n] != av_Pix_Fmt_None:
+  while fmt[n] != AV_PIX_FMT_NONE:
     i = 0
     while true:
       config = avcodecGetHwConfig(avctx.codec, i)
-      if not config:
+      if config == nil:
         break
       if config.pixFmt == fmt[n]:
         break
       inc(i)
-    if not config:
-      ##  No specific config available, so the decoder must be able
-      ##  to handle this format without any additional setup.
+    if config == nil:
       return fmt[n]
-    if config.methods and av_Codec_Hw_Config_Method_Internal:
-      ##  Usable with only internal setup.
+    if (config.methods and AV_CODEC_HW_CONFIG_METHOD_INTERNAL) != 0:
       return fmt[n]
     inc(n)
-  ##  Nothing is usable, give up.
-  return av_Pix_Fmt_None
+  return AV_PIX_FMT_NONE
 
-proc ffGetBuffer*(avctx: AVCodecContext; frame: AVFrame; flags: cint): cint =
+
+type
+  AVSideDataType* = ref object
+    packet: AVPacketSideDataType
+    frame: AVFrameSideDataType
+
+
+# proc avFrameNewSideDataFromBuf*(frame: var AVFrame; t: AVFrameSideDataType;buf: string): AVFrameSideData =
+#   var  tmp: ptr ptr AVFrameSideData
+#   tmp = avRealloc(frame.sideData, (frame.nbSideData + 1) * sizeof(frame.sideData[]))
+#   frame.sideData = tmp
+#   result.buf = buf
+#   result.data = result.buf
+#   result.size = buf.len
+#   result.t = t
+#   inc(frame.nbSideData)
+#   frame.sideData[frame.nbSideData] = result
+#   return result
+
+proc avFrameNewSideData*(frame: var AVFrame; t: AVFrameSideDataType; size: auto): AVFrameSideData =
+  var buf = newString(size)
+  result = AVFrameSideData(buf: buf, data: buf, size: size, t:t)
+  # result = avFrameNewSideDataFromBuf(frame, t, buf)
+
+proc avPacketUnpackDictionary*(data:string; size: auto; dict: OrderedTableRef): cint =
+  var d = data
+  var kv = data.split('\0')
+  for i in countup(0, kv.len, 2):
+    dict[kv[i]] = kv[i+1]
+  # for i in 0..<data.len:
+  #   var key = d
+  #   if d[i] == '\0':
+  #     var val = d + key.len + 1
+  #     dict[key] = val
+  #     d = val + len(val) + 1
+  return 0
+
+
+proc addMetadataFromSideData*(avpkt: var AVPacket; frame: AVFrame): cint =
+  var frameMd = frame.metadata
+  var sideMetadata = avPacketGetSideData(avpkt, AV_PKT_DATA_STRINGS_METADATA)
+  echo "sideMetadata: ", sideMetadata
+  return avPacketUnpackDictionary(sideMetadata, sideMetadata.len, frameMd)
+
+
+const AV_PKT_FLAG_DISCARD  = 0x0004
+const AV_FRAME_FLAG_DISCARD =  (1 shl 2)
+
+proc avRescaleRnd*(a: int64; b: int64; c: int64; rounding: auto): int64 =
+  var rnd = rounding
+  var r: int64 = 0
+  if c <= 0 or b < 0 or not ((rnd and (not AV_ROUND_PASS_MINMAX.ord)) <= 5 and (rnd and (not AV_ROUND_PASS_MINMAX.ord)) != 4):
+    return int64.low
+  if (rnd and AV_ROUND_PASS_MINMAX.ord) != 0:
+    if a == int64.low or a == int64.high:
+      return a
+    rnd -= AV_ROUND_PASS_MINMAX.ord
+  if a < 0:
+    return -(avRescaleRnd(-max(a, -int64.high), b, c, rnd xor ((rnd shr 1) and 1)))
+  if rnd == AV_ROUND_NEAR_INF.ord:
+    r = c div 2
+  elif (rnd and 1) != 0:
+    r = c - 1
+  if b <= int.high and c <= int.high:
+    if a <= int.high:
+      return (a * b + r) div c
+    else:
+      var ad: int64 = a div c
+      var a2: int64 = (a mod c * b + r) div c
+      if ad >= int32.high and b != 0 and ad > (int64.high - a2) div b:
+        return int64.low
+      return ad * b + a2
+  else:
+      var a0 = a and 0xFFFFFFFF
+      var a1 = a shr 32
+      var b0 = b and 0xFFFFFFFF
+      var b1 = b shr 32
+      var t1 = a0 * b1 + a1 * b0
+      var t1a = t1 shl 32
+      var i: cint
+      a0 = a0 * b0 + t1a
+      a1 = a1 * b1 + (t1 shr 32) + int(a0 < t1a)
+      a0 +=  r
+      a1 += int a0 < r
+      i = 63
+      while i >= 0:
+        a1 += a1 + ((a0 shr i) and 1)
+        t1 += t1
+        if c <= a1:
+          a1 -= c
+          inc(t1)
+        dec(i)
+      if t1 > int64.high:
+        return int64.low
+      return t1
+
+
+
+proc avImageCheckSar*(w: auto; h: auto; sar: Rational[int]): cint =
+  var scaledDim: int64
+  if sar.den <= 0 or sar.num < 0:
+    return -(EINVAL)
+  if sar.num == 0 or sar.num == sar.den:
+    return 0
+  if sar.num < sar.den:
+    scaledDim = avRescaleRnd(w.int64, sar.num, sar.den, AV_ROUND_ZERO.ord)
+  else:
+    scaledDim = avRescaleRnd(h, sar.den, sar.num, AV_ROUND_ZERO.ord)
+  if scaledDim > 0:
+    return 0
+  return -(EINVAL)
+
+const FF_SANE_NB_CHANNELS = 512
+
+proc ffDecodeFrameProps*(avctx: AVCodecContext; frame: var AVFrame): cint =
+  var pkt = avctx.internal.lastPktProps
+  var sd = [AVSideDataType(packet:AV_PKT_DATA_REPLAYGAIN, frame:AV_FRAME_DATA_REPLAYGAIN),
+    AVSideDataType(packet:AV_PKT_DATA_DISPLAYMATRIX, frame:AV_FRAME_DATA_DISPLAYMATRIX),
+    AVSideDataType(packet:AV_PKT_DATA_SPHERICAL, frame:AV_FRAME_DATA_SPHERICAL),
+    AVSideDataType(packet:AV_PKT_DATA_STEREO3D, frame:AV_FRAME_DATA_STEREO3D), 
+    AVSideDataType(packet:AV_PKT_DATA_AUDIO_SERVICE_TYPE, frame:AV_FRAME_DATA_AUDIO_SERVICE_TYPE), 
+    AVSideDataType(packet:AV_PKT_DATA_MASTERING_DISPLAY_METADATA,frame:AV_FRAME_DATA_MASTERING_DISPLAY_METADATA), 
+    AVSideDataType(packet:AV_PKT_DATA_CONTENT_LIGHT_LEVEL, frame:AV_FRAME_DATA_CONTENT_LIGHT_LEVEL),
+    AVSideDataType(packet:AV_PKT_DATA_A53_CC, frame:AV_FRAME_DATA_A53_CC), 
+    AVSideDataType(packet:AV_PKT_DATA_ICC_PROFILE, frame:AV_FRAME_DATA_ICC_PROFILE), 
+    AVSideDataType(packet:AV_PKT_DATA_S12M_TIMECODE, frame:AV_FRAME_DATA_S12M_TIMECODE)]
+  if IS_EMPTY(pkt):
+    result = avprivPacketListGet(avctx.internal.pktProps, avctx.internal.pktPropsTail, pkt)
+  if pkt != nil:
+    frame.pts = pkt.pts
+    frame.pktPts = pkt.pts
+    frame.pktPos = pkt.pos
+    frame.pktDuration = pkt.duration
+    frame.pktSize = pkt.size
+    for i in 0..sd.high:
+      var packetSd = avPacketGetSideData(pkt, sd[i].packet)
+      var frameSd = avFrameNewSideData(frame, sd[i].frame, packetSd.len)
+      frameSd.data &= packetSd
+    discard addMetadataFromSideData(pkt, frame)
+    if (pkt.flags and AV_PKT_FLAG_DISCARD) != 0:
+      frame.flags = frame.flags or AV_FRAME_FLAG_DISCARD
+    else:
+      frame.flags = (frame.flags and not AV_FRAME_FLAG_DISCARD)
+  frame.reorderedOpaque = avctx.reorderedOpaque
+  if frame.colorPrimaries == AVCOL_PRI_UNSPECIFIED:
+    frame.colorPrimaries = avctx.colorPrimaries
+  if frame.colorTrc == AVCOL_TRC_UNSPECIFIED:
+    frame.colorTrc = avctx.colorTrc
+  if frame.colorspace == AVCOL_SPC_UNSPECIFIED:
+    frame.colorspace = avctx.colorspace
+  if frame.colorRange == AVCOL_RANGE_UNSPECIFIED:
+    frame.colorRange = avctx.colorRange
+  if frame.chromaLocation == AVCHROMA_LOC_UNSPECIFIED:
+    frame.chromaLocation = avctx.chromaSampleLocation
+  case avctx.codec.t
+  of AVMEDIA_TYPE_VIDEO:
+    frame.format = avctx.pixFmt.ord
+    if frame.sampleAspectRatio.num == 0:
+      frame.sampleAspectRatio = avctx.sampleAspectRatio
+    if frame.width != 0 and frame.height != 0 and avImageCheckSar(frame.width, frame.height, frame.sampleAspectRatio) < 0:
+      echo("ignoring invalid SAR: %u/%u\n", frame.sampleAspectRatio.num, frame.sampleAspectRatio.den)
+      frame.sample_aspect_ratio = Rational[int](num:0, den:1)
+  of AVMEDIA_TYPE_AUDIO:
+    if frame.sampleRate == 0:
+      frame.sampleRate = avctx.sampleRate
+    if frame.format < 0:
+      frame.format = avctx.sampleFmt.ord
+    if frame.channelLayout == 0:
+      if avctx.channelLayout != 0:
+        if avGetChannelLayoutNbChannels(avctx.channelLayout) != avctx.channels:
+          echo("Inconsistent channel configuration.\n")
+          return -(EINVAL)
+        frame.channelLayout = avctx.channelLayout
+      else:
+        if avctx.channels > FF_SANE_NB_CHANNELS:
+          echo("Too many channels: %d.\n", avctx.channels)
+          return -(ENOSYS)
+    frame.channels = avctx.channels
+  else:discard
+  return 0
+
+type
+  FrameDecodeData* = ref object
+    postProcess*: proc (logctx: pointer; frame: var AVFrame): cint 
+    postProcessOpaque*: pointer
+    postProcessOpaqueFree*: proc (opaque: pointer) #
+    hwaccelPriv*: pointer
+    hwaccelPrivFree*: proc (priv: pointer)
+
+proc ffAttachDecodeData*(frame: var AVFrame): cint =
+  var fddBuf = newString(sizeof FrameDecodeData)
+  var fdd = FrameDecodeData()
+  copyMem(fddBuf[0].addr, fdd.addr, sizeof(FramePool))
+  # fddBuf = avBufferCreate(cast[ptr uint8](fdd), sizeof((fdd[])), decodeDataFree, nil, av_Buffer_Flag_Readonly)
+  frame.privateRef = fddBuf
+  return 0
+
+const FF_CODEC_CAP_EXPORTS_CROPPING = (1 shl 4)
+const AV_HWACCEL_CODEC_CAP_EXPERIMENTAL = 0x0200
+
+proc ffGetBuffer*(avctx: var AVCodecContext; frame: var AVFrame; flags: cint): cint =
   var hwaccel: AVHWAccel = avctx.hwaccel
   var overrideDimensions: cint = 1
   if avctx.codecType == AVMEDIA_TYPE_VIDEO:
-    # result = avImageCheckSize2(FFALIGN(avctx.width, STRIDE_ALIGN), avctx.height, avctx.maxPixels, av_Pix_Fmt_None, 0, avctx)
+    # result = avImageCheckSize2(FFALIGN(avctx.width, STRIDE_ALIGN), avctx.height, avctx.maxPixels, AV_PIX_FMT_NONE, 0, avctx)
     if avctx.width > int.high - STRIDE_ALIGN or result < 0 or avctx.pixFmt.ord < 0:
-      echo("video_get_buffer: image parameters invalid\n")
+      echo("video_get_buffer: image parameters invalid")
       result = -(EINVAL)
     if frame.width <= 0 or frame.height <= 0:
       frame.width = max(avctx.width, avctx.codedWidth)
       frame.height = max(avctx.height, avctx.codedHeight)
       overrideDimensions = 0
-    if frame.data[0] != nil or frame.data[1] != nil or frame.data[2] != nil or frame.data[3] != nil:
-      echo("pic->data[*]!=NULL in get_buffer_internal\n")
-      result = -(EINVAL)
+
   elif avctx.codecType == AVMEDIA_TYPE_AUDIO:
     if frame.nbSamples * cast[int64](avctx.channels) > avctx.maxSamples:
       echo("samples per frame %d, exceeds max_samples %lld, frame.nbSamples, avctx.maxSamples")
@@ -3206,20 +3433,127 @@ proc ffGetBuffer*(avctx: AVCodecContext; frame: AVFrame; flags: cint): cint =
       return
   else:
     avctx.swPixFmt = avctx.pixFmt
-  result = avctx.getBuffer2(avctx, frame, flags)
+  result = cint avctx.getBuffer2(avctx, frame, flags)
   if result < 0:
     return
-  validateAvframeAllocation(avctx, frame)
+  # validateAvframeAllocation(avctx, frame)
   result = ffAttachDecodeData(frame)
   if result < 0:
     return
-  if avctx.codecType == AVMEDIA_TYPE_VIDEO and overrideDimensions == 0 and (avctx.codec.capsInternal and ff_Codec_Cap_Exports_Cropping) == 0:
+  if avctx.codecType == AVMEDIA_TYPE_VIDEO and overrideDimensions == 0 and (avctx.codec.capsInternal and FF_CODEC_CAP_EXPORTS_CROPPING) == 0:
     frame.width = avctx.width
     frame.height = avctx.height
   if result < 0:
-    echo("get_buffer() failed\n")
+    echo("get_buffer() failed")
     # avFrameUnref(frame)
   return result
+
+proc hwaccelInit*(avctx: var AVCodecContext; hwConfig: AVCodecHWConfigInternal): auto =
+  var hwaccel: AVHWAccel
+  var err: cint
+  hwaccel = hwConfig.hwaccel
+  if (hwaccel.capabilities and AV_HWACCEL_CODEC_CAP_EXPERIMENTAL) != 0 and avctx.strictStdCompliance > FF_COMPLIANCE_EXPERIMENTAL:
+    echo "Ignoring experimental hwaccel: %s",hwaccel.name
+    return AVERROR_PATCHWELCOME
+  if hwaccel.privDataSize != 0:
+    avctx.internal.hwaccelPrivData = alloc(hwaccel.privDataSize)
+  avctx.hwaccel = hwaccel
+  if hwaccel.init != nil:
+    err = hwaccel.init(avctx)
+    if err < 0:
+      echo("Failed setup for format %s: hwaccel initialisation returned error.",avGetPixFmtName(hwConfig.public.pixFmt.ord))
+      avctx.hwaccel = nil
+      return err
+  return 0
+
+
+proc ffGetFormat*(avctx: var AVCodecContext; fmt: ptr UncheckedArray[AVPixelFormat]): cint =
+  var desc: AVPixFmtDescriptor
+  var choices: seq[AVPixelFormat]
+  var  userChoice: AVPixelFormat
+  var hwConfig: AVCodecHWConfigInternal
+  var config: AVCodecHWConfig
+  var
+    i: cint
+    n: cint
+    err: cint
+  n = 0
+  while fmt[n] != AV_PIX_FMT_NONE:
+    n.inc
+  desc = avPixFmtDescGet(fmt[n - 1].ord)
+  if (desc.flags and AV_PIX_FMT_FLAG_HWACCEL) != 0: discard
+  else:
+    avctx.swPixFmt = fmt[n - 1]
+  choices.setLen n + 1
+  copyMem(choices[0].addr, fmt, (n + 1) * sizeof(AVPixelFormat))
+  while true:
+    var choicesPtr = cast[ptr UncheckedArray[AVPixelFormat]](choices[0].addr)
+    userChoice = avctx.getFormat(avctx, choicesPtr)
+    if userChoice == AV_PIX_FMT_NONE:
+      result = AV_PIX_FMT_NONE.cint
+      break
+    desc = avPixFmtDescGet(userChoice.ord)
+    if desc == nil:
+      echo("Invalid format returned by get_format() callback.\n")
+      result = AV_PIX_FMT_NONE.cint
+      break
+    echo("Format %s chosen by get_format().\n", desc.name)
+    i = 0
+    while i < n:
+      if choices[i] == userChoice:
+        break
+      inc(i)
+    if i == n:
+      echo("Invalid return from get_format(): %s not in possible list.\n",desc.name)
+      result = AV_PIX_FMT_NONE.cint
+      break
+    var hwConfigs = cast[ptr UncheckedArray[AVCodecHWConfigInternal]](avctx.codec.hwConfigs)
+    if hwConfigs != nil:
+      i = 0
+      while true:
+        hwConfig = hwConfigs[i]
+        if hwConfig == nil:
+          break
+        if hwConfig.public.pixFmt == userChoice:
+          break
+        inc(i)
+    else:
+      hwConfig = nil
+    if hwConfig == nil:
+      result = cint userChoice
+      break
+    config = hwConfig.public
+    if (config.methods and AV_CODEC_HW_CONFIG_METHOD_HW_FRAMES_CTX) != 0 and avctx.hwFramesCtx != "":
+      var framesCtx: ptr AVHWFramesContext = cast[ptr AVHWFramesContext](avctx.hwFramesCtx)
+      if framesCtx.format != userChoice:
+        echo( "Invalid setup for format %s: does not match the format of the provided frames context.",desc.name)
+        return
+    elif (config.methods and AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX) != 0 and avctx.hwDeviceCtx != "":
+      var deviceCtx: ptr AVHWDeviceContext = cast[ptr AVHWDeviceContext](avctx.hwDeviceCtx)
+      if deviceCtx.t != config.deviceType:
+        echo( "Invalid setup for format %s: does not match the type of the provided device context.\n",desc.name)
+        return
+    elif (config.methods and AV_CODEC_HW_CONFIG_METHOD_INTERNAL) != 0: discard
+    elif (config.methods and AV_CODEC_HW_CONFIG_METHOD_AD_HOC) != 0: discard
+    else:
+      echo("Invalid setup for format %s: missing configuration.", desc.name)
+    if hwConfig.hwaccel != nil:
+      echo("Format %s requires hwaccel initialisation.",desc.name)
+      err = cint hwaccelInit(avctx, hwConfig)
+      if err < 0:
+        return
+    result = userChoice.cint
+    break
+    echo("Format %s not usable, retrying get_format() without it.\n", desc.name)
+    i = 0
+    while i < n:
+      if choices[i] == userChoice:
+        break
+      inc(i)
+    while i + 1 < n:
+      choices[i] = choices[i + 1]
+      inc(i)
+    dec(n)
 
 
 proc submitPacket*(p: var PerThreadContext; userAvctx: AVCodecContext; avpkt: AVPacket): cint =
@@ -3258,7 +3592,8 @@ proc submitPacket*(p: var PerThreadContext; userAvctx: AVCodecContext; avpkt: AV
       of STATE_GET_BUFFER:
         p.result = ffGetBuffer(p.avctx, p.requestedFrame, p.requestedFlags)
       of STATE_GET_FORMAT:
-        p.resultFormat = ffGetFormat(p.avctx, p.availableFormats)
+        var fmts = cast[ptr UncheckedArray[AVPixelFormat]](p.availableFormats)
+        p.resultFormat = AVPixelFormat ffGetFormat(p.avctx, fmts)
       else:
         callDone = 0
       if callDone != 0:
@@ -3271,55 +3606,59 @@ proc submitPacket*(p: var PerThreadContext; userAvctx: AVCodecContext; avpkt: AV
 
 
 proc ffThreadDecodeFrame*(avctx: var AVCodecContext; picture: var AVFrame;gotPicturePtr: var cint; avpkt: var AVPacket): cint =
-  var fctx: FrameThreadContext = cast[FrameThreadContext](avctx.internal.threadCtx)
+  var fctx = cast[ptr FrameThreadContext](avctx.internal.threadCtx)
   var finished: cint = fctx.nextFinished
   var p: PerThreadContext
   var err: cint
   # asyncUnlock(fctx)
-  p = fctx.threads[fctx.nextDecoding]
+  var threads = cast[ptr UncheckedArray[PerThreadContext]](fctx.threads)
+  p = threads[fctx.nextDecoding]
   err = submitPacket(p, avctx, avpkt)
   if fctx.nextDecoding > (avctx.threadCount - 1 - int(avctx.codecId.ord == AV_CODEC_ID_FFV1.ord)):
     fctx.delaying = 0
   if fctx.delaying != 0:
-    gotPicturePtr[] = 0
-    if avpkt.size:
-      err = avpkt.size
-      break finish
+    gotPicturePtr = 0
+    if avpkt.size != 0:
+      err = cint avpkt.size
+      return 
   while true:
-    p = fctx.threads[inc(finished)]
-    if atomicLoad(p.state) != STATE_INPUT_READY:
-      pthread_mutex_lock(p.progressMutex)
-      while atomicLoadExplicit(p.state, memoryOrderRelaxed) != STATE_INPUT_READY:
-        pthread_cond_wait(p.outputCond, p.progressMutex)
-      pthread_mutex_unlock(p.progressMutex)
-    avFrameMoveRef(picture, p.frame)
-    gotPicturePtr[] = p.gotFrame
+    finished.inc
+    p = threads[finished]
+    if p.state != STATE_INPUT_READY:
+      # pthread_mutex_lock(p.progressMutex)
+      while atomicLoad(p.state.addr) != STATE_INPUT_READY.ord:
+        echo pthread_cond_wait(p.outputCond, p.progressMutex)
+      # pthread_mutex_unlock(p.progressMutex)
+    picture = p.frame
+    # avFrameMoveRef(picture, p.frame)
+    gotPicturePtr = p.gotFrame
     picture.pktDts = p.avpkt.dts
     err = p.result
     p.gotFrame = 0
     p.result = 0
     if finished >= avctx.threadCount:
       finished = 0
-    if not (not avpkt.size and not gotPicturePtr[] and err >= 0 and finished != fctx.nextFinished):
+    if not (avpkt.size == 0 and gotPicturePtr == 0 and err >= 0 and finished != fctx.nextFinished):
       break
-  updateContextFromThread(avctx, p.avctx, 1)
+  avctx = p.avctx
+  # updateContextFromThread(avctx, p.avctx, 1)
   if fctx.nextDecoding >= avctx.threadCount:
     fctx.nextDecoding = 0
   fctx.nextFinished = finished
   if err >= 0:
-    err = avpkt.size
+    err = cint avpkt.size
   # asyncLock(fctx)
   return err
 
-proc guessCorrectPts*(ctx: ptr AVCodecContext; reorderedPts: int64; dts: int64): int64 =
+proc guessCorrectPts*(ctx: var AVCodecContext; reorderedPts: int64; dts: int64): int64 =
   var pts: int64
   if dts != 0:
-    inc(ctx.ptsCorrectionNumFaultyDts, dts <= ctx.ptsCorrectionLastDts)
+    ctx.ptsCorrectionNumFaultyDts += int dts <= ctx.ptsCorrectionLastDts
     ctx.ptsCorrectionLastDts = dts
   elif reorderedPts != 0:
     ctx.ptsCorrectionLastDts = reorderedPts
   if reorderedPts != 0:
-    inc(ctx.ptsCorrectionNumFaultyPts, reorderedPts <= ctx.ptsCorrectionLastPts)
+    ctx.ptsCorrectionNumFaultyPts.inc int reorderedPts <= ctx.ptsCorrectionLastPts
     ctx.ptsCorrectionLastPts = reorderedPts
   elif dts != 0:
     ctx.ptsCorrectionLastPts = dts
@@ -3330,29 +3669,62 @@ proc guessCorrectPts*(ctx: ptr AVCodecContext; reorderedPts: int64; dts: int64):
     pts = dts
   return pts
 
+const FF_CODEC_CAP_SETS_PKT_DTS = (1 shl 2)
+const AV_CODEC_FLAG2_SKIP_MANUAL =  (1 shl 29)
+const AV_CODEC_CAP_SUBFRAMES = (1 shl  8)
 
-proc decodeSimpleInternal*(avctx: var AVCodecContext; frame: AVFrame; discardedSamples:var int64): cint  =
+proc avRescaleQRnd*(a: int64; bq: Rational[int]; cq: Rational[int]; rnd: AVRounding): int64 =
+  var b: int64 = bq.num * cast[int64](cq.den)
+  var c: int64 = cq.num * cast[int64](bq.den)
+  return avRescaleRnd(a, b, c, rnd.ord)
+
+proc avRescaleQ*(a: int64; bq: Rational[int]; cq: Rational[int]): int64 =
+  return avRescaleQRnd(a, bq, cq, AV_ROUND_NEAR_INF)
+
+proc avSamplesCopy*(dst: var string; src: string; dstOffset: auto;
+                   srcOffset: auto; nbSamples: auto; nbChannels: auto;
+                   sampleFmt: int): auto =
+  var planar = avSampleFmtIsPlanar(sampleFmt)
+  var planes = if planar != 0: nbChannels else: 1
+  var blockAlign = avGetBytesPerSample(sampleFmt) * (if planar != 0: 1 else: nbChannels)
+  var dataSize = nbSamples * blockAlign
+  
+  for i in 0..<planes:
+    var rng = i+ dstOffset * blockAlign..i+ dstOffset * blockAlign + datasize
+    dst[rng] = src[rng]
+    # copyMem(dst[i+ dstOffset * blockAlign].addr , src[i + srcOffset * blockAlign].addr , dataSize)
+  # if (if dst[0] < src[0]: src[0] - dst[0] else: dst[0] - src[0]) >= dataSize:
+  #   for i in 0..<planes:
+  #     copyMem(dst[i] + dstOffset, src[i] + srcOffset, dataSize)
+  # else:
+  #   for i in 0..<planes:
+  #     memmove(dst[i] + dstOffset, src[i] + srcOffset, dataSize)
+  return 0
+
+const AV_CODEC_FLAG_TRUNCATED = 1 shl 16
+
+proc decodeSimpleInternal*(avctx: var AVCodecContext; frame: var AVFrame; discardedSamples:var int64): cint  =
   var avci = avctx.internal
   var ds = avci.ds
   var pkt = ds.inPkt
   var
     gotFrame: cint
     actualGotFrame: cint
-  if pkt.data == 0 and avci.draining == 0:
-    avPacketUnref(pkt)
+  if pkt.data[] == 0 and avci.draining == 0:
+    # avPacketUnref(pkt)
     result = ffDecodeGetPacket(avctx, pkt)
     if result < 0 and result != averror_Eof:
       return result
   if avci.drainingDone != 0:
     return averror_Eof
-  if pkt.data == 0 and (avctx.codec.capabilities and AV_CODEC_CAP_DELAY) == 0 and (avctx.activeThreadType and FF_THREAD_FRAME) == 0:
+  if pkt.data[] == 0 and (avctx.codec.capabilities and AV_CODEC_CAP_DELAY) == 0 and (avctx.activeThreadType and FF_THREAD_FRAME) == 0:
     return averror_Eof
   gotFrame = 0
   if HAVE_THREADS != 0 and (avctx.activeThreadType and FF_THREAD_FRAME) != 0:
     result = ffThreadDecodeFrame(avctx, frame, gotFrame, pkt)
   else:
-    result = avctx.codec.decode(avctx, frame, gotFrame, pkt)
-    if (avctx.codec.capsInternal and ff_Codec_Cap_Sets_Pkt_Dts) != 0:
+    result = cint avctx.codec.decode(avctx, frame.addr, gotFrame, pkt)
+    if (avctx.codec.capsInternal and FF_CODEC_CAP_SETS_PKT_DTS) != 0:
       frame.pktDts = pkt.dts
     if avctx.codec.t == AVMEDIA_TYPE_VIDEO:
       if avctx.hasBFrames == 0:
@@ -3364,125 +3736,129 @@ proc decodeSimpleInternal*(avctx: var AVCodecContext; frame: AVFrame; discardedS
           frame.width = avctx.width
         if frame.height == 0:
           frame.height = avctx.height
-        if frame.format == AV_PIX_FMT_NONE:
-          frame.format = avctx.pixFmt
-  emmsC()
+        if frame.format == AV_PIX_FMT_NONE.ord:
+          frame.format = avctx.pixFmt.ord
+  # emmsC()
   actualGotFrame = gotFrame
   if avctx.codec.t == AVMEDIA_TYPE_VIDEO:
-    if (frame.flags and av_Frame_Flag_Discard) != 0 :
+    if (frame.flags and AV_FRAME_FLAG_DISCARD) != 0 :
       gotFrame = 0
     if gotFrame != 0:
       frame.bestEffortTimestamp = guessCorrectPts(avctx, frame.pts, frame.pktDts)
   elif avctx.codec.t == AVMEDIA_TYPE_AUDIO:
-    var side: uint8
-    var sideSize: cint
-    var discardPadding: uint32 = 0
-    var skipReason: uint8 = 0
-    var discardReason: uint8 = 0
+    var discardPadding = 0
+    var skipReason:uint8 = 0
+    var discardReason:uint8 = 0
     if result >= 0 and gotFrame != 0:
       frame.bestEffortTimestamp = guessCorrectPts(avctx, frame.pts, frame.pktDts)
-      if frame.format == AV_SAMPLE_FMT_NONE:
-        frame.format = avctx.sampleFmt
+      if frame.format == AV_SAMPLE_FMT_NONE.ord:
+        frame.format = avctx.sampleFmt.ord
       if  frame.channelLayout == 0:
         frame.channelLayout = avctx.channelLayout
       if frame.channels == 0:
         frame.channels = avctx.channels
       if frame.sampleRate == 0:
         frame.sampleRate = avctx.sampleRate
-    side = avPacketGetSideData(avci.lastPktProps, AV_PKT_DATA_SKIP_SAMPLES, sideSize)
-    if side != 0 and sideSize >= 10:
-      avci.skipSamples = av_Rl32(side) * avci.skipSamplesMultiplier
-      discardPadding = av_Rl32(side + 4)
+    var side = avPacketGetSideData(avci.lastPktProps, AV_PKT_DATA_SKIP_SAMPLES)
+    if side != "" and side.len >= 10:
+      avci.skipSamples = cint side[0].uint32 * avci.skipSamplesMultiplier.uint32
+      discardPadding = cint side[4].uint32
       echo("skip %d / discard %d samples due to side data\n", avci.skipSamples,cast[cint](discardPadding))
-      skipReason = av_Rl8(side + 8)
-      discardReason = av_Rl8(side + 9)
-    if (frame.flags and av_Frame_Flag_Discard) != 0 and gotFrame != 0 and  (avctx.flags2 and av_Codec_Flag2Skip_Manual) == 0:
-      avci.skipSamples = max(0, avci.skipSamples - frame.nbSamples)
+      skipReason = side[8].uint8
+      discardReason = side[9].uint8
+    if (frame.flags and AV_FRAME_FLAG_DISCARD) != 0 and gotFrame != 0 and  (avctx.flags2 and AV_CODEC_FLAG2_SKIP_MANUAL) == 0:
+      avci.skipSamples = cint max(0, avci.skipSamples - frame.nbSamples)
       gotFrame = 0
       inc(discardedSamples, frame.nbSamples)
-    if avci.skipSamples > 0 and gotFrame != 0 and (avctx.flags2 and av_Codec_Flag2Skip_Manual) == 0:
+    if avci.skipSamples > 0 and gotFrame != 0 and (avctx.flags2 and AV_CODEC_FLAG2_SKIP_MANUAL) == 0:
       if frame.nbSamples <= avci.skipSamples:
         gotFrame = 0
         inc(discardedSamples, frame.nbSamples)
         dec(avci.skipSamples, frame.nbSamples)
         echo( "skip whole frame, skip left: %d\n",avci.skipSamples)
       else:
-        avSamplesCopy(frame.extendedData, frame.extendedData, 0, avci.skipSamples,frame.nbSamples - avci.skipSamples, avctx.channels,frame.format)
+        discard avSamplesCopy(frame.extendedData, frame.extendedData, 0, avci.skipSamples,frame.nbSamples - avci.skipSamples, avctx.channels,frame.format)
         if avctx.pktTimebase.num != 0 and avctx.sampleRate != 0:
-          var diff_ts = av_rescale_q(avci.skip_samples, AVRational(num:1, den:avctx.sample_rate), avctx.pkt_timebase)
+          var diff_ts = avRescaleQ(avci.skip_samples, Rational[int](num:1, den:avctx.sample_rate), avctx.pkt_timebase)
           if frame.pts != 0:
-            inc(frame.pts, diffTs)
+            frame.pts += diffTs
           if frame.pktPts != 0:
-            inc(frame.pktPts, diffTs)
+            frame.pktPts += diffTs
           if frame.pktDts != 0:
-            inc(frame.pktDts, diffTs)
+            frame.pktDts += diffTs
           if frame.pktDuration >= diffTs:
-            dec(frame.pktDuration, diffTs)
+            frame.pktDuration -= diffTs
         else:
           echo("Could not update timestamps for skipped samples.")
         echo( "skip %d/%d samples", avci.skipSamples, frame.nbSamples)
         discardedSamples += avci.skipSamples
         dec(frame.nbSamples, avci.skipSamples)
         avci.skipSamples = 0
-    if discardPadding > 0 and discardPadding <= frame.nbSamples and gotFrame != 0 and (avctx.flags2 and av_Codec_Flag2Skip_Manual) == 0:
+    if discardPadding > 0 and discardPadding <= frame.nbSamples and gotFrame != 0 and (avctx.flags2 and AV_CODEC_FLAG2_SKIP_MANUAL) == 0:
       if discardPadding == frame.nbSamples:
         inc(discardedSamples, frame.nbSamples)
         gotFrame = 0
       else:
         if avctx.pktTimebase.num != 0 and avctx.sampleRate != 0:
-          var diff_ts = av_rescale_q(frame.nb_samples - discard_padding,AVRational(num:1, den:avctx.sample_rate),avctx.pkt_timebase)
+          var diff_ts = av_rescale_q(frame.nb_samples - discard_padding,Rational[int](num:1, den:avctx.sample_rate),avctx.pkt_timebase)
           frame.pktDuration = diffTs
         else:
           echo("Could not update timestamps for discarded samples.\n")
         echo("discard %d/%d samples\n", discardPadding, frame.nbSamples)
         dec(frame.nbSamples, discardPadding)
-    if (avctx.flags2 and av_Codec_Flag2Skip_Manual) != 0 and gotFrame != 0:
-      var fside = avFrameNewSideData(frame, av_Frame_Data_Skip_Samples, 10)
+    if (avctx.flags2 and AV_CODEC_FLAG2_SKIP_MANUAL) != 0 and gotFrame != 0:
+      var fside = avFrameNewSideData(frame, AV_FRAME_DATA_SKIP_SAMPLES, 10)
       if fside != nil:
-        av_Wl32(fside.data, avci.skipSamples)
-        av_Wl32(fside.data + 4, discardPadding)
-        av_Wl8(fside.data + 8, skipReason)
-        av_Wl8(fside.data + 9, discardReason)
+        copyMem(fside.data[0].addr, avci.skipSamples.addr, 4)
+        copyMem(fside.data[4].addr, avci.skipSamples.addr, 4)
+        copyMem(fside.data[8].addr, avci.skipSamples.addr, 1)
+        copyMem(fside.data[9].addr, avci.skipSamples.addr, 1)
+        # fside.data[0] = avci.skipSamples
+        # fside.data[4] = discardPadding
+        # fside.data[8] = skipReason
+        # fside.data[9] = discardReason 
         avci.skipSamples = 0
   if avctx.codec.t == AVMEDIA_TYPE_AUDIO and avci.showedMultiPacketWarning == 0 and result >= 0 and result != pkt.size and
-      (avctx.codec.capabilities and av_Codec_Cap_Subframes) == 0:
-    echo( "Multiple frames in a packet.\n")
+      (avctx.codec.capabilities and AV_CODEC_CAP_SUBFRAMES) == 0:
+    echo("Multiple frames in a packet.")
     avci.showedMultiPacketWarning = 1
   # if gotFrame == 0:
     # avFrameUnref(frame)
-  if result >= 0 and avctx.codec.t == AVMEDIA_TYPE_VIDEO and not (avctx.flags and av_Codec_Flag_Truncated):
-    result = pkt.size
+  if result >= 0 and avctx.codec.t == AVMEDIA_TYPE_VIDEO and (avctx.flags and AV_CODEC_FLAG_TRUNCATED) == 0:
+    result = cint pkt.size
   if avctx.framerate.num > 0 and avctx.framerate.den > 0:
     if avci.draining != 0 and actualGotFrame == 0:
       if result < 0:
-        var nbErrorsMax: cint = 20 +
-            (if HAVE_THREADS != 0 and (avctx.activeThreadType and ff_Thread_Frame): avctx.threadCount else: 1)
-        if inc(avci.nbDrainingErrors) >= nbErrorsMax:
+        var t = if HAVE_THREADS != 0 and (avctx.activeThreadType and FF_THREAD_FRAME) != 0: avctx.threadCount else: 1
+        var nbErrorsMax = 20 + t
+
+        if avci.nbDrainingErrors >= nbErrorsMax:
+          avci.nbDrainingErrors.inc
           echo("Too many errors when draining, this is a bug. Stop draining and force EOF.\n")
           avci.drainingDone = 1
-          result = averror_Bug
+          result = cint AVERROR_BUG
       else:
         avci.drainingDone = 1
   inc(avci.compatDecodeConsumed, result)
-  if result >= pkt.size or result < 0:
-    avPacketUnref(pkt)
-    avPacketUnref(avci.lastPktProps)
-  else:
-    var consumed: cint = result
-    inc(pkt.data, consumed)
-    dec(pkt.size, consumed)
-    dec(avci.lastPktProps.size, consumed)
-    pkt.pts = 0
-    pkt.dts = 0
-    avci.lastPktProps.pts = 0
-    avci.lastPktProps.dts = 0
+  # if result >= pkt.size or result < 0:
+    # avPacketUnref(pkt)
+    # avPacketUnref(avci.lastPktProps)
+  # else:
+  var consumed = result
+  pkt.data[].inc consumed
+  dec(pkt.size, consumed)
+  dec(avci.lastPktProps.size, consumed)
+  pkt.pts = 0
+  pkt.dts = 0
+  avci.lastPktProps.pts = 0
+  avci.lastPktProps.dts = 0
   return if result < 0: result else: 0
 
 
-proc decodeSimpleReceiveFrame*(avctx: AVCodecContext; frame: AVFrame): cint =
+proc decodeSimpleReceiveFrame*(avctx: var AVCodecContext; frame: var AVFrame): cint =
   var result: cint
   var discardedSamples: int64 = 0
-  while frame.buf[0] == nil:
+  while frame.buf == "":
     if discardedSamples > avctx.maxSamples:
       return -EAGAIN
     result = decodeSimpleInternal(avctx, frame, discardedSamples)
@@ -3491,28 +3867,19 @@ proc decodeSimpleReceiveFrame*(avctx: AVCodecContext; frame: AVFrame): cint =
   return 0
 
 
-type
-  FrameDecodeData* = ref object
-    postProcess*: proc (logctx: pointer; frame: var AVFrame): cint 
-    postProcessOpaque*: pointer
-    postProcessOpaqueFree*: proc (opaque: pointer) 
-    hwaccelPriv*: pointer
-    hwaccelPrivFree*: proc (priv: pointer)
-
-proc decodeReceiveFrameInternal*(avctx: var AVCodecContext; frame: var AVFrame): cint =
+proc decodeReceiveFrameInternal*(avctx: var AVCodecContext; frame: var AVFrame): auto =
   var avci: AVCodecInternal = avctx.internal
-  var result: cint
   if avctx.codec.receiveFrame != nil:
     result = avctx.codec.receiveFrame(avctx, frame)
-    # if result != -(eagain):
+    # if result != -(EAGAIN):
     #   avPacketUnref(avci.lastPktProps)
   else:
     result = decodeSimpleReceiveFrame(avctx, frame)
   if result == averror_Eof:
     avci.drainingDone = 1
   if result == 0:
-    if frame.privateRef != nil:
-      var fdd: FrameDecodeData = cast[FrameDecodeData](frame.privateRef.data)
+    if frame.privateRef != "":
+      var fdd: FrameDecodeData = cast[FrameDecodeData](frame.privateRef)
       if fdd.postProcess != nil:
         result = fdd.postProcess(avctx.addr, frame)
         if result < 0:
@@ -3521,13 +3888,91 @@ proc decodeReceiveFrameInternal*(avctx: var AVCodecContext; frame: var AVFrame):
   # avBufferUnref(frame.privateRef)
   return result
 
+proc calcCroppingOffsets*(offsets: var array[4, int]; frame: AVFrame;desc: AVPixFmtDescriptor): auto =
+  for i in 0..frame.data.high:
+    var comp: ptr AVComponentDescriptor = nil
+    var shiftX = if (i == 1 or i == 2): desc.log2ChromaW else: 0
+    var shiftY = if (i == 1 or i == 2): desc.log2ChromaH else: 0
+    if (desc.flags and (AV_PIX_FMT_FLAG_PAL or FF_PSEUDOPAL)) != 0 and i == 1:
+      offsets[i] = 0
+      break
+    for j in 0..<desc.nbComponents.int:
+      if desc.comp[j].plane == i:
+        comp = addr(desc.comp[j])
+        break
+    if comp == nil:
+      return AVERROR_BUG
+    offsets[i] =  int(frame.cropTop shr shiftY) * frame.linesize[i] + int(frame.cropLeft shr shiftX) * comp.step
+  return 0
 
-proc avcodecReceiveFrame*(avctx: AVCodecContext; frame: var AVFrame): cint =
+const AV_FRAME_CROP_UNALIGNED = 1 shl 0
+
+proc avFrameApplyCropping*(frame: AVFrame; flags: cint): auto =
+  var desc: AVPixFmtDescriptor
+  var offsets: array[4, int]
+  var i: cint
+  if not (frame.width > 0 and frame.height > 0):
+    return -(EINVAL)
+  if frame.cropLeft >= int.high.uint - frame.cropRight or
+      frame.cropTop >= int.high.uint - frame.cropBottom or
+      (frame.cropLeft + frame.cropRight) >= frame.width.uint or
+      (frame.cropTop + frame.cropBottom) >= frame.height.uint:
+    return -(ERANGE)
+  desc = avPixFmtDescGet(frame.format)
+  if (desc.flags and (AV_PIX_FMT_FLAG_BITSTREAM or AV_PIX_FMT_FLAG_HWACCEL)) != 0:
+    frame.width -= frame.cropRight.int
+    frame.height -= frame.cropBottom.int
+    frame.cropRight = 0
+    frame.cropBottom = 0
+    return 0
+  discard calcCroppingOffsets(offsets, frame, desc)
+  if (flags and AV_FRAME_CROP_UNALIGNED) == 0:
+    var log2CropAlign = if frame.cropLeft != 0: countTrailingZeroBits(frame.cropLeft) else: int.high
+    var minLog2Align = int.high
+    for i in 0..frame.data.high:
+      var log2Align = if offsets[i] != 0: countTrailingZeroBits(offsets[i]) else: int.high
+      minLog2Align = min(log2Align, minLog2Align)
+    if log2CropAlign < minLog2Align:
+      return AVERROR_BUG
+    if minLog2Align < 5:
+      frame.cropLeft = frame.cropLeft and not((1 shl (5 + log2CropAlign - minLog2Align)) - 1).uint
+      discard calcCroppingOffsets(offsets, frame, desc)
+  i = 0
+  for i in 0..frame.data.high:
+    inc(frame.data[i], offsets[i])
+  frame.width -= int(frame.cropLeft + frame.cropRight)
+  frame.height -= int(frame.cropTop + frame.cropBottom)
+  frame.cropLeft = 0
+  frame.cropRight = 0
+  frame.cropTop = 0
+  frame.cropBottom = 0
+  return 0
+
+const AV_CODEC_FLAG_UNALIGNED= (1 shl  0)
+proc applyCropping*(avctx: var AVCodecContext; frame: var AVFrame): auto =
+  if frame.cropLeft >= int.high.uint - frame.cropRight or
+      frame.cropTop >= int.high.uint - frame.cropBottom or
+      (frame.cropLeft + frame.cropRight) >= frame.width.uint or
+      (frame.cropTop + frame.cropBottom) >= frame.height.uint:
+    echo("Invalid cropping information set by a decoder: %zu/%zu/%zu/%zu (frame size %dx%d). This is a bug, please report it",
+          frame.cropLeft, frame.cropRight, frame.cropTop, frame.cropBottom,
+          frame.width, frame.height)
+    frame.cropLeft = 0
+    frame.cropRight = 0
+    frame.cropTop = 0
+    frame.cropBottom = 0
+    return 0
+  if avctx.applyCropping == 0:
+    return 0
+  return avFrameApplyCropping(frame, if (avctx.flags and AV_CODEC_FLAG_UNALIGNED) != 0: AV_FRAME_CROP_UNALIGNED else: 0)
+
+
+proc avcodecReceiveFrame*(avctx: var AVCodecContext; frame: var AVFrame): auto =
   var avci: AVCodecInternal = avctx.internal
 #   avFrameUnref(frame)
   if not avcodecIsOpen(avctx) or not avCodecIsDecoder(avctx.codec):
     return -EINVAL
-  if avci.bufferFrame.buf[0] != nil:
+  if avci.bufferFrame.buf != "":
     frame = avci.bufferFrame
   else:
     result = decodeReceiveFrameInternal(avctx, frame)
@@ -3541,15 +3986,17 @@ proc avcodecReceiveFrame*(avctx: AVCodecContext; frame: var AVFrame): cint =
   inc(avctx.frameNumber)
   if (avctx.flags and AV_CODEC_FLAG_DROPCHANGED) != 0:
     if avctx.frameNumber == 1:
-      avci.initialFormat = frame.format
+      avci.initialFormat = cint frame.format
       case avctx.codecType
       of AVMEDIA_TYPE_VIDEO:
-        avci.initialWidth = frame.width
-        avci.initialHeight = frame.height
+        avci.initialWidth = cint frame.width
+        avci.initialHeight = cint frame.height
       of AVMEDIA_TYPE_AUDIO:
-        avci.initialSampleRate = if frame.sampleRate: frame.sampleRate else: avctx.sampleRate
-        avci.initialChannels = frame.channels
+        avci.initialSampleRate = if frame.sampleRate != 0: cint frame.sampleRate else: cint avctx.sampleRate
+        avci.initialChannels = cint frame.channels
         avci.initialChannelLayout = frame.channelLayout
+      else:
+        discard
     if avctx.frameNumber > 1:
       var changed = avci.initialFormat != frame.format
       case avctx.codecType
@@ -3562,12 +4009,11 @@ proc avcodecReceiveFrame*(avctx: AVCodecContext; frame: var AVFrame): cint =
       if changed:
         inc(avci.changedFramesDropped)
         echo( "dropped changed frame #%d pts %lld drop count: %d \n", avctx.frameNumber, frame.pts,avci.changedFramesDropped)
-        # avFrameUnref(frame)
         return AVERROR_INPUT_CHANGED
   return 0
 
-var inputFilename*: cstring
-var windowTitle*: cstring
+var inputFilename*: string
+var windowTitle*: string
 var defaultWidth*: cint = 640
 var defaultHeight*: cint = 480
 var screenWidth*: cint = 0
@@ -3577,7 +4023,7 @@ var screenTop*: cint
 var audioDisable*: cint
 var videoDisable*: cint
 var subtitleDisable*: cint
-var wantedStreamSpec*: array[AVMEDIA_TYPE_NB, cstring]
+var wantedStreamSpec*: array[AVMEDIA_TYPE_NB, string]
 var seekByBytes*: cint = -1
 var seekInterval*: cfloat = 10
 var displayDisable*: cint
@@ -3585,7 +4031,7 @@ var borderless*: cint
 var alwaysontop*: cint
 var startupVolume*: cint = 100
 var showStatus*: cint = -1
-var avSyncType*: cint = av_Sync_Audio_Master
+var avSyncType*: cint = AV_SYNC_AUDIO_MASTER
 var startTime*: int64 
 var duration*: int64
 var fast*: cint = 0
@@ -3598,16 +4044,15 @@ var exitOnMousedown*: cint
 var loop*: cint = 1
 var framedrop*: cint = -1
 var infiniteBuffer*: cint = -1
-var showMode*: ShowMode
-var audioCodecName*: cstring
-var subtitleCodecName*: cstring
-var videoCodecName*: cstring
+var audioCodecName*: string
+var subtitleCodecName*: string
+var videoCodecName*: string
 var rdftspeed*: cdouble = 0.02
 var cursorLastShown*: int64
 var cursorHidden*: cint = 0
 var vfiltersList*: cstringArray 
 var nbVfilters*: cint = 0
-var afilters*: cstring 
+var afilters*: string 
 var autorotate*: cint = 1
 var findStreamInfo*: cint = 1
 var filterNbthreads*: cint = 0
@@ -3615,18 +4060,263 @@ var filterNbthreads*: cint = 0
 var isFullScreen*: cint
 var audioCallbackTime*: int64
 
+import sdl2
 
 const
-  FF_QUIT_EVENT* = (sdl_Userevent + 2)
+  FF_QUIT_EVENT* = (UserEvent.int + 2)
 
-var window*: SDL_Window
-var renderer*: SDL_Renderer
-var rendererInfo*: SDL_RendererInfo
-var audioDev*: SDL_AudioDeviceID
+var window*: WindowPtr
+var renderer*: RendererPtr
+
+const AV_CODEC_CAP_ENCODER_FLUSH = (1 shl 21)
+
+proc avCodecIsEncoder*(codec: AVCodec): auto =
+  codec != nil and (codec.encodeSub != nil or codec.encode2 != nil or codec.receivePacket != nil)
+
+proc parkFrameWorkerThreads*(fctx: ptr FrameThreadContext; threadCount: auto) =
+  for i in 0..<threadCount:
+    var threads = cast[ptr UncheckedArray[PerThreadContext]](fctx.threads)
+    var p = threads[i]
+    # if atomicLoad(addr(p.state)) != STATE_INPUT_READY:
+    #   while atomicLoad(addr(p.state)) != STATE_INPUT_READY:
+    #     pthreadCondWait(addr(p.outputCond), addr(p.progressMutex))
+    p.gotFrame = 0
+
+proc releaseDelayedBuffers*(p: PerThreadContext) =
+  var fctx = p.parent
+  while p.numReleasedBuffers > 0:
+    var f: AVFrame
+    # pthreadMutexLock(addr(fctx.bufferMutex))
+    f = p.releasedBuffers[p.numReleasedBuffers]
+    f.extendedData = f.data
+    p.numReleasedBuffers.dec
+    # avFrameUnref(f)
+    # pthreadMutexUnlock(addr(fctx.bufferMutex))
 
 
-proc decoderDecodeFrame*(d: Decoder; frame: AVFrame; sub: AVSubtitle): cint =
+proc ffThreadFlush*(avctx: AVCodecContext) =
+  var i: cint
+  var fctx = cast[ptr FrameThreadContext](avctx.internal.threadCtx)
+  if fctx == nil:
+    return
+  parkFrameWorkerThreads(fctx, avctx.threadCount)
+  var threads = cast[ptr UncheckedArray[PerThreadContext]](fctx.threads)
+
+  if fctx.prevThread != nil:
+    if fctx.prevThread != threads[0]:
+      threads[0].avctx = fctx.prevThread.avctx
+      # updateContextFromThread(threads[0].avctx, fctx.prevThread.avctx, 0)
+  fctx.nextFinished = 0
+  fctx.nextDecoding = 0
+  fctx.delaying = 1
+  fctx.prevThread = nil
+  for i in 0..<avctx.threadCount:
+    var p = threads[i]
+    p.gotFrame = 0
+    p.result = 0
+    releaseDelayedBuffers(p)
+    if avctx.codec.flush != nil:
+      avctx.codec.flush(p.avctx)
+
+proc avBsfFlush*(ctx: AVBSFContext) =
+  var bsfi = ctx.internal
+  bsfi.eof = 0
+  # avPacketUnref(bsfi.bufferPkt)
+  if ctx.filter.flush != nil:
+    ctx.filter.flush(ctx)
+
+
+proc avcodecFlushBuffers*(avctx: AVCodecContext) =
+  var avci = avctx.internal
+  if avCodecIsEncoder(avctx.codec):
+    var caps = avctx.codec.capabilities
+    if (caps and AV_CODEC_CAP_ENCODER_FLUSH) == 0:
+      echo("Ignoring attempt to flush encoder that doesn\'t support it\n")
+      return
+  avci.draining = 0
+  avci.drainingDone = 0
+  avci.nbDrainingErrors = 0
+  # avFrameUnref(avci.bufferFrame)
+  # avFrameUnref(avci.compatDecodeFrame)
+  # avPacketUnref(avci.compatEncodePacket)
+  # avPacketUnref(avci.bufferPkt)
+  # avFrameUnref(avci.es.inFrame)
+  # avPacketUnref(avci.ds.inPkt)
+  if HAVE_THREADS != 0 and (avctx.activeThreadType and FF_THREAD_FRAME) != 0:
+    ffThreadFlush(avctx)
+  elif avctx.codec.flush != nil:
+    avctx.codec.flush(avctx)
+  avctx.ptsCorrectionLastPts = int64.low
+  avctx.ptsCorrectionLastDts = int64.low
+  if avCodecIsDecoder(avctx.codec):
+    avBsfFlush(avci.bsf)
+  # if avctx.refcountedFrames == 0:
+  #   avFrameUnref(avci.toFree)
+
+proc getSubtitleDefaults*(sub: AVSubtitle) =
+  sub.pts = 0
+
+const
+  UTF8_MAX_BYTES* = 4
+  FF_SUB_CHARENC_MODE_DO_NOTHING* = -1
+  FF_SUB_CHARENC_MODE_AUTOMATIC* = 0
+  FF_SUB_CHARENC_MODE_PRE_DECODER* = 1
+  FF_SUB_CHARENC_MODE_IGNORE* = 2
+
+import encodings
+proc recodeSubtitle*(avctx: AVCodecContext; outpkt:var AVPacket; inpkt: AVPacket): cint =
+  if avctx.subCharencMode != FF_SUB_CHARENC_MODE_PRE_DECODER or inpkt.size == 0:
+    return 0
+  var ec = open("UTF-8", avctx.subCharenc)
+  var inl = inpkt.size
+  outpkt.buf = ""
+  outpkt.size = inl * UTF8_MAX_BYTES
+  var inb = newString(inpkt.size)
+  copyMem(inb[0].addr, inpkt.data, inpkt.size)
+  var converted = ec.convert(inb)
+  copyMem(outpkt.data, converted[0].addr, converted.len)
+  ec.close()
+
+const LIBAVCODEC_VERSION_MAJOR = 58
+const FF_API_ASS_TIMING = (LIBAVCODEC_VERSION_MAJOR < 59)
+const FF_SUB_TEXT_FMT_ASS_WITH_TIMINGS = 1
+
+template AV_TIME_BASE_Q():untyped = Rational[int](num: 1, den: 1000000)
+
+type
+  AVBPrint* = ref object
+    str*: cstring
+    len*: cuint
+    size*: cuint
+    sizeMax*: cuint
+    reservedInternalBuffer*: array[1, char]
+
+
+proc insertTs*(buf: var string; t: int) =
+  var ts = t
+  if ts == -1:
+    buf &= "9:59:59.99,"
+  else:
+    var h = ts div 360000
+    ts -= 360000 * h
+    var m = ts div 6000
+    ts -= 6000 * m
+    var s = ts div 100
+    ts -= 100 * s
+    buf &= fmt"{h}:{m}:{s}.{ts},"
+
+
+proc avMakeQ*(num: auto; den: auto): Rational[int] = Rational[int](num:num, den:den)
+
+proc strchr(s:cstring, c:int): ptr char {.importc.}
+
+proc convertSubToOldAssForm*(sub: var AVSubtitle; pkt: AVPacket; tb: Rational[int]): auto =
+  var buf: string
+  for i in 0..<sub.numRects:
+    var rect = sub.rects[i]
+    var  tsDuration = -1
+    if rect.t != SUBTITLE_ASS or rect.ass == "Dialogue: ":
+      continue
+    ##  skip ReadOrder
+    var parts = rect.ass.split(",")
+    echo "convertSubToOldAssForm: ",parts
+    var dialog = parts[0]
+    var layer = parseInt(parts[1])
+
+    var tsStart = cint avRescaleQ(pkt.pts, tb, avMakeQ(1, 100))
+    if pkt.duration != -1:
+      tsDuration = cint avRescaleQ(pkt.duration, tb, avMakeQ(1, 100))
+    sub.endDisplayTime = max(sub.endDisplayTime, uint32 10 * tsDuration)
+    buf &= fmt"Dialogue: {layer},"
+    buf.insertTs(tsStart)
+    buf.insertTs(if tsDuration == -1: -1 else: tsStart + tsDuration)
+    buf &= fmt"{dialog}\c\n"
+    rect.ass = buf
+  return 0
+
+const AV_CODEC_PROP_BITMAP_SUB = (1 shl 16)
+const AV_CODEC_PROP_TEXT_SUB = (1 shl 17)
+
+proc avcodecDecodeSubtitle2*(avctx: AVCodecContext; sub: var AVSubtitle;gotSubPtr:var cint; avpkt: var AVPacket): auto =
+  var i: cint
+  if avctx.codec.t != AVMEDIA_TYPE_SUBTITLE:
+    echo("Invalid media type for subtitles")
+    return -(EINVAL)
+  gotSubPtr = 0
+  if (avctx.codec.capabilities and AV_CODEC_CAP_DELAY)!= 0 or avpkt.size != 0:
+    var pktRecoded = avpkt
+    result = recodeSubtitle(avctx, pktRecoded, avpkt)
+    result = extractPacketProps(avctx.internal,  pktRecoded)
+    if avctx.pktTimebase.num != 0 and avpkt.pts != 0:
+      sub.pts = avRescaleQ(avpkt.pts, avctx.pktTimebase, AV_TIME_BASE_Q)
+    result = avctx.codec.decode(avctx, sub.addr, gotSubPtr, pktRecoded)
+    when FF_API_ASS_TIMING:
+      if avctx.subTextFormat == FF_SUB_TEXT_FMT_ASS_WITH_TIMINGS and gotSubPtr != 0 and sub.numRects != 0:
+        var tb: Rational[int] = if avctx.pktTimebase.num != 0: avctx.pktTimebase else: avctx.timeBase
+        var err: cint = convertSubToOldAssForm(sub, avpkt, tb)
+        if err < 0:
+          result = err
+    if sub.numRects != 0 and sub.endDisplayTime == 0 and avpkt.duration != 0 and avctx.pktTimebase.num != 0:
+      var ms = Rational[int](num:1, den:1000)
+      sub.endDisplayTime = uint32 avRescaleQ(avpkt.duration, avctx.pktTimebase, ms)
+    if (avctx.codecDescriptor.props and AV_CODEC_PROP_BITMAP_SUB) != 0:
+      sub.format = 0
+    elif (avctx.codecDescriptor.props and AV_CODEC_PROP_TEXT_SUB) != 0:
+      sub.format = 1
+    for i in 0..<sub.numRects:
+      if avctx.subCharencMode != FF_SUB_CHARENC_MODE_IGNORE and sub.rects[i].ass != "" and validateUtf8(sub.rects[i].ass) == 0:
+        echo("Invalid UTF-8 in decoded subtitles text; maybe missing -subCharenc option\n")
+        # avsubtitleFree(sub)
+        result = AVERROR_INVALIDDATA
+        break
+    if avpkt.data != pktRecoded.data:
+      pktRecoded.sideData.setLen 0
+      pktRecoded.sideDataElems = 0
+      # avPacketUnref(addr(pktRecoded))
+    if gotSubPtr != 0:
+      inc(avctx.frameNumber)
+  return result
+
+proc avBsfSendPacket*(ctx: AVBSFContext; pkt: AVPacket): cint =
+  var bsfi = ctx.internal
+  var result: cint
+  if pkt == nil or IS_EMPTY(pkt):
+    bsfi.eof = 1
+    return 0
+  if bsfi.eof != 0:
+    echo("A non-NULL packet sent after an EOF.\n")
+    return -(EINVAL)
+  if not IS_EMPTY(bsfi.bufferPkt):
+    return -(EAGAIN)
+  bsfi.bufferPkt = pkt
+  # avPacketMoveRef(bsfi.bufferPkt, pkt)
+  return 0
+
+
+proc avcodecSendPacket*(avctx:var AVCodecContext; avpkt: AVPacket): auto =
+  var avci = avctx.internal
+  
+  if not avcodecIsOpen(avctx) or not avCodecIsDecoder(avctx.codec):
+    return -(EINVAL)
+  if avctx.internal.draining != 0:
+    return averror_Eof
+  if avpkt != nil and avpkt.size == 0 and avpkt.data != nil:
+    return -(EINVAL)
+  if avpkt != nil and (avpkt.data != nil or avpkt.sideDataElems != 0):
+    avci.bufferPkt = avpkt
+  result = avBsfSendPacket(avci.bsf, avci.bufferPkt)
+  if result < 0:
+    return result
+  if avci.bufferFrame.buf == "":
+    result = decodeReceiveFrameInternal(avctx, avci.bufferFrame)
+    if result < 0 and result != -(EAGAIN) and result != averror_Eof:
+      return result
+  return 0
+
+
+proc decoderDecodeFrame*(d: var Decoder; frame: var AVFrame; sub:var AVSubtitle): cint =
     while true:
+        var  pkt: AVPacket
         if d.queue.serial == d.pktSerial:
           while true:
             if d.queue.abortRequest != 0:
@@ -3642,7 +4332,7 @@ proc decoderDecodeFrame*(d: Decoder; frame: AVFrame; sub: AVSubtitle): cint =
             of AVMEDIA_TYPE_AUDIO:
                 result = avcodecReceiveFrame(d.avctx, frame)
                 if result >= 0:
-                    var tb = AVRational(num:1, den:frame.sample_rate)
+                    var tb = Rational[int](num:1, den:frame.sample_rate)
                     if frame.pts != 0:
                         frame.pts = avRescaleQ(frame.pts, d.avctx.pktTimebase, tb)
                     elif d.nextPts != 0:
@@ -3660,11 +4350,12 @@ proc decoderDecodeFrame*(d: Decoder; frame: AVFrame; sub: AVSubtitle): cint =
             if not (result != EAGAIN):
                 break
         while true:
-        #   if d.queue.nbPackets == 0:
+          if d.queue.nbPackets == 0:
         #     sDL_CondSignal(d.emptyQueueCond)
             if d.packetPending != 0:
-                # avPacketMoveRef(pkt, d.pkt)
-                d.packetPending = 0
+              pkt = d.pkt
+              # avPacketMoveRef(pkt, d.pkt)
+              d.packetPending = 0
             else:
                 while true:
                     if d.queue.abortRequest != 0:
@@ -3683,86 +4374,481 @@ proc decoderDecodeFrame*(d: Decoder; frame: AVFrame; sub: AVSubtitle): cint =
                     if d.queue.serial == d.pktSerial:
                         break
                     #   avPacketUnref(pkt)
-        if pkt.data == flushPkt.data:
+        if pkt.addr == flushPkt.data:
             avcodecFlushBuffers(d.avctx)
             d.finished = 0
             d.nextPts = d.startPts
             d.nextPtsTb = d.startPtsTb
         else:
-            if d.avctx.codecType == avmedia_Type_Subtitle:
+            if d.avctx.codecType == AVMEDIA_TYPE_SUBTITLE:
                 var gotFrame: cint = 0
                 result = avcodecDecodeSubtitle2(d.avctx, sub, gotFrame, pkt)
                 if result < 0:
-                    result = -(eagain)
+                    result = -(EAGAIN)
                 else:
-                    if gotFrame and not pkt.data:
+                    if gotFrame != 0 and pkt == nil:
                         d.packetPending = 1
-                        avPacketMoveRef(d.pkt, pkt)
-                    result = if gotFrame: 0 else: (if pkt.data: -(eagain) else: averror_Eof)
+                        d.pkt = pkt
+                        # avPacketMoveRef(d.pkt, pkt)
+                    result = if gotFrame != 0: 0 else: (if pkt != nil: -(EAGAIN) else: averror_Eof)
             else:
-                if avcodecSendPacket(d.avctx, pkt) == -(eagain):
+                if avcodecSendPacket(d.avctx, pkt) == -(EAGAIN):
                     echo("Receive_frame and send_packet both returned EAGAIN, which is an API violation.\n")
                     d.packetPending = 1
-            #   avPacketMoveRef(d.pkt, pkt)
-        #   avPacketUnref(pkt)
 
-# proc decoderDestroy*(d: Decoder) =
-#   avPacketUnref(d.pkt)
-#   avcodecFreeContext(d.avctx)
+proc avQ2d*(a: Rational[int]): auto = a.num / a.den
+
+proc avReduce*(dstNum: var cint; dstDen: var auto; num: var int64; den: var int64; max: int64): auto =
+  var
+    a0 = Rational[int](num:0, den:1)
+    a1 = Rational[int](num:1, den:0)
+  var sign = (num < 0) xor (den < 0)
+  var gcd: int64 = gcd(abs(num), abs(den))
+  if gcd != 0:
+    num = abs(num) div gcd
+    den = abs(den) div gcd
+  if num <= max and den <= max:
+    a1 = Rational[int](num:num, den:den)
+    den = 0
+  while den != 0:
+    var x: uint64 = num div den
+    var nextDen: int64 = num - den * x
+    var a2n: int64 = x * a1.num + a0.num
+    var a2d: int64 = x * a1.den + a0.den
+    if a2n > max or a2d > max:
+      if a1.num != 0:
+        x = (max - a0.num) div a1.num
+      if a1.den != 0:
+        x = min(x, (max - a0.den) div a1.den)
+      if den * (2 * x * a1.den + a0.den) > num * a1.den:
+        break
+    a0 = a1
+    a1  = Rational[int](num:a2n, den:a2d)
+    num = den
+    den = nextDen
+  dstNum = if sign != 0: -a1.num else: a1.num
+  dstDen = a1.den
+  return den == 0
+
+
+proc avGuessSampleAspectRatio*(format: AVFormatContext; stream: AVStream;frame: AVFrame): Rational[int] =
+  var undef = Rational[int](num:0, den:1)
+  var streamSampleAspectRatio = if stream != nil: stream.sampleAspectRatio else: undef
+  var codecSampleAspectRatio= if stream != nil and stream.codecpar != nil: stream.codecpar.sampleAspectRatio else: undef
+  var frameSampleAspectRatio = if frame != nil: frame.sampleAspectRatio else: codecSampleAspectRatio
+  reduce[int](streamSampleAspectRatio)
+  reduce[int](frameSampleAspectRatio)
+  if streamSampleAspectRatio.num != 0:
+    return streamSampleAspectRatio
+  else:
+    return frameSampleAspectRatio
+
+
+
+
+proc getMasterSyncType*(vs: VideoState): cint =
+  case vs.avSyncType
+  of AV_SYNC_VIDEO_MASTER:
+    if vs.videoSt != nil:
+      AV_SYNC_VIDEO_MASTER
+    else:
+      AV_SYNC_AUDIO_MASTER
+  of AV_SYNC_AUDIO_MASTER:
+    if vs.audioSt != nil:
+      AV_SYNC_AUDIO_MASTER
+    else:
+      AV_SYNC_EXTERNAL_CLOCK
+  else:
+    AV_SYNC_EXTERNAL_CLOCK
+
+proc getClock*(c: Clock): auto =
+  if c.queueSerial != c.serial:
+    return NaN
+  if c.paused != 0:
+    return c.pts
+  else:
+    # var time: cdouble = avGettimeRelative() div 1000000.0
+    var time = (getTime() + 42.hours).toUnix.float / 1000000.0
+    return c.ptsDrift + time - (time - c.lastUpdated) * (1.0 - c.speed)
+
+
+proc getMasterClock*(vs: VideoState): cdouble =
+  case getMasterSyncType(vs)
+  of AV_SYNC_VIDEO_MASTER:
+    getClock(vs.vidclk)
+  of AV_SYNC_AUDIO_MASTER:
+    getClock(vs.audclk)
+  else:
+    getClock(vs.extclk)
+
+const AV_NOSYNC_THRESHOLD = 10.0
 
 proc getVideoFrame*(vs: VideoState; frame: var AVFrame): cint =
-  var gotPicture = decoderDecodeFrame(vs.viddec, frame, nil)
+  var sub: AVSubtitle
+  var gotPicture = decoderDecodeFrame(vs.viddec, frame, sub)
   if gotPicture != 0:
-    var dpts: cdouble = Nan
+    var dpts = NaN
     if frame.pts != 0:
-      dpts = avQ2d(vs.videoSt.timeBase) * frame.pts
+      dpts = avQ2d(vs.videoSt.timeBase) * frame.pts.float
     frame.sampleAspectRatio = avGuessSampleAspectRatio(vs.ic, vs.videoSt, frame)
-    if framedrop > 0 or (framedrop and getMasterSyncType(vs) != av_Sync_Video_Master):
+    if framedrop > 0 or (framedrop != 0 and getMasterSyncType(vs) != AV_SYNC_VIDEO_MASTER):
       if frame.pts != 0:
         var diff: cdouble = dpts - getMasterClock(vs)
-        if Nan != diff and abs(diff) < av_Nosync_Threshold and diff - vs.frameLastFilterDelay < 0 and vs.viddec.pktSerial == vs.vidclk.serial and vs.videoq.nbPackets:
-          inc(vs.frameDropsEarly)
-          # avFrameUnref(frame)
+        if NaN != diff and abs(diff) < AV_NOSYNC_THRESHOLD and diff - vs.frameLastFilterDelay < 0 and vs.viddec.pktSerial == vs.vidclk.serial and vs.videoq.nbPackets != 0:
+          vs.frameDropsEarly.inc
           gotPicture = 0
   return gotPicture
+
+# proc avMulQ*(b: Rational; c: Rational): Rational =
+#   avReduce(addr(b.num), addr(b.den), b.num * c.num, b.den * c.den, int.high)
+#   return b
+
+proc avMulQ*(b: Rational; c: Rational): Rational =
+  result = b*c
+  reduce(result)
+
+proc avDivQ( b,c:Rational):Rational =
+    return av_mul_q(b, initRational(c.den, c.num))
+
+
+proc avGuessFrameRate*(format: AVFormatContext; st: AVStream;frame: AVFrame): Rational[int] =
+  var fr = st.rFrameRate
+  var codecFr = st.internal.avctx.framerate
+  var avgFr = st.avgFrameRate
+  if avgFr.num > 0 and avgFr.den > 0 and fr.num > 0 and fr.den > 0 and avQ2d(avgFr) < 70 and
+      avQ2d(fr) > 210:
+    fr = avgFr
+  if st.internal.avctx.ticksPerFrame > 1:
+    if codecFr.num > 0 and codecFr.den > 0 and (fr.num == 0 or avQ2d(codecFr) < avQ2d(fr) * 0.7 and abs(1.0 - avQ2d(avDivQ(avgFr, fr))) > 0.1):
+      fr = codecFr
+  return fr
+
+proc avDefaultItemName*(p: pointer): string = cast[ptr AVClass](p).className
+
+template av_Version_Int*(a, b, c: untyped): untyped =
+  ((a) shl 16 or (b) shl 8 or (c))
+
+const
+  LIBAVUTIL_VERSION_MAJOR* = 56
+  LIBAVUTIL_VERSION_MINOR* = 60
+  LIBAVUTIL_VERSION_MICRO* = 100
+  LIBAVUTIL_VERSION_INT* = av_Version_Int(LIBAVUTIL_VERSION_MAJOR,
+                                        LIBAVUTIL_VERSION_MINOR,
+                                        LIBAVUTIL_VERSION_MICRO)
+
+template offsetof*(s, m: untyped): untyped =
+  ((sizeT) and ((cast[ptr S](0)).m))
+
+template OFFSET*(x: untyped): untyped =
+  offsetof(AVFilterGraph, x)
+
+const
+  AV_OPT_FLAG_FILTERING_PARAM* = (1 shl 16) 
+  AV_OPT_FLAG_AUDIO_PARAM = 8
+  AV_OPT_FLAG_VIDEO_PARAM = 16
+  F* = AV_OPT_FLAG_FILTERING_PARAM
+  V* = AV_OPT_FLAG_VIDEO_PARAM
+  A* = AV_OPT_FLAG_AUDIO_PARAM
+  AVFILTER_THREAD_SLICE = (1 shl 0)
+
+var  filtergraphOptions: seq[AVOption] = @[
+  AVOption(name:"thread_type", help:"Allowed thread types", offset: OFFSET(threadType), t:AV_OPT_TYPE_FLAGS, defaultVal: AVOptionUnion(i64:AVFILTER_THREAD_SLICE), min:0, max:int.high, flags:F or V or A, unit:"thread_type"),
+  AVOption(name:"slice", help:"", offset:0, t:AV_OPT_TYPE_CONST, defaultVal:AVOptionUnion(i64:AVFILTER_THREAD_SLICE), flags: F or V or A, unit:"thread_type"),
+  AVOption(name:"threads", help:"Maximum number of threads", offset:OFFSET(nbThreads), t:AV_OPT_TYPE_INT, defaultVal:AVOptionUnion(i64:0), min:0, max:int.high, flags: F or V or A),
+  AVOption(name:"scale_sws_opts", help:"default scale filter options", offset:OFFSET(scaleSwsOpts), t:AV_OPT_TYPE_STRING, defaultVal:AVOptionUnion(str:""), min:0, max:0, flags:F or V),
+  AVOption(name:"aresample_swr_opts", help:"default aresample filter options", offset:OFFSET(aresampleSwrOpts), t:AV_OPT_TYPE_STRING, defaultVal:AVOptionUnion(str:""), min:0, max:0, flags:F or A),
+] 
+var filtergraphClass = AVClass(className:"AVFilterGraph",
+  itemName: avDefaultItemName,
+  version: LIBAVUTIL_VERSION_INT,
+  option: filtergraphOptions,
+  category: AV_CLASS_CATEGORY_FILTER)
+
+proc writeNumber*(obj: pointer; o: AVOption; dst: pointer; n: auto; den: auto; intnum: auto): cint =
+  var num = n
+  # if o.t != AV_OPT_TYPE_FLAGS and (den != 0 or o.max * den < num * intnum or o.min * den > num * intnum):
+  #   num =  if den != 0: num * intnum div den else: (if num != 0 and intnum != 0: Inf else: NaN)
+  #   echo("Value %f for parameter \'%s\' out of range [%g - %g]\n", num, o.name, o.min, o.max)
+  #   return -(ERANGE)
+  # if o.t == AV_OPT_TYPE_FLAGS:
+  #   var d = num * intnum div den
+  #   if (d.float < -1.5) or (d > 0xFFFFFFFF + 0.5.int) or (round(float d * 256).int and 255) != 0:
+  #     echo("Value %f for parameter \'%s\' is not a valid set of 32bit integer flags", num * intnum div den, o.name)
+  #     return -(ERANGE)
+  # case o.t
+  # of AV_OPT_TYPE_PIXEL_FMT:
+  #   cast[ptr AVPixelFormat](dst)[] = AVPixelFormat round(num / den) * intnum.float
+  # of AV_OPT_TYPE_SAMPLE_FMT:
+  #   cast[ptr AVSampleFormat](dst)[] = AVSampleFormat round(num / den) * intnum.float
+  # of AV_OPT_TYPE_BOOL, AV_OPT_TYPE_FLAGS, AV_OPT_TYPE_INT:
+  #   cast[ptr cint](dst)[] = cint round(num / den) * intnum.float
+  # of AV_OPT_TYPE_DURATION, AV_OPT_TYPE_CHANNEL_LAYOUT, AV_OPT_TYPE_INT64:
+  #   var d = num / den
+  #   if intnum == 1 and d == cast[cdouble](int64.high):
+  #     cast[ptr int64](dst)[] = int64.high
+  #   else:
+  #     cast[ptr int64](dst)[] = int64 round(d) * intnum.float
+  # of AV_OPT_TYPE_UINT64:
+  #   var d = num / den
+  #   if intnum == 1 and d == cast[cdouble](uint64.high):
+  #     cast[ptr uint64](dst)[] = uint64.high
+  #   elif d.int64 > int64.high + 1:
+  #     cast[ptr uint64](dst)[] = uint64 (round(d - float(int64.high + 1)) + float(int64.high + 1)) * intnum.float
+  #   else:
+  #     cast[ptr uint64](dst)[] = uint64 round(d) * intnum.float
+  # of AV_OPT_TYPE_FLOAT:
+  #   cast[ptr cfloat](dst)[] = cfloat num * intnum div den
+  # of AV_OPT_TYPE_DOUBLE:
+  #   cast[ptr cdouble](dst)[] = cdouble num * intnum div den
+  # of AV_OPT_TYPE_RATIONAL, AV_OPT_TYPE_VIDEO_RATE:
+  #   if cast[cint](num) == num:
+  #     break
+  # else:
+  #   return -(EINVAL)
+  return 0
+
+const AV_OPT_FLAG_READONLY = 128
+
+proc avOptSetDefaults*(s: pointer) =
+  var opt:AVOption 
+  # var class = cast[ptr AVClass](s)
+  # for opt in class.option.mitems:
+  #   var dst: pointer #= s + opt.offset
+  #   if (opt.flags and 0) != 0:
+  #     continue
+  #   if (opt.flags and AV_OPT_FLAG_READONLY) != 0:
+  #     continue
+  #   case opt.t
+  #   of AV_OPT_TYPE_CONST:      
+  #     discard 
+  #   of AV_OPT_TYPE_BOOL, AV_OPT_TYPE_FLAGS, AV_OPT_TYPE_INT, AV_OPT_TYPE_INT64,
+  #     AV_OPT_TYPE_UINT64, AV_OPT_TYPE_DURATION, AV_OPT_TYPE_CHANNEL_LAYOUT,
+  #     AV_OPT_TYPE_PIXEL_FMT, AV_OPT_TYPE_SAMPLE_FMT:
+  #     writeNumber(s, opt, dst, 1, 1, opt.defaultVal.i64)
+  #   of AV_OPT_TYPE_DOUBLE, AV_OPT_TYPE_FLOAT:
+  #     var val: cdouble
+  #     val = opt.defaultVal.dbl
+  #     writeNumber(s, opt, dst, val, 1, 1)
+  #   of AV_OPT_TYPE_RATIONAL:
+  #     var val: Rational[int]
+  #     val = avD2q(opt.defaultVal.dbl, int_Max)
+  #     writeNumber(s, opt, dst, 1, val.den, val.num)
+  #   of AV_OPT_TYPE_COLOR:
+  #     setStringColor(s, opt, opt.defaultVal.str, dst)
+  #   of AV_OPT_TYPE_STRING:
+  #     setString(s, opt, opt.defaultVal.str, dst)
+  #   of AV_OPT_TYPE_IMAGE_SIZE:
+  #     setStringImageSize(s, opt, opt.defaultVal.str, dst)
+  #   of AV_OPT_TYPE_VIDEO_RATE:
+  #     setStringVideoRate(s, opt, opt.defaultVal.str, dst)
+  #   of AV_OPT_TYPE_BINARY:
+  #     setStringBinary(s, opt, opt.defaultVal.str, dst)
+  #   of AV_OPT_TYPE_DICT:
+  #     setStringDict(s, opt, opt.defaultVal.str, dst)
+  #   else:
+  #     echo("AVOption type %d of option %s not implemented yet", opt.t,opt.name)
+
+proc avfilterGraphAlloc*(): AVFilterGraph =
+  result.internal = AVFilterGraphInternal()
+  result.avClass = filtergraphClass
+  # avOptSetDefaults(result)
+  return result
+
+proc avfilterGraphAllocFilter*(graph: ptr AVFilterGraph; filter: ptr AVFilter;
+                              name: cstring): ptr AVFilterContext =
+  var
+    filters: ptr ptr AVFilterContext
+    s: ptr AVFilterContext
+  if graph.threadType and not graph.internal.threadExecute:
+    if graph.execute:
+      graph.internal.threadExecute = graph.execute
+    else:
+      var result: cint = ffGraphThreadInit(graph)
+      if result < 0:
+        echo(graph, av_Log_Error, "Error initializing threading: %s.\n",
+              avErr2str(result))
+        return nil
+  s = ffFilterAlloc(filter, name)
+  if not s:
+    return nil
+  filters = avRealloc(graph.filters, sizeof((filters[]) * (graph.nbFilters + 1)))
+  if not filters:
+    avfilterFree(s)
+    return nil
+  graph.filters = filters
+  graph.filters[inc(graph.nbFilters)] = s
+  s.graph = graph
+  return s
+
+proc avfilterInitStr*(filter: ptr AVFilterContext; args: cstring): cint =
+  var options: ptr AVDictionary
+  var e: ptr AVDictionaryEntry
+  if args and args[]:
+    if not filter.filter.privClass:
+      echo("This filter does not take any options, but options were provided: %s.\n",args)
+      return -(einval)
+    result = processOptions(filter, addr(options), args)
+    if result < 0:
+      return
+  result = avfilterInitDict(filter, addr(options))
+  if result < 0:
+    return
+  if (e = avDictGet(options, "", nil, av_Dict_Ignore_Suffix)):
+    echo(filter, av_Log_Error, "No such option: %s.\n", e.key)
+    result = averror_Option_Not_Found
+    return
+  return result
+
+
+proc avfilterGraphCreateFilter*(filtCtx: AVFilterContext; filt: AVFilter;
+                               name: cstring; args: cstring; opaque: pointer;
+                               graphCtx: ptr AVFilterGraph): auto =
+  filtCtx[] = avfilterGraphAllocFilter(graphCtx, filt, name)
+  result = avfilterInitStr(filtCtx[], args)
+  if result < 0:
+    return
+  return 0
+
+
+template insert_Filt*(name, arg: untyped): void =
+  while true:
+    var filtCtx: ptr AVFilterContext
+    result = avfilterGraphCreateFilter(addr(filtCtx), avfilterGetByName(name),"ffplay_", name, arg, nil, graph)
+    if result < 0:
+      return
+    result = avfilterLink(filtCtx, 0, lastFilter, 0)
+    if result < 0:
+      return
+    lastFilter = filtCtx
+
+type 
+  TextureFormatEntry = ref object
+    format:int 
+    texture_fmt:int
+
+const sdlTextureFormatMap: seq[TextureFormatEntry] = @[
+    TextureFormatEntry(format: AV_PIX_FMT_RGB8.ord,           texture_fmt:SDL_PIXELFORMAT_RGB332.ord ),
+    TextureFormatEntry(format: AV_PIX_FMT_RGB444LE.ord,         texture_fmt:SDL_PIXELFORMAT_RGB444.ord ),
+    TextureFormatEntry(format: AV_PIX_FMT_RGB555LE.ord,         texture_fmt:SDL_PIXELFORMAT_RGB555.ord ),
+    TextureFormatEntry(format: AV_PIX_FMT_BGR555LE.ord,         texture_fmt:SDL_PIXELFORMAT_BGR555.ord ),
+    TextureFormatEntry(format: AV_PIX_FMT_RGB565LE.ord,         texture_fmt:SDL_PIXELFORMAT_RGB565.ord ),
+    TextureFormatEntry(format: AV_PIX_FMT_BGR565LE.ord,         texture_fmt:SDL_PIXELFORMAT_BGR565.ord ),
+    TextureFormatEntry(format: AV_PIX_FMT_RGB24.ord,          texture_fmt:SDL_PIXELFORMAT_RGB24.ord ),
+    TextureFormatEntry(format: AV_PIX_FMT_BGR24.ord,          texture_fmt:SDL_PIXELFORMAT_BGR24.ord ),
+    # TextureFormatEntry(format: AV_PIX_FMT_0RGB32.ord,         texture_fmt:SDL_PIXELFORMAT_RGB888.ord ),
+    # TextureFormatEntry(format: AV_PIX_FMT_0BGR32.ord,         texture_fmt:SDL_PIXELFORMAT_BGR888.ord ),
+    # TextureFormatEntry(format: AV_PIX_FMT_NE0BGR.ord, texture_fmt:SDL_PIXELFORMAT_RGBX8888.ord ),
+    # TextureFormatEntry(format: AV_PIX_FMT_NE0RGB.ord, texture_fmt:SDL_PIXELFORMAT_BGRX8888.ord ),
+    # TextureFormatEntry(format: AV_PIX_FMT_RGB32.ord,          texture_fmt:SDL_PIXELFORMAT_ARGB8888.ord ),
+    # TextureFormatEntry(format: AV_PIX_FMT_RGB32_1.ord,        texture_fmt:SDL_PIXELFORMAT_RGBA8888.ord ),
+    # TextureFormatEntry(format: AV_PIX_FMT_BGR32.ord,          texture_fmt:SDL_PIXELFORMAT_ABGR8888.ord ),
+    # TextureFormatEntry(format: AV_PIX_FMT_BGR32_1.ord,        texture_fmt:SDL_PIXELFORMAT_BGRA8888.ord ),
+    TextureFormatEntry(format: AV_PIX_FMT_YUV420P.ord,        texture_fmt:SDL_PIXELFORMAT_IYUV.ord ),
+    TextureFormatEntry(format: AV_PIX_FMT_YUYV422.ord,        texture_fmt:SDL_PIXELFORMAT_YUY2.ord ),
+    TextureFormatEntry(format: AV_PIX_FMT_UYVY422.ord,        texture_fmt:SDL_PIXELFORMAT_UYVY.ord ),
+    TextureFormatEntry(format: AV_PIX_FMT_NONE.ord,           texture_fmt:SDL_PIXELFORMAT_UNKNOWN.ord ),
+]
+
+var  rendererInfo: SDL_RendererInfo
+var  audioDev: SDL_AudioDeviceID
+
+proc configureVideoFilters*(graph: var AVFilterGraph; vs: VideoState;vfilters: cstring; frame: AVFrame): cint =
+  var pixFmts: array[sdlTextureFormatMap.len, int]
+  var swsFlagsStr: string = newString(512)
+  var buffersrcArgs: string = newString(256)
+  var result: cint
+  var
+    filtSrc: ptr AVFilterContext 
+    filtOut: ptr AVFilterContext 
+    lastFilter: ptr AVFilterContext
+  var codecpar = vs.videoSt.codecpar
+  var fr = avGuessFrameRate(vs.ic, vs.videoSt, nil)
+  var e: ptr AVDictionaryEntry 
+  var nbPixFmts: cint = 0
+  for i in 0..<rendererInfo.numTextureFormats:
+    for j in 0..<sdlTextureFormatMap.len - 1:
+      if rendererInfo.textureFormats[i] == sdlTextureFormatMap[j].textureFmt:
+        pixFmts[nbPixFmts] = sdlTextureFormatMap[j].format
+        inc(nbPixFmts)
+        break
+  pixFmts[nbPixFmts] = AV_PIX_FMT_NONE.ord
+  while (e = avDictGet(swsDict, "", e, av_Dict_Ignore_Suffix)):
+    if e.key == "sws_flags":
+      swsFlagsStr &= fmt"flags={e.value}:"
+    else:
+      swsFlagsStr &= fmt"{e.key}={e.value}:"
+  if swsFlagsStr != "":
+    swsFlagsStr[len(swsFlagsStr) - 1] = '\x00'
+  graph.scaleSwsOpts = swsFlagsStr
+  buffersrcArgs &= fmt"video_size={frame.width}{frame.height}:pix_fmt={frame.format}:time_base={vs.videoSt.timeBase.num}/{vs.videoSt.timeBase.den}:pixel_aspect={codecpar.sampleAspectRatio.num}/{max(codecpar.sampleAspectRatio.den, 1)}"
+  if fr.num != 0 and fr.den != 0:
+    buffersrcArgs &= fmt":frame_rate={fr.num}/{fr.den}"
+  result = avfilterGraphCreateFilter(addr(filtSrc), avfilterGetByName("buffer"),"ffplay_buffer", buffersrcArgs, nil, graph)
+  if result< 0:
+    return
+  result = avfilterGraphCreateFilter(addr(filtOut), avfilterGetByName("buffersink"),"ffplay_buffersink", nil, nil, graph)
+  if result < 0:
+    return
+  if (result = avOptSetIntList(filtOut, "pix_fmts", pixFmts, AV_PIX_FMT_NONE,av_Opt_Search_Children)) < 0:
+    return
+  lastFilter = filtOut
+  if autorotate != 0:
+    var theta: cdouble = getRotation(vs.videoSt)
+    if abs(theta - 90) < 1.0:
+      insert_Filt("transpose", "clock")
+    elif abs(theta - 180) < 1.0:
+      insert_Filt("hflip", nil)
+      insert_Filt("vflip", nil)
+    elif abs(theta - 270) < 1.0:
+      insert_Filt("transpose", "cclock")
+    elif abs(theta) > 1.0:
+      var rotateBuf = newString(64)
+      rotateBuf &= fmt"{theta}*PI/180"
+      insert_Filt("rotate", rotateBuf)
+  result = configureFiltergraph(graph, vfilters, filtSrc, lastFilter)
+  if result < 0:
+    return
+  vs.inVideoFilter = filtSrc
+  vs.outVideoFilter = filtOut
+  return result
+
 
 proc videoThread*(arg: VideoState): cint =
   var vs:  VideoState = arg
   var frame = AVFrame()  
-  var pts: cdouble
   var duration: cdouble
   var result: cint
-  var tb: AVRational = vs.videoSt.timeBase
-  var frameRate: AVRational = avGuessFrameRate(vs.ic, vs.videoSt, nil)
+  var tb = vs.videoSt.timeBase
+  var frameRate = avGuessFrameRate(vs.ic, vs.videoSt, nil)
   var graph: AVFilterGraph
   var
     filtOut: AVFilterContext 
     filtIn: AVFilterContext
-  var lastW: cint = 0
-  var lastH: cint = 0
-  var lastFormat: AVPixelFormat = -2
-  var lastSerial: cint = -1
-  var lastVfilterIdx: cint = 0
+  var lastW = 0
+  var lastH = 0
+  var lastFormat = -2
+  var lastSerial = -1
+  var lastVfilterIdx = 0
   while true:
     result = getVideoFrame(vs, frame)
     if  result == 0:
       continue
-    if lastW != frame.width or lastH != frame.height or lastFormat != frame.format or lastSerial != vs.viddec.pktSerial or lastVfilterIdx != vs.vfilterIdx:
-      echo("Video frame changed from size:%dx%d format:%s serial:%d to size:%dx%d format:%s serial:%d\n",
+    if (lastW != frame.width) or (lastH != frame.height) or (lastFormat != frame.format) or (lastSerial != vs.viddec.pktSerial) or (lastVfilterIdx != vs.vfilterIdx):
+      echo("Video frame changed from size:%dx%d format:%s serial:%d to size:%dx%d format:%s serial:%d",
             lastW, lastH,
-            cast[cstring](avXIfNull(avGetPixFmtName(lastFormat), "none")),
+            avGetPixFmtName(lastFormat),
             lastSerial, frame.width, frame.height,
-            cast[cstring](avXIfNull(avGetPixFmtName(frame.format), "none")),
+            avGetPixFmtName(frame.format),
             vs.viddec.pktSerial)
-      avfilterGraphFree(graph)
+      # avfilterGraphFree(graph)
       graph = avfilterGraphAlloc()
       graph.nbThreads = filterNbthreads
-      result = configureVideoFilters(graph, vs, if vfiltersList: vfiltersList[vs.vfilterIdx] else: nil, frame)
+      result = configureVideoFilters(graph, vs, if vfiltersList != nil: vfiltersList[vs.vfilterIdx] else: nil, frame)
       if result < 0:
-        var event: SDL_Event
-        event.t = ff_Quit_Event
+        var event: Event
+        event.kind = FF_QUIT_EVENT
         event.user.data1 = vs
-        sDL_PushEvent(event)
+        discard pushEvent(event.addr)
         return
       filtIn = vs.inVideoFilter
       filtOut = vs.outVideoFilter
@@ -3776,42 +4862,38 @@ proc videoThread*(arg: VideoState): cint =
     if result < 0:
       return
     while result >= 0:
-      vs.frameLastReturnedTime = avGettimeRelative() div 1000000.0
+      vs.frameLastReturnedTime = (getTime() + 42.hours).toUnix.float / 1000000.0
       result = avBuffersinkGetFrameFlags(filtOut, frame, 0)
       if result < 0:
         if result == averror_Eof:
           vs.viddec.finished = vs.viddec.pktSerial
         result = 0
         break
-      vs.frameLastFilterDelay = avGettimeRelative() div 1000000.0 - vs.frameLastReturnedTime
-      if abs(vs.frameLastFilterDelay) > av_Nosync_Threshold div 10.0:
+      vs.frameLastFilterDelay = (getTime() + 42.hours).toUnix.float / 1000000.0 - vs.frameLastReturnedTime
+      if abs(vs.frameLastFilterDelay) > AV_NOSYNC_THRESHOLD / 10.0:
         vs.frameLastFilterDelay = 0
       tb = avBuffersinkGetTimeBase(filtOut)
-      duration = if frame_rate.num != 0 and frame_rate.den != 0: av_q2d(AVRational(num:frame_rate.den, den:frame_rate.num)) else: 0
-      pts = if (frame.pts == 0): Nan else: frame.pts * avQ2d(tb)
+      duration = if frame_rate.num != 0 and frame_rate.den != 0: avQ2d(Rational[int](num:frame_rate.den, den:frame_rate.num)) else: 0
+      var pts = if (frame.pts == 0): NaN else: frame.pts.float * avQ2d(tb)
       result = queuePicture(vs, frame, pts, duration, frame.pktPos, vs.viddec.pktSerial)
-    #   avFrameUnref(frame)
       if vs.videoq.serial != vs.viddec.pktSerial:
         break
-#   avfilterGraphFree(graph)
-#   avFrameFree(frame)
   return 0
 
 proc initClock*(c: var Clock; queueSerial: cint) =
   c.speed = 1.0
   c.paused = 0
   c.queueSerial = queueSerial
-  setClock(c, Nan, -1)
+  setClock(c, NaN, -1)
 
 proc streamOpen*(filename: string; iformat: AVInputFormat): VideoState =
   var videoState = VideoState(filename:filename, iformat:iformat)
-  with videoState:
-    video_stream = -1
-    last_video_stream = -1
-    audio_stream = -1
-    last_audio_stream = -1
-    subtitle_stream = -1
-    last_subtitle_stream = -1
+  videoState.videoStream = -1
+  videoState.lastVideoStream = -1
+  videoState.audioStream = -1
+  videoState.lastAudioStream = -1
+  videoState.subtitleStream = -1
+  videoState.lastSubtitleStream = -1
   ##  start video display
   echo frameQueueInit(videoState.pictq, videoState.videoq, VIDEO_PICTURE_QUEUE_SIZE, 1)
   echo frameQueueInit(videoState.subpq, videoState.subtitleq, SUBPICTURE_QUEUE_SIZE, 0)
@@ -3835,3 +4917,83 @@ proc streamOpen*(filename: string; iformat: AVInputFormat): VideoState =
   return videoState
 
 var videoState = streamOpen("/mnt/d/videos/mov.mp4", fileIformat)
+
+
+# proc updateContextFromUser*(dst: var AVCodecContext; src: AVCodecContext): cint =
+#   dst.flags = src.flags
+#   dst.drawHorizBand = src.drawHorizBand
+#   dst.getBuffer2 = src.getBuffer2
+#   dst.opaque = src.opaque
+#   dst.debug = src.debug
+#   dst.debugMv = src.debugMv
+#   dst.sliceFlags = src.sliceFlags
+#   dst.flags2 = src.flags2
+#   dst.exportSideData = src.exportSideData
+#   dst.skipLoopFilter = src.skipLoopFilter
+#   dst.skipIdct = src.skipIdct
+#   dst.skipFrame = src.skipFrame
+#   dst.frameNumber = src.frameNumber
+#   dst.reorderedOpaque = src.reorderedOpaque
+#   dst.threadSafeCallbacks = src.threadSafeCallbacks
+#   if src.sliceCount != 0 and src.sliceOffset != 0:
+#     if dst.sliceCount < src.sliceCount:
+#       var err: cint = avReallocpArray(addr(dst.sliceOffset), src.sliceCount, sizeof(dst.sliceOffset))
+#       if err < 0:
+#         return err
+#     copyMem(dst.sliceOffset, src.sliceOffset,src.sliceCount * sizeof((dst.sliceOffset[])))
+#   dst.sliceCount = src.sliceCount
+#   return 0
+
+
+# proc updateContextFromThread*(dst: ptr AVCodecContext; src: ptr AVCodecContext; forUser: cint): cint =
+#   var err: cint = 0
+#   if dst != src and (forUser != 0 or src.codec.updateThreadContext != nil):
+#     dst.timeBase = src.timeBase
+#     dst.framerate = src.framerate
+#     dst.width = src.width
+#     dst.height = src.height
+#     dst.pixFmt = src.pixFmt
+#     dst.swPixFmt = src.swPixFmt
+#     dst.codedWidth = src.codedWidth
+#     dst.codedHeight = src.codedHeight
+#     dst.hasBFrames = src.hasBFrames
+#     dst.idctAlgo = src.idctAlgo
+#     dst.bitsPerCodedSample = src.bitsPerCodedSample
+#     dst.sampleAspectRatio = src.sampleAspectRatio
+#     dst.profile = src.profile
+#     dst.level = src.level
+#     dst.bitsPerRawSample = src.bitsPerRawSample
+#     dst.ticksPerFrame = src.ticksPerFrame
+#     dst.colorPrimaries = src.colorPrimaries
+#     dst.colorTrc = src.colorTrc
+#     dst.colorspace = src.colorspace
+#     dst.colorRange = src.colorRange
+#     dst.chromaSampleLocation = src.chromaSampleLocation
+#     dst.hwaccel = src.hwaccel
+#     dst.hwaccelContext = src.hwaccelContext
+#     dst.channels = src.channels
+#     dst.sampleRate = src.sampleRate
+#     dst.sampleFmt = src.sampleFmt
+#     dst.channelLayout = src.channelLayout
+#     dst.internal.hwaccelPrivData = src.internal.hwaccelPrivData
+#     if not not dst.hwFramesCtx != not not src.hwFramesCtx or
+#         (dst.hwFramesCtx and dst.hwFramesCtx.data != src.hwFramesCtx.data):
+#       avBufferUnref(addr(dst.hwFramesCtx))
+#       if src.hwFramesCtx:
+#         dst.hwFramesCtx = avBufferRef(src.hwFramesCtx)
+#         if not dst.hwFramesCtx:
+#           return -(ENOMEM)
+#     dst.hwaccelFlags = src.hwaccelFlags
+#     err = avBufferReplace(addr(dst.internal.pool), src.internal.pool)
+#     if err < 0:
+#       return err
+#   if forUser:
+#     dst.codedFrame = src.codedFrame
+#   else:
+#     if dst.codec.updateThreadContext:
+#       err = dst.codec.updateThreadContext(dst, src)
+#   return err
+
+# proc decoderDestroy*(d: Decoder) =
+#   avPacketUnref(d.pkt)
+#   avcodecFreeContext(d.avctx)
