@@ -11,6 +11,7 @@ import strformat
 import unicode
 import rationals
 import times
+import cpuinfo
 
 const
   AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX* = 0x00000001
@@ -290,6 +291,10 @@ type
     comp*: seq[AVComponentDescriptor]
     alias*: string
 
+  AVDictionary* = ref object
+    count:int
+    elems: seq[AVDictionaryEntry]
+    
   AVDictionaryEntry* = ref object
     key*: string
     value*: string
@@ -1713,26 +1718,53 @@ type
                            nbJobs: cint): cint
 
   AvfilterExecuteFunc* = proc (ctx: ptr AVFilterContext;
-                            `func`: ptr AvfilterActionFunc; arg: pointer;
+                            f: ptr AvfilterActionFunc; arg: pointer;
                             result: ptr cint; nbJobs: cint): cint
 
   FFFrameQueueGlobal* = ref object
     dummy*: char               
 
+  WorkerContext* = ref object
+    ctx*: AVSliceThread
+    mutex*: PthreadMutex
+    cond*: PthreadCond
+    thread*: Pthread
+    done*: cint
+
+  AVSliceThread* = ref object
+    workers*: seq[WorkerContext]
+    nbThreads*: cint
+    nbActiveThreads*: cint
+    nbJobs*: cint
+    firstJob*: uint64
+    currentJob*: uint64
+    doneMutex*: PthreadMutex
+    doneCond*: PthreadCond
+    done*: cint
+    finished*: cint
+    priv*: pointer
+    workerFunc*: proc (priv: pointer; jobnr: auto; threadnr: auto; nbJobs: auto; nbThreads: auto)
+    mainFunc*: proc (priv: pointer)
+
+  ThreadContext* = ref object
+    graph*: AVFilterGraph
+    thread*: AVSliceThread
+    f*: AvfilterActionFunc 
+    ctx*: AVFilterContext
+    arg*: pointer
+    rets*: cint
 
   AVFilterGraphInternal* = ref object
-    thread*: pointer
-    threadExecute*: ptr AvfilterExecuteFunc
+    thread*: ThreadContext
+    threadExecute*: AvfilterExecuteFunc
     frameQueues*: FFFrameQueueGlobal
 
   AVFilterInternal* = ref object
     execute*: ptr AvfilterExecuteFunc
 
-
-
   AVFilterGraph* = ref object
     avClass*: AVClass
-    filters*: AVFilterContext
+    filters*: seq[AVFilterContext]
     nbFilters*: cuint
     scaleSwsOpts*: string     
     resampleLavrOpts*: string 
@@ -1740,7 +1772,7 @@ type
     nbThreads*: cint
     internal*: AVFilterGraphInternal
     opaque*: pointer
-    # execute*: AvfilterExecuteFunc
+    execute*: AvfilterExecuteFunc
     aresampleSwrOpts*: string
     # sinkLinks*: AVFilterLink
     sinkLinksCount*: cint
@@ -1783,14 +1815,10 @@ type
     samplerates*: AVFilterFormats
     # channel_layouts*: AVFilterChannelLayouts
 
-
-
-type
   VideoStateShowMode* = enum
     SHOW_MODE_NONE = -1, SHOW_MODE_VIDEO = 0, SHOW_MODE_WAVES, SHOW_MODE_RDFT,
     SHOW_MODE_NB
 
-type
   MyAVPacketList* = ref object
     pkt*: AVPacket
     next*: MyAVPacketList
@@ -1974,6 +2002,12 @@ type
     lastSubtitleStream*: int
     # continueReadThread*: SDL_cond
 
+
+
+
+
+
+
 const EAGAIN = 11
 const EINVAL = 22
 const averror_Eof = -('E'.ord or ('O'.ord shl 8) or ('F'.ord shl 16) or (' '.ord shl 24))
@@ -2076,7 +2110,7 @@ proc packetQueueInit*(q: PacketQueue): cint =
 #     avFreep(src)
 #   else:
 #     avFreep(dst)
-#   if atomicFetchSubExplicit(b.refcount, 1, memoryOrderAcqRel) == 1:
+#   if atomicFetchSubExplicit(b.refcount, 1, ATOMIC_ACQ_REL) == 1:
 #     b.free(b.opaque, b.data)
 #     avFreep(b)
 
@@ -2460,10 +2494,7 @@ proc ffDecodeGetPacket*(avctx: var AVCodecContext; pkt: var AVPacket): cint =
 
 
 
-type
-  MemoryOrder* = enum
-    memoryOrderRelaxed, memoryOrderConsume, memoryOrderAcquire, memoryOrderRelease,
-    memoryOrderAcqRel, memoryOrderSeqCst
+
 
 const AV_CODEC_CAP_DELAY = (1 shl  5)
 const FF_THREAD_FRAME =  1 
@@ -2480,12 +2511,12 @@ type
     parent*: FrameThreadContext
     thread*: PthreadT
     threadInit*: cint
-    inputCond*: ptr Pthread_cond   ## /< Used to wait for a new packet from the main thread.
+    inputCond*: ptr Pthread_cond   
     progressCond*:ptr Pthread_cond ## /< Used by child threads to wait for progress to change.
-    outputCond*:ptr Pthread_cond  ## /< Used by the main thread to wait for frames to finish.
+    outputCond*:ptr Pthread_cond  
     mutex*: ptr Pthread_mutex      ## /< Mutex used to protect the contents of the PerThreadContext.
     progressMutex*: ptr Pthread_mutex ## /< Mutex used to protect frame progress values and progress_cond.
-    avctx*: AVCodecContext  ## /< Context used to decode packets passed to this thread.
+    avctx*: AVCodecContext  
     avpkt*: AVPacket           ## /< Input packet (for decoding) or output (for encoding).
     frame*: AVFrame         ## /< Output frame (for decoding) or input (for encoding).
     gotFrame*: cint            ## /< The output of got_picture_ptr from the last avcodec_decode_video() call.
@@ -2498,14 +2529,14 @@ type
     requestedFlags*: cint      ## /< flags passed to get_buffer() for requested_frame
     availableFormats*: ptr AVPixelFormat ## /< Format array for get_format()
     resultFormat*: AVPixelFormat ## /< get_format() result
-    die*: cint                 ## /< Set when the thread should exit.
+    die*: cint                 
     hwaccelSerializing*: cint
     asyncSerializing*: cint
     debugThreads*: int   
 
   FrameThreadContext* = ref object
-    threads*: ptr PerThreadContext ## /< The contexts for each thread.
-    prevThread*: PerThreadContext ## /< The last thread submit_packet() was called on.
+    threads*: ptr PerThreadContext 
+    prevThread*: PerThreadContext 
     bufferMutex*: Pthread_mutex 
     hwaccelMutex*: Pthread_mutex
     asyncMutex*: Pthread_mutex
@@ -4654,47 +4685,178 @@ proc avfilterGraphAlloc*(): AVFilterGraph =
   # avOptSetDefaults(result)
   return result
 
-proc avfilterGraphAllocFilter*(graph: ptr AVFilterGraph; filter: ptr AVFilter;
-                              name: cstring): ptr AVFilterContext =
-  var
-    filters: ptr ptr AVFilterContext
-    s: ptr AVFilterContext
-  if graph.threadType and not graph.internal.threadExecute:
-    if graph.execute:
+proc runJobs*(ctx: AVSliceThread): cint =
+  var nbJobs = ctx.nbJobs
+  var nbActiveThreads = ctx.nbActiveThreads
+  var firstJob = atomicFetchAdd(ctx.firstJob.addr, 1, ATOMIC_ACQ_REL)
+  var currentJob = firstJob
+  while true:
+    ctx.workerFunc(ctx.priv, currentJob, firstJob, nbJobs, nbActiveThreads)
+    currentJob = atomicFetchAdd(ctx.currentJob.addr, 1, ATOMIC_ACQ_REL)
+    if (currentJob >= nbJobs):
+      break
+  return currentJob == nbJobs + nbActiveThreads - 1
+
+proc threadWorker*(v: WorkerContext): pointer =
+  var w:WorkerContext = v
+  var ctx: AVSliceThread = w.ctx
+  pthreadMutexLock(addr(w.mutex))
+  pthreadCondSignal(addr(w.cond))
+  while true:
+    w.done = 1
+    while w.done != 0:
+      pthreadCondWait(addr(w.cond), addr(w.mutex))
+    if ctx.finished != 0:
+      pthreadMutexUnlock(addr(w.mutex))
+      return nil
+    if runJobs(ctx):
+      pthreadMutexLock(addr(ctx.doneMutex))
+      ctx.done = 1
+      pthreadCondSignal(addr(ctx.doneCond))
+      pthreadMutexUnlock(addr(ctx.doneMutex))
+
+
+proc avprivSlicethreadCreate*(pctx: AVSliceThread; priv: pointer; workerFunc: proc (
+    priv: pointer; jobnr: cint; threadnr: cint; nbJobs: cint; nbThreads: auto);
+                             mainFunc: proc (priv: pointer); nbThreads: cint): cint =
+  var ctx = AVSliceThread()
+  var nbWorkers = nbThreads
+  var  i: cint
+  if nbWorkers == 0:
+    var nbCpus = countProcessors()
+    if nbCpus > 1:
+      nbWorkers = nbCpus + 1
+    else:
+      nbWorkers = 1
+  if mainFunc == nil:
+    dec(nbWorkers)
+  pctx = ctx
+  if ctx == nil:
+    return -(ENOMEM)
+  if nbWorkers and not (ctx.workers = newSeq(nbWorkers)):
+    return -(ENOMEM)
+  ctx.priv = priv
+  ctx.workerFunc = workerFunc
+  ctx.mainFunc = mainFunc
+  ctx.nbThreads = nbThreads
+  ctx.nbActiveThreads = 0
+  ctx.nbJobs = 0
+  ctx.finished = 0
+  pthreadMutexInit(ctx.doneMutex, nil)
+  pthreadCondInit(ctx.doneCond, nil)
+  ctx.done = 0
+  i = 0
+  while i < nbWorkers:
+    var w: WorkerContext = ctx.workers[i]
+    var ret: cint
+    w.ctx = ctx
+    pthreadMutexInit(addr(w.mutex), nil)
+    pthreadCondInit(addr(w.cond), nil)
+    pthreadMutexLock(addr(w.mutex))
+    w.done = 0
+    ret = createThread(w.thread, nil, threadWorker, w)
+    if ret != 0 :
+      ctx.nbThreads = if mainFunc: i else: i + 1
+      pthreadMutexUnlock(addr(w.mutex))
+      pthreadCondDestroy(addr(w.cond))
+      pthreadMutexDestroy(addr(w.mutex))
+      return -(ret)
+    while not w.done:
+      pthreadCondWait(addr(w.cond), addr(w.mutex))
+    pthreadMutexUnlock(addr(w.mutex))
+    inc(i)
+  return nbThreads
+
+
+proc threadInitInternal*(c: ThreadContext; nbThreads: cint): cint =
+  result = avprivSlicethreadCreate(addr(c.thread), c, workerFunc, nil, nbThreads)
+  if result <= 1:
+    avprivSlicethreadFree(addr(c.thread))
+  return max(result, 1)
+
+
+proc ffGraphThreadInit*(graph: AVFilterGraph): cint =
+  var ret: cint
+  if graph.nbThreads == 1:
+    graph.threadType = 0
+    return 0
+  graph.internal.thread = ThreadContext()
+  ret = threadInitInternal(graph.internal.thread, graph.nbThreads)
+  if ret <= 1:
+    graph.threadType = 0
+    graph.nbThreads = 1
+    return if (ret < 0): ret else: 0
+  graph.nbThreads = ret
+  graph.internal.threadExecute = threadExecute
+  return 0
+
+
+proc avfilterGraphAllocFilter*(graph: AVFilterGraph; filter: AVFilter; name: string): AVFilterContext =
+  var filters = newSeq[AVFilterContext](graph.nbFilters + 1)
+  if graph.threadType != 0 and graph.internal.threadExecute == nil:
+    if graph.execute != nil:
       graph.internal.threadExecute = graph.execute
     else:
-      var result: cint = ffGraphThreadInit(graph)
-      if result < 0:
-        echo(graph, av_Log_Error, "Error initializing threading: %s.\n",
-              avErr2str(result))
-        return nil
-  s = ffFilterAlloc(filter, name)
-  if not s:
-    return nil
-  filters = avRealloc(graph.filters, sizeof((filters[]) * (graph.nbFilters + 1)))
-  if not filters:
-    avfilterFree(s)
-    return nil
+      discard ffGraphThreadInit(graph)
+  result = AVFilterContext(filter:filter, name:name)
   graph.filters = filters
-  graph.filters[inc(graph.nbFilters)] = s
-  s.graph = graph
-  return s
+  graph.filters[graph.nbFilters] = result
+  graph.nbFilters.inc
+  result.graph = graph
 
-proc avfilterInitStr*(filter: ptr AVFilterContext; args: cstring): cint =
-  var options: ptr AVDictionary
-  var e: ptr AVDictionaryEntry
-  if args and args[]:
-    if not filter.filter.privClass:
+const
+  AV_DICT_MATCH_CASE* = 1
+  AV_DICT_IGNORE_SUFFIX* = 2
+  AV_DICT_DONT_STRDUP_KEY* = 4
+  AV_DICT_DONT_STRDUP_VAL* = 8
+  AV_DICT_DONT_OVERWRITE* = 16
+  AV_DICT_APPEND* = 32
+  AV_DICT_MULTIKEY* = 64
+
+proc avDictGet*(m: AVDictionary; key: string; prev: AVDictionaryEntry;flags: cint): AVDictionaryEntry =
+  var
+    i: cuint
+    j: cuint
+  if prev != nil:
+    i = prev - m.elems + 1
+  else:
+    i = 0
+  while i < m.count:
+    var s = m.elems[i].key
+    if (flags and AV_DICT_MATCH_CASE) != 0:
+      j = 0
+      while s[j] == key[j] and key[j]:
+        inc(j)
+    else:
+      j = 0
+      while toUpper(s[j]) == toUpper(key[j]):
+        inc(j)
+    if key[j]:
+      continue
+    if s[j] != nil and (flags and AV_DICT_IGNORE_SUFFIX) == 0:
+      continue
+    return addr(m.elems[i])
+    inc(i)
+  return nil
+
+
+
+
+proc avfilterInitStr*(filter: AVFilterContext; args: string): cint =
+  var options: AVDictionary
+  var e: AVDictionaryEntry
+  if args != "":
+    if filter.filter.privClass == nil:
       echo("This filter does not take any options, but options were provided: %s.\n",args)
-      return -(einval)
-    result = processOptions(filter, addr(options), args)
+      return -(EINVAL)
+    result = processOptions(filter, options, args)
     if result < 0:
       return
   result = avfilterInitDict(filter, addr(options))
   if result < 0:
     return
-  if (e = avDictGet(options, "", nil, av_Dict_Ignore_Suffix)):
-    echo(filter, av_Log_Error, "No such option: %s.\n", e.key)
+  if (e = avDictGet(options, "", nil, AV_DICT_IGNORE_SUFFIX)):
+    echo("No such option: %s.", e.key)
     result = averror_Option_Not_Found
     return
   return result
@@ -4713,7 +4875,7 @@ proc avfilterGraphCreateFilter*(filtCtx: AVFilterContext; filt: AVFilter;
 template insert_Filt*(name, arg: untyped): void =
   while true:
     var filtCtx: ptr AVFilterContext
-    result = avfilterGraphCreateFilter(addr(filtCtx), avfilterGetByName(name),"ffplay_", name, arg, nil, graph)
+    result = avfilterGraphCreateFilter(filtCtx, avfilterGetByName(name),"ffplay_", name, arg, nil, graph)
     if result < 0:
       return
     result = avfilterLink(filtCtx, 0, lastFilter, 0)
@@ -4772,7 +4934,7 @@ proc configureVideoFilters*(graph: var AVFilterGraph; vs: VideoState;vfilters: c
         inc(nbPixFmts)
         break
   pixFmts[nbPixFmts] = AV_PIX_FMT_NONE.ord
-  while (e = avDictGet(swsDict, "", e, av_Dict_Ignore_Suffix)):
+  while (e = avDictGet(swsDict, "", e, AV_DICT_IGNORE_SUFFIX)):
     if e.key == "sws_flags":
       swsFlagsStr &= fmt"flags={e.value}:"
     else:
@@ -4783,10 +4945,10 @@ proc configureVideoFilters*(graph: var AVFilterGraph; vs: VideoState;vfilters: c
   buffersrcArgs &= fmt"video_size={frame.width}{frame.height}:pix_fmt={frame.format}:time_base={vs.videoSt.timeBase.num}/{vs.videoSt.timeBase.den}:pixel_aspect={codecpar.sampleAspectRatio.num}/{max(codecpar.sampleAspectRatio.den, 1)}"
   if fr.num != 0 and fr.den != 0:
     buffersrcArgs &= fmt":frame_rate={fr.num}/{fr.den}"
-  result = avfilterGraphCreateFilter(addr(filtSrc), avfilterGetByName("buffer"),"ffplay_buffer", buffersrcArgs, nil, graph)
+  result = avfilterGraphCreateFilter(filtSrc, avfilterGetByName("buffer"),"ffplay_buffer", buffersrcArgs, nil, graph)
   if result< 0:
     return
-  result = avfilterGraphCreateFilter(addr(filtOut), avfilterGetByName("buffersink"),"ffplay_buffersink", nil, nil, graph)
+  result = avfilterGraphCreateFilter(filtOut, avfilterGetByName("buffersink"),"ffplay_buffersink", nil, nil, graph)
   if result < 0:
     return
   if (result = avOptSetIntList(filtOut, "pix_fmts", pixFmts, AV_PIX_FMT_NONE,av_Opt_Search_Children)) < 0:
