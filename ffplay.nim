@@ -167,14 +167,14 @@ type
     itemName*: proc (ctx: pointer): string
     option*: seq[AVOption]
     version*: int
-    log_level_offset_offset*: int
-    parent_log_context_offset*: int
-    child_next*: proc (obj: pointer; prev: pointer): pointer
-    child_class_next*: proc (prev: AVClass): AVClass
+    logLevelOffsetOffset*: int
+    parentLogContextOffset*: int
+    childNext*: proc (obj: pointer; prev: pointer): pointer
+    childClassNext*: proc (prev: AVClass): AVClass
     category*: AVClassCategory
-    get_category*: proc (ctx: pointer): AVClassCategory
-    query_ranges*: proc (a1: AVOptionRanges; obj: pointer; key: string;flags: int): int
-    child_class_iterate*: proc (iter: pointer): AVClass
+    getCategory*: proc (ctx: pointer): AVClassCategory
+    queryRanges*: proc (a1: AVOptionRanges; obj: pointer; key: string;flags: int): int
+    childClassIterate*: proc (iter: AVClass): AVClass
 
   AVPixelFormat* = enum
     AV_PIX_FMT_NONE = -1, AV_PIX_FMT_YUV420P, AV_PIX_FMT_YUYV422, AV_PIX_FMT_RGB24,
@@ -1603,7 +1603,7 @@ type
     write_header*: proc (a1: AVFormatContext): int
     write_packet*: proc (a1: AVFormatContext; pkt: AVPacket): int
     write_trailer*: proc (a1: AVFormatContext): int
-    interleave_packet*: proc (a1: AVFormatContext; `out`: AVPacket;
+    interleave_packet*: proc (a1: AVFormatContext; o: AVPacket;
                             `in`: AVPacket; flush: int): int
     query_codec*: proc (id: AVCodecID; std_compliance: int): int
     get_output_timestamp*: proc (s: AVFormatContext; stream: int;
@@ -1714,12 +1714,12 @@ type
     init_opaque*: proc (ctx: AVFilterContext; opaque: pointer): int
     activate*: proc (ctx: AVFilterContext): int
 
-  AvfilterActionFunc* = proc (ctx: ptr AVFilterContext; arg: pointer; jobnr: cint;
+  AvfilterActionFunc* = proc (ctx: AVFilterContext; arg: pointer; jobnr: cint;
                            nbJobs: cint): cint
 
-  AvfilterExecuteFunc* = proc (ctx: ptr AVFilterContext;
-                            f: ptr AvfilterActionFunc; arg: pointer;
-                            result: ptr cint; nbJobs: cint): cint
+  AvfilterExecuteFunc* = proc (ctx: AVFilterContext;
+                            f: AvfilterActionFunc; arg: pointer;
+                            result: cint; nbJobs: cint): cint
 
   FFFrameQueueGlobal* = ref object
     dummy*: char               
@@ -1728,7 +1728,7 @@ type
     ctx*: AVSliceThread
     mutex*: PthreadMutex
     cond*: PthreadCond
-    thread*: Pthread
+    thread*: Thread[WorkerContext]
     done*: cint
 
   AVSliceThread* = ref object
@@ -1743,16 +1743,16 @@ type
     done*: cint
     finished*: cint
     priv*: pointer
-    workerFunc*: proc (priv: pointer; jobnr: auto; threadnr: auto; nbJobs: auto; nbThreads: auto)
+    workerFunc*: proc (priv: pointer; jobnr: cint; threadnr: cint; nbJobs: cint; nbThreads: cint)
     mainFunc*: proc (priv: pointer)
 
   ThreadContext* = ref object
     graph*: AVFilterGraph
     thread*: AVSliceThread
-    f*: AvfilterActionFunc 
+    fn*: AvfilterActionFunc 
     ctx*: AVFilterContext
     arg*: pointer
-    rets*: cint
+    rets*: seq[cint]
 
   AVFilterGraphInternal* = ref object
     thread*: ThreadContext
@@ -1785,10 +1785,10 @@ type
     name*: string
     # input_pads*: AVFilterPad
     # inputs*: AVFilterLink
-    nb_inputs*: cuint
+    nbInputs*: cuint
     # output_pads*: AVFilterPad
     # outputs*: AVFilterLink
-    nb_outputs*: cuint
+    nbOutputs*: cuint
     priv*: pointer
     graph*: AVFilterGraph
     threadType*: int
@@ -2032,9 +2032,24 @@ template FFERRTAG(a, b, c, d):untyped = -MKTAG(a, b, c, d)
 const AVERROR_INVALIDDATA =  FFERRTAG( 'I','N','D','A')
 const AVERROR_PATCHWELCOME = FFERRTAG( 'P','A','W','E')
 const AVERROR_BUG = FFERRTAG( 'B','U','G','!')
+const AVERROR_OPTION_NOT_FOUND = FFERRTAG(0xF8,'O','P','T')
 
 template FFALIGN(x: int, a:int):int = ((x+a-1) and not(a-1))
 template IS_EMPTY(pkt):untyped = (pkt.data == nil and (pkt).side_data_elems == 0)
+template `+`*[T](p: ptr T, off: int): ptr T =
+  cast[ptr type(p[])](cast[ByteAddress](p) +% off * sizeof(p[]))
+
+template `+=`*[T](p: ptr T, off: int) = p = p + off
+
+template `-`*[T](p: ptr T, off: int): ptr T =
+  cast[ptr type(p[])](cast[ByteAddress](p) -% off * sizeof(p[]))
+
+template `-=`*[T](p: ptr T, off: int) = p = p - off
+
+template `[]`*[T](p: ptr T, off: int): T = (p + off)[]
+
+template `[]=`*[T](p: ptr T, off: int, val: T) = (p + off)[] = val
+
 var atomicLock*: Pthread_mutex
 
 var avPixFmtDescriptors = newOrderedTable(
@@ -4216,7 +4231,7 @@ template AV_TIME_BASE_Q():untyped = Rational[int](num: 1, den: 1000000)
 
 type
   AVBPrint* = ref object
-    str*: cstring
+    str*: string
     len*: cuint
     size*: cuint
     sizeMax*: cuint
@@ -4239,7 +4254,7 @@ proc insertTs*(buf: var string; t: int) =
 
 proc avMakeQ*(num: auto; den: auto): Rational[int] = Rational[int](num:num, den:den)
 
-proc strchr(s:cstring, c:int): ptr char {.importc.}
+proc strchr(s:string, c:int): ptr char {.importc.}
 
 proc convertSubToOldAssForm*(sub: var AVSubtitle; pkt: AVPacket; tb: Rational[int]): auto =
   var buf: string
@@ -4685,39 +4700,40 @@ proc avfilterGraphAlloc*(): AVFilterGraph =
   # avOptSetDefaults(result)
   return result
 
-proc runJobs*(ctx: AVSliceThread): cint =
+proc runJobs*(ctx: AVSliceThread): auto =
   var nbJobs = ctx.nbJobs
   var nbActiveThreads = ctx.nbActiveThreads
   var firstJob = atomicFetchAdd(ctx.firstJob.addr, 1, ATOMIC_ACQ_REL)
   var currentJob = firstJob
   while true:
-    ctx.workerFunc(ctx.priv, currentJob, firstJob, nbJobs, nbActiveThreads)
+    ctx.workerFunc(ctx.priv, currentJob.cint, firstJob.cint, nbJobs, nbActiveThreads)
     currentJob = atomicFetchAdd(ctx.currentJob.addr, 1, ATOMIC_ACQ_REL)
-    if (currentJob >= nbJobs):
+    if (currentJob.cint >= nbJobs):
       break
-  return currentJob == nbJobs + nbActiveThreads - 1
+  return currentJob.cint == nbJobs + nbActiveThreads - 1
 
-proc threadWorker*(v: WorkerContext): pointer =
-  var w:WorkerContext = v
-  var ctx: AVSliceThread = w.ctx
-  pthreadMutexLock(addr(w.mutex))
-  pthreadCondSignal(addr(w.cond))
-  while true:
-    w.done = 1
-    while w.done != 0:
-      pthreadCondWait(addr(w.cond), addr(w.mutex))
-    if ctx.finished != 0:
-      pthreadMutexUnlock(addr(w.mutex))
-      return nil
-    if runJobs(ctx):
-      pthreadMutexLock(addr(ctx.doneMutex))
-      ctx.done = 1
-      pthreadCondSignal(addr(ctx.doneCond))
-      pthreadMutexUnlock(addr(ctx.doneMutex))
+proc threadWorker*(v: WorkerContext) {.thread.} =
+  {.gcsafe.}:
+    var w:WorkerContext = v
+    var ctx: AVSliceThread = w.ctx
+    discard pthreadMutexLock(w.mutex.addr)
+    discard pthreadCondSignal(w.cond.addr)
+    while true:
+      w.done = 1
+      while w.done != 0:
+        discard pthreadCondWait(w.cond.addr, w.mutex.addr)
+      if ctx.finished != 0:
+        discard pthreadMutexUnlock(addr(w.mutex))
+        return 
+      if runJobs(ctx):
+        discard pthreadMutexLock(addr(ctx.doneMutex))
+        ctx.done = 1
+        discard pthreadCondSignal(addr(ctx.doneCond))
+        discard pthreadMutexUnlock(addr(ctx.doneMutex))
 
 
-proc avprivSlicethreadCreate*(pctx: AVSliceThread; priv: pointer; workerFunc: proc (
-    priv: pointer; jobnr: cint; threadnr: cint; nbJobs: cint; nbThreads: auto);
+proc avprivSlicethreadCreate*(pctx: var AVSliceThread; priv: pointer; workerFunc: proc (
+    priv: pointer; jobnr: cint; threadnr: cint; nbJobs: cint; nbThreads: cint);
                              mainFunc: proc (priv: pointer); nbThreads: cint): cint =
   var ctx = AVSliceThread()
   var nbWorkers = nbThreads
@@ -4725,7 +4741,7 @@ proc avprivSlicethreadCreate*(pctx: AVSliceThread; priv: pointer; workerFunc: pr
   if nbWorkers == 0:
     var nbCpus = countProcessors()
     if nbCpus > 1:
-      nbWorkers = nbCpus + 1
+      nbWorkers = cint nbCpus + 1
     else:
       nbWorkers = 1
   if mainFunc == nil:
@@ -4733,8 +4749,7 @@ proc avprivSlicethreadCreate*(pctx: AVSliceThread; priv: pointer; workerFunc: pr
   pctx = ctx
   if ctx == nil:
     return -(ENOMEM)
-  if nbWorkers and not (ctx.workers = newSeq(nbWorkers)):
-    return -(ENOMEM)
+  ctx.workers = newSeq[WorkerContext](nbWorkers)
   ctx.priv = priv
   ctx.workerFunc = workerFunc
   ctx.mainFunc = mainFunc
@@ -4742,51 +4757,93 @@ proc avprivSlicethreadCreate*(pctx: AVSliceThread; priv: pointer; workerFunc: pr
   ctx.nbActiveThreads = 0
   ctx.nbJobs = 0
   ctx.finished = 0
-  pthreadMutexInit(ctx.doneMutex, nil)
-  pthreadCondInit(ctx.doneCond, nil)
+  discard pthreadMutexInit(ctx.doneMutex.addr, nil)
+  discard pthreadCondInit(ctx.doneCond.addr, nil)
   ctx.done = 0
   i = 0
   while i < nbWorkers:
     var w: WorkerContext = ctx.workers[i]
-    var ret: cint
+    var result: cint
     w.ctx = ctx
-    pthreadMutexInit(addr(w.mutex), nil)
-    pthreadCondInit(addr(w.cond), nil)
-    pthreadMutexLock(addr(w.mutex))
+    discard pthreadMutexInit(addr(w.mutex), nil)
+    discard pthreadCondInit(addr(w.cond), nil)
+    discard pthreadMutexLock(addr(w.mutex))
     w.done = 0
-    ret = createThread(w.thread, nil, threadWorker, w)
-    if ret != 0 :
-      ctx.nbThreads = if mainFunc: i else: i + 1
-      pthreadMutexUnlock(addr(w.mutex))
-      pthreadCondDestroy(addr(w.cond))
-      pthreadMutexDestroy(addr(w.mutex))
-      return -(ret)
-    while not w.done:
-      pthreadCondWait(addr(w.cond), addr(w.mutex))
-    pthreadMutexUnlock(addr(w.mutex))
+    createThread(w.thread, threadWorker, w)
+
+    while w.done == 0:
+      discard pthreadCondWait(addr(w.cond), addr(w.mutex))
+    discard pthreadMutexUnlock(addr(w.mutex))
     inc(i)
   return nbThreads
 
+proc workerFunc*(priv: pointer; jobnr: cint; threadnr: cint; nbJobs: cint; nbThreads: cint) =
+  var c = cast[ptr ThreadContext](priv)
+  var result = c.fn(c.ctx, c.arg, jobnr, nbJobs)
+  if c.rets.len != 0:
+    c.rets[jobnr] = result
 
-proc threadInitInternal*(c: ThreadContext; nbThreads: cint): cint =
-  result = avprivSlicethreadCreate(addr(c.thread), c, workerFunc, nil, nbThreads)
-  if result <= 1:
-    avprivSlicethreadFree(addr(c.thread))
+
+proc threadInitInternal*(c: var ThreadContext; nbThreads: cint): cint =
+  result = avprivSlicethreadCreate(c.thread, c.addr, workerFunc, nil, nbThreads)
   return max(result, 1)
+
+proc avprivSlicethreadExecute*(ctx: AVSliceThread; nbJobs: cint; executeMain: cint) =
+  var
+    nbWorkers: cint
+    i: cint
+    isLast: bool 
+  ctx.nbJobs = nbJobs
+  ctx.nbActiveThreads = min(nbJobs, ctx.nbThreads)
+  var firstJobVal:uint64 = 0
+  atomicStore(addr(ctx.firstJob), firstJobVal.addr, ATOMIC_RELAXED)
+  var currentJobVal:uint64 = ctx.nbActiveThreads.uint64
+  atomicStore(addr(ctx.currentJob), currentJobVal.addr, ATOMIC_RELAXED)
+  nbWorkers = ctx.nbActiveThreads
+  if ctx.mainFunc == nil or executeMain == 0:
+    nbWorkers.dec
+  for i in 0..<nbWorkers:
+    var w: WorkerContext = ctx.workers[i]
+    discard pthreadMutexLock(addr(w.mutex))
+    w.done = 0
+    discard pthreadCondSignal(addr(w.cond))
+    discard pthreadMutexUnlock(addr(w.mutex))
+  if ctx.mainFunc != nil and executeMain != 0:
+    ctx.mainFunc(ctx.priv)
+  else:
+    isLast = runJobs(ctx)
+  if not isLast:
+    discard pthreadMutexLock(addr(ctx.doneMutex))
+    while ctx.done == 0:
+      discard pthreadCondWait(addr(ctx.doneCond), addr(ctx.doneMutex))
+    ctx.done = 0
+    discard pthreadMutexUnlock(addr(ctx.doneMutex))
+
+
+proc threadExecute*(ctx: AVFilterContext; fn: AvfilterActionFunc;arg: pointer; ret: cint; nbJobs: cint): cint =
+  var c = ctx.graph.internal.thread
+  if nbJobs <= 0:
+    return 0
+  c.ctx = ctx
+  c.arg = arg
+  c.fn = fn
+  c.rets[0] = ret
+  avprivSlicethreadExecute(c.thread, nbJobs, 0)
+  return 0
 
 
 proc ffGraphThreadInit*(graph: AVFilterGraph): cint =
-  var ret: cint
+  var result: cint
   if graph.nbThreads == 1:
     graph.threadType = 0
     return 0
   graph.internal.thread = ThreadContext()
-  ret = threadInitInternal(graph.internal.thread, graph.nbThreads)
-  if ret <= 1:
+  result = threadInitInternal(graph.internal.thread, graph.nbThreads)
+  if result <= 1:
     graph.threadType = 0
     graph.nbThreads = 1
-    return if (ret < 0): ret else: 0
-  graph.nbThreads = ret
+    return if (result < 0): result else: 0
+  graph.nbThreads = result
   graph.internal.threadExecute = threadExecute
   return 0
 
@@ -4814,37 +4871,346 @@ const
   AV_DICT_MULTIKEY* = 64
 
 proc avDictGet*(m: AVDictionary; key: string; prev: AVDictionaryEntry;flags: cint): AVDictionaryEntry =
-  var
-    i: cuint
-    j: cuint
-  if prev != nil:
-    i = prev - m.elems + 1
-  else:
-    i = 0
-  while i < m.count:
-    var s = m.elems[i].key
-    if (flags and AV_DICT_MATCH_CASE) != 0:
-      j = 0
-      while s[j] == key[j] and key[j]:
-        inc(j)
-    else:
-      j = 0
-      while toUpper(s[j]) == toUpper(key[j]):
-        inc(j)
-    if key[j]:
-      continue
-    if s[j] != nil and (flags and AV_DICT_IGNORE_SUFFIX) == 0:
-      continue
-    return addr(m.elems[i])
-    inc(i)
+  # var
+  #   i: cuint
+  #   j: cuint
+  # if prev != nil:
+  #   i = prev - m.elems + 1
+  # else:
+  #   i = 0
+  # while i < m.count:
+  #   var s = m.elems[i].key
+  #   if (flags and AV_DICT_MATCH_CASE) != 0:
+  #     j = 0
+  #     while s[j] == key[j] and key[j]:
+  #       inc(j)
+  #   else:
+  #     j = 0
+  #     while toUpper(s[j]) == toUpper(key[j]):
+  #       j.inc
+  #   if key[j]:
+  #     continue
+  #   if s[j] != nil and (flags and AV_DICT_IGNORE_SUFFIX) == 0:
+  #     continue
+  #   return addr(m.elems[i])
+  #   i.inc
   return nil
 
+proc getKey*(ropts: var string; delim: string; rkey: var string): cint =
+  # var opts: string = ropts
+  # var
+  #   keyStart: string
+  #   keyEnd: string
+  # keyStart = inc(opts, strspn(opts, whitespaces))
+  # while isKeyChar(opts[]):
+  #   inc(opts)
+  # keyEnd = opts
+  # inc(opts, strspn(opts, whitespaces))
+  # inc(opts)
+  # copyMem(rkey[0].addr, keyStart[0].addr, keyEnd - keyStart)
+  # rkey[keyEnd - keyStart] = 0
+  # ropts = opts
+  return 0
+
+const
+  WHITESPACES* = " \n\t\c"
+
+proc avGetToken*(buf: string; term: string): string =
+  # var o: string = newString(buf.len + 1)
+  # var  e: string = o
+  # var p: string = buf[0]
+  # inc(p, strspn(p, whitespaces))
+  # while p != " " and strspn(p, term) == 0:
+  #   var c = inc(p)[]
+  #   if c == '\b' and p[]:
+  #     inc(o)[] = inc(p)[]
+  #     e = o
+  #   elif c == '\'':
+  #     while p[] and p[] != '\'':
+  #       inc(o)[] = inc(p)[]
+  #     if p[]:
+  #       inc(p)
+  #       e = o
+  #   else:
+  #     inc(o)[] = c
+  # while true:
+  #   dec(o)[] = 0
+  #   if not (o >= e and strspn(o, whitespaces)):
+  #     break
+  # buf[] = p
+  return result
+
+proc avOptGetKeyValue*(ropts: var string; keyValSep: string; pairsSep: string;
+                      flags: int; rkey: var string; rval: var string): cint =
+  var
+    key: string 
+    val: string
+  var opts: string
+  result = getKey(opts, keyValSep, key)
+  if result < 0 and (flags and AV_OPT_FLAG_IMPLICIT_KEY) == 0:
+    return -(EINVAL)
+  val = avGetToken(opts, pairsSep)
+  if val == "":
+    return -(ENOMEM)
+  ropts = opts
+  rkey = key
+  rval = val
+  return 0
+
+# iterator avOptNext*(obj: pointer; last: AVOption): AVOption =
+#   var class = cast[ptr AVClass](obj)
+#   if  last == nil and class != nil and class.option.len != 0 and class.option[0].name == "": 
+#     yield class.option
+#   if last != nil and last.name != "":
+#     yield last
+#     last.inc
+
+const AV_OPT_SEARCH_CHILDREN =  (1 shl 0) 
+const AV_OPT_SEARCH_FAKE_OBJ  = (1 shl 1)
+
+iterator avOptChildClassIterate*(parent: ptr AVClass; iter: var AVClass): AVClass =
+  if parent.childClassIterate != nil:
+    yield parent.childClassIterate(iter)
+  if parent.childClassNext != nil:
+    iter = parent.childClassNext(iter)
+    yield iter
+
+iterator avOptChildNext*(obj: pointer; prev: pointer): pointer =
+  var c = cast[ptr AVClass](obj)
+  if c.childNext != nil:
+    yield c.childNext(obj, prev)
 
 
+proc avOptFind2*(obj: pointer; name: string; unit: string; optFlags: cint; searchFlags: cint; targetObj:var pointer): AVOption =
+  var o: AVOption 
+  var c = cast[ptr AVClass](obj)
+  if (searchFlags and AV_OPT_SEARCH_CHILDREN) != 0:
+    if (searchFlags and AV_OPT_SEARCH_FAKE_OBJ) != 0:
+      var iter: AVClass
+      
+      for child in avOptChildClassIterate(c, iter):
+        var obj: pointer
+        o = avOptFind2(child.unsafeAddr, name, unit, optFlags, searchFlags, obj)
+        if o != nil:
+          return o
+    else:
+      var child: pointer
+      for c in avOptChildNext(obj, child):
+        o = avOptFind2(c.unsafeAddr, name, unit, optFlags, searchFlags, targetObj)
+        if o != nil:
+          return o
+  var class = cast[ptr AVClass](obj)
+  for o in class.option:
+    if o.name == name and (o.flags and optFlags) == optFlags and
+        ((unit == "" and o.t != AV_OPT_TYPE_CONST) or
+        (unit != "" and o.t == AV_OPT_TYPE_CONST and o.unit != "" and o.unit == unit)):
+      if targetObj != nil:
+        if (searchFlags and AV_OPT_SEARCH_FAKE_OBJ) == 0:
+          targetObj = obj
+        else:
+          targetObj = nil
+      return o
+  return nil
 
-proc avfilterInitStr*(filter: AVFilterContext; args: string): cint =
-  var options: AVDictionary
-  var e: AVDictionaryEntry
+proc avOptFind*(obj: pointer; name: string; unit: string; optFlags: cint; searchFlags: cint): AVOption =
+  var targetObj: pointer
+  return avOptFind2(obj, name, unit, optFlags, searchFlags, targetObj)
+
+proc avOptSet*(obj: pointer; name: string; val: string; searchFlags: cint): int =
+  var
+    dst: int
+    targetObj: pointer
+  var o = avOptFind2(obj, name, "", 0, searchFlags, targetObj)
+  if o == nil or targetObj == nil:
+    return AVERROR_OPTION_NOT_FOUND.ord
+  if val == nil and
+      (o.t != AV_OPT_TYPE_STRING and o.t != AV_OPT_TYPE_PIXEL_FMT and
+      o.t != AV_OPT_TYPE_SAMPLE_FMT and o.t != AV_OPT_TYPE_IMAGE_SIZE and
+      o.t != AV_OPT_TYPE_DURATION and o.t != AV_OPT_TYPE_COLOR and
+      o.t != AV_OPT_TYPE_CHANNEL_LAYOUT and o.t != AV_OPT_TYPE_BOOL):
+    return -(EINVAL)
+  if (o.flags and AV_OPT_FLAG_READONLY) != 0:
+    return -(EINVAL)
+  if (o.flags and av_Opt_Flag_Deprecated) != 0:
+    echo("The \"%s\" option is deprecated: %s\n", name, o.help)
+  dst = (cast[ptr uint8](targetObj)) + o.offset
+  case o.t
+  of AV_OPT_TYPE_BOOL:
+    return setStringBool(obj, o, val, dst)
+  of AV_OPT_TYPE_STRING:
+    return setString(obj, o, val, dst)
+  of AV_OPT_TYPE_BINARY:
+    return setStringBinary(obj, o, val, dst)
+  of AV_OPT_TYPE_FLAGS, AV_OPT_TYPE_INT, AV_OPT_TYPE_INT64, AV_OPT_TYPE_UINT64,
+    AV_OPT_TYPE_FLOAT, AV_OPT_TYPE_DOUBLE, AV_OPT_TYPE_RATIONAL:
+    return setStringNumber(obj, targetObj, o, val, dst)
+  of AV_OPT_TYPE_IMAGE_SIZE:
+    return setStringImageSize(obj, o, val, dst)
+  of AV_OPT_TYPE_VIDEO_RATE:
+    var tmp: Rational[int]
+    result = setStringVideoRate(obj, o, val, addr(tmp))
+    if result < 0:
+      return ret
+    return writeNumber(obj, o, dst, 1, tmp.den, tmp.num)
+  of AV_OPT_TYPE_PIXEL_FMT:
+    return setStringPixelFmt(obj, o, val, dst)
+  of AV_OPT_TYPE_SAMPLE_FMT:
+    return setStringSampleFmt(obj, o, val, dst)
+  of AV_OPT_TYPE_DURATION:
+    var usecs: int64 = 0
+    result = avParseTime(addr(usecs), val, 1)
+    if result < 0:
+      echo("Unable to parse option value \"%s\" as duration\n", val)
+      return ret
+    if usecs < o.min or usecs > o.max:
+      echo("Value %f for parameter \'%s\' out of range [%g - %g]\n",
+            usecs div 1000000.0, o.name, o.min div 1000000.0, o.max div 1000000.0)
+      return -(ERANGE)
+    dst = usecs
+    return 0
+  of AV_OPT_TYPE_COLOR:
+    return setStringColor(obj, o, val, dst)
+  of AV_OPT_TYPE_CHANNEL_LAYOUT:
+    if val == "":
+      cast[ptr int64](dst)[] = 0
+    else:
+      var cl: int64 = avGetChannelLayout(val)
+      if cl == 0:
+        echo("Unable to parse option value \"%s\" as channel layout\n", val)
+        result = -(EINVAL)
+      dst = cl
+      return ret
+  of AV_OPT_TYPE_DICT:
+    return setStringDict(obj, o, val, dst)
+  else:discard
+  echo("Invalid option type.\n")
+  return -(EINVAL)
+
+const
+  AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC* = (1 shl 16)
+  AVFILTER_FLAG_SUPPORT_TIMELINE_INTERNAL* = (1 shl 17)
+  AVFILTER_FLAG_SUPPORT_TIMELINE* = (AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC or AVFILTER_FLAG_SUPPORT_TIMELINE_INTERNAL)
+
+proc avExprParse*(exp: ptr AVExpr; s: string; constNames: cstringArray;
+                 func1Names: cstringArray;
+                 funcs1: proc (a1: pointer; a2: cdouble): cdouble;
+                 func2Names: cstringArray;
+                 funcs2: proc (a1: pointer; a2: cdouble; a3: cdouble): cdouble;
+                 logOffset: cint; logCtx: pointer): cint =
+  var p: Parser
+  var e: ptr AVExpr = nil
+  var w: string = newString(len(s) + 1)
+  var wp: string = w
+  var s0: string = s
+  var ret: cint = 0
+  while s[]:
+    if not avIsspace(inc(s)[]):
+      inc(wp)[] = s[-1]
+  inc(wp)[] = 0
+  p.class = addr(evalClass)
+  p.stackIndex = 100
+  p.s = w
+  p.constNames = constNames
+  p.funcs1 = funcs1
+  p.func1Names = func1Names
+  p.funcs2 = funcs2
+  p.func2Names = func2Names
+  p.logOffset = logOffset
+  p.logCtx = logCtx
+  if (ret = parseExpr(addr(e), addr(p))) < 0:
+    break e
+  if p.s[]:
+    echo(
+          "Invalid chars \'%s\' at the end of expression \'%s\'\n", p.s, s0)
+    ret = averror(einval)
+    break e
+  if not verifyExpr(e):
+    ret = averror(einval)
+    break e
+  e.v = avMallocz(sizeof((double) * vars))
+  if not e.v:
+    ret = averror(enomem)
+    break e
+  exp[] = e
+  e = nil
+  return ret
+
+
+proc setEnableExpr*(ctx: AVFilterContext; exp: string): cint =
+  var exprDup: string
+  var old = ctx.enable
+  if (ctx.filter.flags and AVFILTER_FLAG_SUPPORT_TIMELINE) == 0:
+    echo("Timeline (\'enable\' option) not supported with filter \'%s\'\n",ctx.filter.name)
+    return AVERROR_PATCHWELCOME.ord
+  exprDup = exp
+  # if ctx.varValues == 0:
+  #   ctx.varValues = avCalloc(var_Vars_Nb, sizeof((ctx.varValues[])))
+  result = avExprParse(cast[ptr AVExpr](addr(ctx.enable)), exprDup, varNames, nil, nil, nil, nil, 0, ctx.priv)
+  if result < 0:
+    echo("Error when evaluating the expression \'%s\' for enable\n", exprDup)
+    return result
+  ctx.enableStr = exprDup
+  return 0
+
+
+proc processOptions*(ctx: var AVFilterContext; options: OrderedTableRef[string,string]; args: var string): auto =
+  var o: AVOption 
+  var  count: cint
+  var
+    parsedKey: string
+    value: string
+  var key: string
+  var offset = -1
+  var shorthand: string
+  var class = cast[ptr AVClass](ctx.priv)
+  for i in 0..args.high:
+    o = class.option[0]
+    class.option = class.option[1..^1]
+    # o = avOptNext(ctx.priv, o)
+    if o != nil:
+      if o.t == AV_OPT_TYPE_CONST or o.offset == offset:
+        continue
+      offset = o.offset
+      shorthand = o.name
+    result = avOptGetKeyValue(args, "=", ":",
+                         if shorthand != "": AV_OPT_FLAG_IMPLICIT_KEY.int else: 0,
+                         parsedKey, value)
+    if result < 0:
+      if result == -(EINVAL):
+        echo("No option name near \'%s\'\n", args[i])
+      else:
+        echo( "Unable to parse \'%s\': %s\n", args[i], result)
+      return result
+    if parsedKey != "":
+      key = parsedKey
+      class.option.setLen 0
+    else:
+      key = shorthand
+    echo("Setting \'%s\' to value \'%s\'\n", key, value)
+    var option = avOptFind(ctx.addr, key, "", 0, 0)
+    if option != nil:
+      result = cint avOptSet(ctx.addr, key, value, 0)
+      if result < 0:
+        return result
+    else:
+      options[key] = value
+      result = cint avOptSet(ctx.priv, key, value, AV_OPT_SEARCH_CHILDREN)
+      if result < 0:
+        var find = avOptFind(ctx.priv, key, "", 0, AV_OPT_SEARCH_CHILDREN or AV_OPT_SEARCH_FAKE_OBJ)
+        if find == nil :
+          if result == AVERROR_OPTION_NOT_FOUND:
+            echo("Option \'%s\' not found\n", key)
+          return result
+    inc(count)
+  if ctx.enableStr != "":
+    result = setEnableExpr(ctx, ctx.enableStr)
+    if result < 0:
+      return result
+  return count
+
+
+proc avfilterInitStr*(filter: var AVFilterContext; args: var string): cint =
+  var options = newOrderedTable[string,string]()
   if args != "":
     if filter.filter.privClass == nil:
       echo("This filter does not take any options, but options were provided: %s.\n",args)
@@ -4852,21 +5218,14 @@ proc avfilterInitStr*(filter: AVFilterContext; args: string): cint =
     result = processOptions(filter, options, args)
     if result < 0:
       return
-  result = avfilterInitDict(filter, addr(options))
-  if result < 0:
-    return
-  if (e = avDictGet(options, "", nil, AV_DICT_IGNORE_SUFFIX)):
-    echo("No such option: %s.", e.key)
-    result = averror_Option_Not_Found
-    return
   return result
 
 
-proc avfilterGraphCreateFilter*(filtCtx: AVFilterContext; filt: AVFilter;
-                               name: cstring; args: cstring; opaque: pointer;
-                               graphCtx: ptr AVFilterGraph): auto =
-  filtCtx[] = avfilterGraphAllocFilter(graphCtx, filt, name)
-  result = avfilterInitStr(filtCtx[], args)
+proc avfilterGraphCreateFilter*(filtCtx: var AVFilterContext; filt: AVFilter;
+                               name: string; args: var string; opaque: pointer;
+                               graphCtx: AVFilterGraph): auto =
+  filtCtx = avfilterGraphAllocFilter(graphCtx, filt, name)
+  result = avfilterInitStr(filtCtx, args)
   if result < 0:
     return
   return 0
@@ -4911,36 +5270,48 @@ const sdlTextureFormatMap: seq[TextureFormatEntry] = @[
     TextureFormatEntry(format: AV_PIX_FMT_NONE.ord,           texture_fmt:SDL_PIXELFORMAT_UNKNOWN.ord ),
 ]
 
+type
+  SDL_RendererInfo* {.bycopy.} = object
+    name*: cstring
+    flags*: uint32
+    num_texture_formats*: uint32
+    textureFormats*: array[16, uint32]
+    max_texture_width*: cint
+    max_texture_height*: cint
+  SDL_AudioDeviceID* = uint32
+
 var  rendererInfo: SDL_RendererInfo
 var  audioDev: SDL_AudioDeviceID
 
-proc configureVideoFilters*(graph: var AVFilterGraph; vs: VideoState;vfilters: cstring; frame: AVFrame): cint =
+proc avfilterGetByName*(name: string): AVFilter
+
+proc configureVideoFilters*(graph: var AVFilterGraph; vs: VideoState;vfilters: string; frame: AVFrame): cint =
   var pixFmts: array[sdlTextureFormatMap.len, int]
   var swsFlagsStr: string = newString(512)
   var buffersrcArgs: string = newString(256)
   var result: cint
   var
-    filtSrc: ptr AVFilterContext 
-    filtOut: ptr AVFilterContext 
-    lastFilter: ptr AVFilterContext
+    filtSrc: AVFilterContext 
+    filtOut: AVFilterContext 
+    lastFilter: AVFilterContext
   var codecpar = vs.videoSt.codecpar
   var fr = avGuessFrameRate(vs.ic, vs.videoSt, nil)
-  var e: ptr AVDictionaryEntry 
+  var e: AVDictionaryEntry 
   var nbPixFmts: cint = 0
   for i in 0..<rendererInfo.numTextureFormats:
     for j in 0..<sdlTextureFormatMap.len - 1:
-      if rendererInfo.textureFormats[i] == sdlTextureFormatMap[j].textureFmt:
+      if rendererInfo.textureFormats[i].int == sdlTextureFormatMap[j].textureFmt:
         pixFmts[nbPixFmts] = sdlTextureFormatMap[j].format
         inc(nbPixFmts)
         break
   pixFmts[nbPixFmts] = AV_PIX_FMT_NONE.ord
-  while (e = avDictGet(swsDict, "", e, AV_DICT_IGNORE_SUFFIX)):
+  e = avDictGet(swsDict, "", e, AV_DICT_IGNORE_SUFFIX)
+  while e != nil:
     if e.key == "sws_flags":
       swsFlagsStr &= fmt"flags={e.value}:"
     else:
       swsFlagsStr &= fmt"{e.key}={e.value}:"
-  if swsFlagsStr != "":
-    swsFlagsStr[len(swsFlagsStr) - 1] = '\x00'
+  swsFlagsStr[len(swsFlagsStr) - 1] = '\x00'
   graph.scaleSwsOpts = swsFlagsStr
   buffersrcArgs &= fmt"video_size={frame.width}{frame.height}:pix_fmt={frame.format}:time_base={vs.videoSt.timeBase.num}/{vs.videoSt.timeBase.den}:pixel_aspect={codecpar.sampleAspectRatio.num}/{max(codecpar.sampleAspectRatio.den, 1)}"
   if fr.num != 0 and fr.den != 0:
@@ -4951,7 +5322,7 @@ proc configureVideoFilters*(graph: var AVFilterGraph; vs: VideoState;vfilters: c
   result = avfilterGraphCreateFilter(filtOut, avfilterGetByName("buffersink"),"ffplay_buffersink", nil, nil, graph)
   if result < 0:
     return
-  if (result = avOptSetIntList(filtOut, "pix_fmts", pixFmts, AV_PIX_FMT_NONE,av_Opt_Search_Children)) < 0:
+  if (result = avOptSetIntList(filtOut, "pix_fmts", pixFmts, AV_PIX_FMT_NONE,AV_OPT_SEARCH_CHILDREN)) < 0:
     return
   lastFilter = filtOut
   if autorotate != 0:
