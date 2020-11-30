@@ -42,7 +42,16 @@ const
   CODEC_HW_CONFIG_METHOD_INTERNAL* = 0x00000004
   CODEC_HW_CONFIG_METHOD_AD_HOC* = 0x00000008
   ERANGE = 34
-
+  AV_LOG_QUIET* = -8
+  AV_LOG_PANIC* = 0
+  AV_LOG_FATAL* = 8
+  AV_LOG_ERROR* = 16
+  AV_LOG_WARNING* = 24
+  AV_LOG_INFO* = 32
+  AV_LOG_VERBOSE* = 40
+  AV_LOG_DEBUG* = 48
+  AV_LOG_TRACE* = 56
+  AV_LOG_MAX_OFFSET* = (AV_LOG_TRACE - AV_LOG_QUIET)
 
 type
   AVDiscard* = enum 
@@ -4451,23 +4460,24 @@ proc decoderDecodeFrame*(d: var Decoder; frame: var AVFrame; sub:var AVSubtitle)
 
 proc avQ2d*(a: Rational[int]): auto = a.num / a.den
 
-proc avReduce*(dstNum: var cint; dstDen: var auto; num: var int64; den: var int64; max: int64): auto =
+
+proc avReduce*(dstNum: var int; dstDen: var auto; num: var int; den: var int; max: int): int =
   var
-    a0 = Rational[int](num:0, den:1)
-    a1 = Rational[int](num:1, den:0)
-  var sign = (num < 0) xor (den < 0)
-  var gcd: int64 = gcd(abs(num), abs(den))
+    a0 = initRational(0, 1)
+    a1 = initRational(1, 0)
+  var sign:int = int(num < 0) xor int(den < 0)
+  var gcd = gcd(abs(num), abs(den))
   if gcd != 0:
     num = abs(num) div gcd
     den = abs(den) div gcd
   if num <= max and den <= max:
-    a1 = Rational[int](num:num, den:den)
+    a1 = initRational(num, den)
     den = 0
   while den != 0:
-    var x: uint64 = num div den
-    var nextDen: int64 = num - den * x
-    var a2n: int64 = x * a1.num + a0.num
-    var a2d: int64 = x * a1.den + a0.den
+    var x = num div den
+    var nextDen = num - den * x
+    var a2n = x * a1.num + a0.num
+    var a2d = x * a1.den + a0.den
     if a2n > max or a2d > max:
       if a1.num != 0:
         x = (max - a0.num) div a1.num
@@ -4476,27 +4486,28 @@ proc avReduce*(dstNum: var cint; dstDen: var auto; num: var int64; den: var int6
       if den * (2 * x * a1.den + a0.den) > num * a1.den:
         break
     a0 = a1
-    a1  = Rational[int](num:a2n, den:a2d)
+    a1  = initRational(a2n, a2d)
     num = den
     den = nextDen
   dstNum = if sign != 0: -a1.num else: a1.num
   dstDen = a1.den
-  return den == 0
+  return int den == 0
+
+template reduce(r:var Rational[int], condition: untyped):untyped = 
+  avReduce(r.num, r.den, r.num, r.den, int.high)
 
 
 proc avGuessSampleAspectRatio*(format: AVFormatContext; stream: AVStream;frame: AVFrame): Rational[int] =
-  var undef = Rational[int](num:0, den:1)
+  var undef = initRational(0, 1)
   var streamSampleAspectRatio = if stream != nil: stream.sampleAspectRatio else: undef
   var codecSampleAspectRatio= if stream != nil and stream.codecpar != nil: stream.codecpar.sampleAspectRatio else: undef
   var frameSampleAspectRatio = if frame != nil: frame.sampleAspectRatio else: codecSampleAspectRatio
-  reduce[int](streamSampleAspectRatio)
-  reduce[int](frameSampleAspectRatio)
+  reduce(streamSampleAspectRatio)
+  reduce(frameSampleAspectRatio)
   if streamSampleAspectRatio.num != 0:
     return streamSampleAspectRatio
   else:
     return frameSampleAspectRatio
-
-
 
 
 proc getMasterSyncType*(vs: VideoState): cint =
@@ -4556,12 +4567,15 @@ proc getVideoFrame*(vs: VideoState; frame: var AVFrame): cint =
 #   avReduce(addr(b.num), addr(b.den), b.num * c.num, b.den * c.den, int.high)
 #   return b
 
-proc avMulQ*(b: Rational; c: Rational): Rational =
-  result = b*c
-  reduce(result)
+proc avMulQ*(b: var Rational; c: var Rational): Rational =
+  var mulNum = b.num * c.num
+  var mulDen = b.den * c.den
+  discard avReduce(b.num, b.den, mulNum, mulDen, int.high)
+  result = b
 
-proc avDivQ( b,c:Rational):Rational =
-    return av_mul_q(b, initRational(c.den, c.num))
+proc avDivQ( b,c: var Rational):Rational =
+  result = initRational(c.den, c.num)
+  result = avMulQ(b, result)
 
 
 proc avGuessFrameRate*(format: AVFormatContext; st: AVStream;frame: AVFrame): Rational[int] =
@@ -5545,7 +5559,6 @@ proc avExprParse*(exp: var AVExpr; ss: string; constNames: string;
 template FFDIFFSIGN(x,y):untyped = int(x>y) - int(x<y)
 
 const
-  AV_LOG_INFO = 32
   DBL_MAX* = 1.797693134862316e+308
   DBL_MIN* = 2.225073858507201e-308
 
@@ -5995,50 +6008,65 @@ proc avParseVideoSize*(widthPtr: ptr cint; heightPtr: ptr cint; str: string): ci
       break
     inc(i)
   if i == n:
-    width = parseInt(str, cast[pointer](addr(p)), 10)
-    if p[]:
-      inc(p)
-    height = parseInt(p, cast[pointer](addr(p)), 10)
-    if p[]:
-      return -(einval)
+    # width = strtol(str, (void*)&p, 10);
+    # if (*p)
+    #     p++;
+    # height = strtol(p, (void*)&p, 10);
+    width = cint parseInt(str)
+    # if p[]:
+    #   inc(p)
+    height = cint parseInt(p)
+    # if p[]:
+    #   return -(EINVAL)
   if width <= 0 or height <= 0:
-    return -(einval)
+    return -(EINVAL)
   widthPtr[] = width
   heightPtr[] = height
   return 0
 
-proc avParseRatio*(q: ptr Rational; str: cstring; max: cint; logOffset: cint;
-                  logCtx: pointer): cint =
+proc avD2q*(d: cdouble; max: int): Rational[int] =
+  var a: Rational[int]
+  if Nan == d:
+    return initRational(0,0)
+  if abs(d).int > int.high + 3:
+    return initRational(if d < 0: -1 else: 1, 0)
+  var exponent = exp(d)
+  exponent = max(exponent - 1, 0)
+  var den = 1 shl (61 - exponent.int)
+  var flNum = int floor(d * den.float + 0.5)
+  discard avReduce(a.num, a.den, flNum, den, max)
+  if (a.num == 0 or a.den == 0) and d != 0 and max > 0 and max < int.high:
+    discard avReduce(a.num, a.den, flNum, den, int.high)
+  return a
+
+
+proc avParseRatio*(q: var Rational; str: string; max: cint; logOffset: cint;logCtx: pointer): cint =
   var c: char
   var result: cint
   if scanf(str, "%d:%d%c", q.num, q.den, c):
     var d: cdouble
-    result = avExprParseAndEval(addr(d), str, nil, nil, nil, nil, nil, nil, nil, logOffset, logCtx)
+    result = avExprParseAndEval(d, str, "", nil, "", nil, "", nil, nil, logOffset, logCtx)
     if result < 0:
       return result
-    q[] = avD2q(d, max)
+    q = avD2q(d, max)
   else:
-    avReduce(addr(q.num), addr(q.den), q.num, q.den, max)
+    discard avReduce(q.num, q.den, q.num, q.den, int.high)
   return 0
 
 template avParseRatioQuiet*(rate, str, max: untyped): untyped =
-  avParseRatio(rate, str, max, av_Log_Max_Offset, nil)
+  avParseRatio(rate, str, max, AV_LOG_MAX_OFFSET, nil)
 
-proc avParseVideoRate*(rate: Rational; arg: string): cint =
-  var
-    i: cint
-  var n: cint = len(videoRateAbbrs)
-  i = 0
-  while i < n:
+proc avParseVideoRate*(rate: var Rational; arg: string): cint =
+  var n = len(videoRateAbbrs)
+  for i in 0..<n:
     if videoRateAbbrs[i].abbr == arg:
-      rate[] = videoRateAbbrs[i].rate
+      rate = videoRateAbbrs[i].rate
       return 0
-    inc(i)
   result = avParseRatioQuiet(rate, arg, 1001000)
   if result < 0:
     return result
   if rate.num <= 0 or rate.den <= 0:
-    return -(einval)
+    return -(EINVAL)
   return 0
 
 
@@ -6052,11 +6080,227 @@ proc setStringImageSize*(obj: pointer; o: ptr AVOption; val: string; dst: ptr ci
     echo("Unable to parse option value \"%s\" as image size", val)
   return result
 
-proc setStringVideoRate*(obj: pointer; o: ptr AVOption; val: string; dst: Rational[int]): cint =
+proc setStringVideoRate*(obj: pointer; o: ptr AVOption; val: string; dst: var Rational[int]): cint =
   var result = avParseVideoRate(dst, val)
   if result < 0:
     echo("Unable to parse option value \"%s\" as video rate\n", val)
   return result
+
+type
+  ColorEntry* = ref object
+    name*: cstring             ## /< a string representing the name of the color
+    rgbColor*: array[3, uint8] ## /< RGB values for the color
+
+
+var colorTable*: seq[ColorEntry] = @[
+    ColorEntry(name:"AliceBlue", rgbColor: [0x000000F0'u8, 0x000000F8, 0x000000FF]),
+    ColorEntry(name:"AntiqueWhite", rgbColor: [0x000000FA'u8, 0x000000EB, 0x000000D7]),
+    ColorEntry(name:"Aqua", rgbColor: [0x00000000'u8, 0x000000FF, 0x000000FF]),
+    ColorEntry(name:"Aquamarine", rgbColor: [0x0000007F'u8, 0x000000FF, 0x000000D4]),
+    ColorEntry(name:"Azure", rgbColor: [0x000000F0'u8, 0x000000FF, 0x000000FF]),
+    ColorEntry(name:"Beige", rgbColor: [0x000000F5'u8, 0x000000F5, 0x000000DC]),
+    ColorEntry(name:"Bisque", rgbColor: [0x000000FF'u8, 0x000000E4, 0x000000C4]),
+    ColorEntry(name:"Black", rgbColor: [0x00000000'u8, 0x00000000, 0x00000000]),
+    ColorEntry(name:"BlanchedAlmond", rgbColor: [0x000000FF'u8, 0x000000EB, 0x000000CD]),
+    ColorEntry(name:"Blue", rgbColor: [0x00000000'u8, 0x00000000, 0x000000FF]),
+    ColorEntry(name:"BlueViolet", rgbColor: [0x0000008A'u8, 0x0000002B, 0x000000E2]),
+    ColorEntry(name:"Brown", rgbColor: [0x000000A5'u8, 0x0000002A, 0x0000002A]),
+    ColorEntry(name:"BurlyWood", rgbColor: [0x000000DE'u8, 0x000000B8, 0x00000087]),
+    ColorEntry(name:"CadetBlue", rgbColor: [0x0000005F'u8, 0x0000009E, 0x000000A0]),
+    ColorEntry(name:"Chartreuse", rgbColor: [0x0000007F'u8, 0x000000FF, 0x00000000]),
+    ColorEntry(name:"Chocolate", rgbColor: [0x000000D2'u8, 0x00000069, 0x0000001E]),
+    ColorEntry(name:"Coral", rgbColor: [0x000000FF'u8, 0x0000007F, 0x00000050]),
+    ColorEntry(name:"CornflowerBlue", rgbColor: [0x00000064'u8, 0x00000095, 0x000000ED]),
+    ColorEntry(name:"Cornsilk", rgbColor: [0x000000FF'u8, 0x000000F8, 0x000000DC]),
+    ColorEntry(name:"Crimson", rgbColor: [0x000000DC'u8, 0x00000014, 0x0000003C]),
+    ColorEntry(name:"Cyan", rgbColor: [0x00000000'u8, 0x000000FF, 0x000000FF]),
+    ColorEntry(name:"DarkBlue", rgbColor: [0x00000000'u8, 0x00000000, 0x0000008B]),
+    ColorEntry(name:"DarkCyan", rgbColor: [0x00000000'u8, 0x0000008B, 0x0000008B]),
+    ColorEntry(name:"DarkGoldenRod", rgbColor: [0x000000B8'u8, 0x00000086, 0x0000000B]),
+    ColorEntry(name:"DarkGray", rgbColor: [0x000000A9'u8, 0x000000A9, 0x000000A9]),
+    ColorEntry(name:"DarkGreen", rgbColor: [0x00000000'u8, 0x00000064, 0x00000000]),
+    ColorEntry(name:"DarkKhaki", rgbColor: [0x000000BD'u8, 0x000000B7, 0x0000006B]),
+    ColorEntry(name:"DarkMagenta", rgbColor: [0x0000008B'u8, 0x00000000, 0x0000008B]),
+    ColorEntry(name:"DarkOliveGreen", rgbColor: [0x00000055'u8, 0x0000006B, 0x0000002F]),
+    ColorEntry(name:"Darkorange", rgbColor: [0x000000FF'u8, 0x0000008C, 0x00000000]),
+    ColorEntry(name:"DarkOrchid", rgbColor: [0x00000099'u8, 0x00000032, 0x000000CC]),
+    ColorEntry(name:"DarkRed", rgbColor: [0x0000008B'u8, 0x00000000, 0x00000000]),
+    ColorEntry(name:"DarkSalmon", rgbColor: [0x000000E9'u8, 0x00000096, 0x0000007A]),
+    ColorEntry(name:"DarkSeaGreen", rgbColor: [0x0000008F'u8, 0x000000BC, 0x0000008F]),
+    ColorEntry(name:"DarkSlateBlue", rgbColor: [0x00000048'u8, 0x0000003D, 0x0000008B]),
+    ColorEntry(name:"DarkSlateGray", rgbColor: [0x0000002F'u8, 0x0000004F, 0x0000004F]),
+    ColorEntry(name:"DarkTurquoise", rgbColor: [0x00000000'u8, 0x000000CE, 0x000000D1]),
+    ColorEntry(name:"DarkViolet", rgbColor: [0x00000094'u8, 0x00000000, 0x000000D3]),
+    ColorEntry(name:"DeepPink", rgbColor: [0x000000FF'u8, 0x00000014, 0x00000093]),
+    ColorEntry(name:"DeepSkyBlue", rgbColor: [0x00000000'u8, 0x000000BF, 0x000000FF]),
+    ColorEntry(name:"DimGray", rgbColor: [0x00000069'u8, 0x00000069, 0x00000069]),
+    ColorEntry(name:"DodgerBlue", rgbColor: [0x0000001E'u8, 0x00000090, 0x000000FF]),
+    ColorEntry(name:"FireBrick", rgbColor: [0x000000B2'u8, 0x00000022, 0x00000022]),
+    ColorEntry(name:"FloralWhite", rgbColor: [0x000000FF'u8, 0x000000FA, 0x000000F0]),
+    ColorEntry(name:"ForestGreen", rgbColor: [0x00000022'u8, 0x0000008B, 0x00000022]),
+    ColorEntry(name:"Fuchsia", rgbColor: [0x000000FF'u8, 0x00000000, 0x000000FF]),
+    ColorEntry(name:"Gainsboro", rgbColor: [0x000000DC'u8, 0x000000DC, 0x000000DC]),
+    ColorEntry(name:"GhostWhite", rgbColor: [0x000000F8'u8, 0x000000F8, 0x000000FF]),
+    ColorEntry(name:"Gold", rgbColor: [0x000000FF'u8, 0x000000D7, 0x00000000]),
+    ColorEntry(name:"GoldenRod", rgbColor: [0x000000DA'u8, 0x000000A5, 0x00000020]),
+    ColorEntry(name:"Gray", rgbColor: [0x00000080'u8, 0x00000080, 0x00000080]),
+    ColorEntry(name:"Green", rgbColor: [0x00000000'u8, 0x00000080, 0x00000000]),
+    ColorEntry(name:"GreenYellow", rgbColor: [0x000000AD'u8, 0x000000FF, 0x0000002F]),
+    ColorEntry(name:"HoneyDew", rgbColor: [0x000000F0'u8, 0x000000FF, 0x000000F0]),
+    ColorEntry(name:"HotPink", rgbColor: [0x000000FF'u8, 0x00000069, 0x000000B4]),
+    ColorEntry(name:"IndianRed", rgbColor: [0x000000CD'u8, 0x0000005C, 0x0000005C]),
+    ColorEntry(name:"Indigo", rgbColor: [0x0000004B'u8, 0x00000000, 0x00000082]),
+    ColorEntry(name:"Ivory", rgbColor: [0x000000FF'u8, 0x000000FF, 0x000000F0]),
+    ColorEntry(name:"Khaki", rgbColor: [0x000000F0'u8, 0x000000E6, 0x0000008C]),
+    ColorEntry(name:"Lavender", rgbColor: [0x000000E6'u8, 0x000000E6, 0x000000FA]),
+    ColorEntry(name:"LavenderBlush", rgbColor: [0x000000FF'u8, 0x000000F0, 0x000000F5]),
+    ColorEntry(name:"LawnGreen", rgbColor: [0x0000007C'u8, 0x000000FC, 0x00000000]),
+    ColorEntry(name:"LemonChiffon", rgbColor: [0x000000FF'u8, 0x000000FA, 0x000000CD]),
+    ColorEntry(name:"LightBlue", rgbColor: [0x000000AD'u8, 0x000000D8, 0x000000E6]),
+    ColorEntry(name:"LightCoral", rgbColor: [0x000000F0'u8, 0x00000080, 0x00000080]),
+    ColorEntry(name:"LightCyan", rgbColor: [0x000000E0'u8, 0x000000FF, 0x000000FF]),
+    ColorEntry(name:"LightGoldenRodYellow", rgbColor: [0x000000FA'u8, 0x000000FA, 0x000000D2]),
+    ColorEntry(name:"LightGreen", rgbColor: [0x00000090'u8, 0x000000EE, 0x00000090]),
+    ColorEntry(name:"LightGrey", rgbColor: [0x000000D3'u8, 0x000000D3, 0x000000D3]),
+    ColorEntry(name:"LightPink", rgbColor: [0x000000FF'u8, 0x000000B6, 0x000000C1]),
+    ColorEntry(name:"LightSalmon", rgbColor: [0x000000FF'u8, 0x000000A0, 0x0000007A]),
+    ColorEntry(name:"LightSeaGreen", rgbColor: [0x00000020'u8, 0x000000B2, 0x000000AA]),
+    ColorEntry(name:"LightSkyBlue", rgbColor: [0x00000087'u8, 0x000000CE, 0x000000FA]),
+    ColorEntry(name:"LightSlateGray", rgbColor: [0x00000077'u8, 0x00000088, 0x00000099]),
+    ColorEntry(name:"LightSteelBlue", rgbColor: [0x000000B0'u8, 0x000000C4, 0x000000DE]),
+    ColorEntry(name:"LightYellow", rgbColor: [0x000000FF'u8, 0x000000FF, 0x000000E0]),
+    ColorEntry(name:"Lime", rgbColor: [0x00000000'u8, 0x000000FF, 0x00000000]),
+    ColorEntry(name:"LimeGreen", rgbColor: [0x00000032'u8, 0x000000CD, 0x00000032]),
+    ColorEntry(name:"Linen", rgbColor: [0x000000FA'u8, 0x000000F0, 0x000000E6]),
+    ColorEntry(name:"Magenta", rgbColor: [0x000000FF'u8, 0x00000000, 0x000000FF]),
+    ColorEntry(name:"Maroon", rgbColor: [0x00000080'u8, 0x00000000, 0x00000000]),
+    ColorEntry(name:"MediumAquaMarine", rgbColor: [0x00000066'u8, 0x000000CD, 0x000000AA]),
+    ColorEntry(name:"MediumBlue", rgbColor: [0x00000000'u8, 0x00000000, 0x000000CD]),
+    ColorEntry(name:"MediumOrchid", rgbColor: [0x000000BA'u8, 0x00000055, 0x000000D3]),
+    ColorEntry(name:"MediumPurple", rgbColor: [0x00000093'u8, 0x00000070, 0x000000D8]),
+    ColorEntry(name:"MediumSeaGreen", rgbColor: [0x0000003C'u8, 0x000000B3, 0x00000071]),
+    ColorEntry(name:"MediumSlateBlue", rgbColor: [0x0000007B'u8, 0x00000068, 0x000000EE]),
+    ColorEntry(name:"MediumSpringGreen", rgbColor: [0x00000000'u8, 0x000000FA, 0x0000009A]),
+    ColorEntry(name:"MediumTurquoise", rgbColor: [0x00000048'u8, 0x000000D1, 0x000000CC]),
+    ColorEntry(name:"MediumVioletRed", rgbColor: [0x000000C7'u8, 0x00000015, 0x00000085]),
+    ColorEntry(name:"MidnightBlue", rgbColor: [0x00000019'u8, 0x00000019, 0x00000070]),
+    ColorEntry(name:"MintCream", rgbColor: [0x000000F5'u8, 0x000000FF, 0x000000FA]),
+    ColorEntry(name:"MistyRose", rgbColor: [0x000000FF'u8, 0x000000E4, 0x000000E1]),
+    ColorEntry(name:"Moccasin", rgbColor: [0x000000FF'u8, 0x000000E4, 0x000000B5]),
+    ColorEntry(name:"NavajoWhite", rgbColor: [0x000000FF'u8, 0x000000DE, 0x000000AD]),
+    ColorEntry(name:"Navy", rgbColor: [0x00000000'u8, 0x00000000, 0x00000080]),
+    ColorEntry(name:"OldLace", rgbColor: [0x000000FD'u8, 0x000000F5, 0x000000E6]),
+    ColorEntry(name:"Olive", rgbColor: [0x00000080'u8, 0x00000080, 0x00000000]),
+    ColorEntry(name:"OliveDrab", rgbColor: [0x0000006B'u8, 0x0000008E, 0x00000023]),
+    ColorEntry(name:"Orange", rgbColor: [0x000000FF'u8, 0x000000A5, 0x00000000]),
+    ColorEntry(name:"OrangeRed", rgbColor: [0x000000FF'u8, 0x00000045, 0x00000000]),
+    ColorEntry(name:"Orchid", rgbColor: [0x000000DA'u8, 0x00000070, 0x000000D6]),
+    ColorEntry(name:"PaleGoldenRod", rgbColor: [0x000000EE'u8, 0x000000E8, 0x000000AA]),
+    ColorEntry(name:"PaleGreen", rgbColor: [0x00000098'u8, 0x000000FB, 0x00000098]),
+    ColorEntry(name:"PaleTurquoise", rgbColor: [0x000000AF'u8, 0x000000EE, 0x000000EE]),
+    ColorEntry(name:"PaleVioletRed", rgbColor: [0x000000D8'u8, 0x00000070, 0x00000093]),
+    ColorEntry(name:"PapayaWhip", rgbColor: [0x000000FF'u8, 0x000000EF, 0x000000D5]),
+    ColorEntry(name:"PeachPuff", rgbColor: [0x000000FF'u8, 0x000000DA, 0x000000B9]),
+    ColorEntry(name:"Peru", rgbColor: [0x000000CD'u8, 0x00000085, 0x0000003F]),
+    ColorEntry(name:"Pink", rgbColor: [0x000000FF'u8, 0x000000C0, 0x000000CB]),
+    ColorEntry(name:"Plum", rgbColor: [0x000000DD'u8, 0x000000A0, 0x000000DD]),
+    ColorEntry(name:"PowderBlue", rgbColor: [0x000000B0'u8, 0x000000E0, 0x000000E6]),
+    ColorEntry(name:"Purple", rgbColor: [0x00000080'u8, 0x00000000, 0x00000080]),
+    ColorEntry(name:"Red", rgbColor: [0x000000FF'u8, 0x00000000, 0x00000000]),
+    ColorEntry(name:"RosyBrown", rgbColor: [0x000000BC'u8, 0x0000008F, 0x0000008F]),
+    ColorEntry(name:"RoyalBlue", rgbColor: [0x00000041'u8, 0x00000069, 0x000000E1]),
+    ColorEntry(name:"SaddleBrown", rgbColor: [0x0000008B'u8, 0x00000045, 0x00000013]),
+    ColorEntry(name:"Salmon", rgbColor: [0x000000FA'u8, 0x00000080, 0x00000072]),
+    ColorEntry(name:"SandyBrown", rgbColor: [0x000000F4'u8, 0x000000A4, 0x00000060]),
+    ColorEntry(name:"SeaGreen", rgbColor: [0x0000002E'u8, 0x0000008B, 0x00000057]),
+    ColorEntry(name:"SeaShell", rgbColor: [0x000000FF'u8, 0x000000F5, 0x000000EE]),
+    ColorEntry(name:"Sienna", rgbColor: [0x000000A0'u8, 0x00000052, 0x0000002D]),
+    ColorEntry(name:"Silver", rgbColor: [0x000000C0'u8, 0x000000C0, 0x000000C0]),
+    ColorEntry(name:"SkyBlue", rgbColor: [0x00000087'u8, 0x000000CE, 0x000000EB]),
+    ColorEntry(name:"SlateBlue", rgbColor: [0x0000006A'u8, 0x0000005A, 0x000000CD]),
+    ColorEntry(name:"SlateGray", rgbColor: [0x00000070'u8, 0x00000080, 0x00000090]),
+    ColorEntry(name:"Snow", rgbColor: [0x000000FF'u8, 0x000000FA, 0x000000FA]),
+    ColorEntry(name:"SpringGreen", rgbColor: [0x00000000'u8, 0x000000FF, 0x0000007F]),
+    ColorEntry(name:"SteelBlue", rgbColor: [0x00000046'u8, 0x00000082, 0x000000B4]),
+    ColorEntry(name:"Tan", rgbColor: [0x000000D2'u8, 0x000000B4, 0x0000008C]),
+    ColorEntry(name:"Teal", rgbColor: [0x00000000'u8, 0x00000080, 0x00000080]),
+    ColorEntry(name:"Thistle", rgbColor: [0x000000D8'u8, 0x000000BF, 0x000000D8]),
+    ColorEntry(name:"Tomato", rgbColor: [0x000000FF'u8, 0x00000063, 0x00000047]),
+    ColorEntry(name:"Turquoise", rgbColor: [0x00000040'u8, 0x000000E0, 0x000000D0]),
+    ColorEntry(name:"Violet", rgbColor: [0x000000EE'u8, 0x00000082, 0x000000EE]),
+    ColorEntry(name:"Wheat", rgbColor: [0x000000F5'u8, 0x000000DE, 0x000000B3]),
+    ColorEntry(name:"White", rgbColor: [0x000000FF'u8, 0x000000FF, 0x000000FF]),
+    ColorEntry(name:"WhiteSmoke", rgbColor: [0x000000F5'u8, 0x000000F5, 0x000000F5]),
+    ColorEntry(name:"Yellow", rgbColor: [0x000000FF'u8, 0x000000FF, 0x00000000]),
+    ColorEntry(name:"YellowGreen", rgbColor: [0x0000009A'u8, 0x000000CD, 0x00000032])
+]
+
+const ALPHA_SEP = '@'
+
+proc avParseColor*(rgbaColor: var array[4,uint8]; colorString: string; slen: var cint;
+                  logCtx: pointer): cint =
+  var
+    tail: string
+    colorString2 = newString(128)
+  var entry: ColorEntry
+  var
+    len: cint
+    hexOffset: cint = 0
+  if colorString[0] == '#':
+    hexOffset = 1
+  elif colorString.startsWith "0x":
+    hexOffset = 2
+  if slen < 0:
+    slen = colorString.len
+  copyMem(colorString2[0].addr, colorString + hexOffset, min(slen - hexOffset + 1, len(colorString2)))
+  tail = strchr(colorString2, ALPHA_SEP)
+  if tail != nil:
+    tail[] = 0
+    tail.inc
+  len = strlen(colorString2)
+  rgbaColor[3] = 255
+  if colorString2 == "random" or colorString2 == "bikeshed":
+    var rgba: cint = randomize()
+    rgbaColor[0] = rgba shr 24
+    rgbaColor[1] = rgba shr 16
+    rgbaColor[2] = rgba shr 8
+    rgbaColor[3] = rgba
+  elif hexOffset or strspn(colorString2, "0123456789ABCDEFabcdef") == len:
+    var tail: string
+    var rgba: cuint = strtoul(colorString2, addr(tail), 16)
+    if tail[] or (len != 6 and len != 8):
+      echo("Invalid 0xRRGGBB[AA] color string: \'%s\'\n", colorString2)
+      return -(EINVAL)
+    if len == 8:
+      rgbaColor[3] = rgba
+      rgba = rgba shr 8
+    rgbaColor[0] = rgba shr 16
+    rgbaColor[1] = rgba shr 8
+    rgbaColor[2] = rgba
+  else:
+    entry = binarysearch(colorString2, colorTable, len(colorTable), sizeof((colorEntry)), colorTableCompare)
+    if not entry:
+      echo( "Cannot find color \'%s\'\n", colorString2)
+      return -(EINVAL)
+    copyMem(rgbaColor, entry.rgbColor, 3)
+  if tail:
+    var alpha: cdouble
+    var alphaString: string = tail
+    if alphaString.startsWith "0x":
+      alpha = fromHex(alphaString)
+    else:
+      var normAlpha = strtod(alphaString, addr(tail))
+      if normAlpha < 0.0 or normAlpha > 1.0:
+        alpha = 256
+      else:
+        alpha = 255 * normAlpha
+    if tail == alphaString or tail[] or alpha > 255 or alpha < 0:
+      echo("Invalid alpha value specifier \'%s\' in \'%s\'\n", alphaString,
+            colorString)
+      return -(EINVAL)
+    rgbaColor[3] = alpha
+  return 0
+
 
 proc setStringColor*(obj: pointer; o: ptr AVOption; val: string; dst: ptr uint8): cint =
   if val == "":
