@@ -14,15 +14,20 @@ import times
 import cpuinfo
 import strscans
 import sequtils
+import random
+import strformat
+import sdl2
 
 template `+`*[T](p: ptr T, off: int): ptr T =
   cast[ptr type(p[])](cast[ByteAddress](p) +% off * sizeof(p[]))
 
 template `+=`*[T](p: ptr T, off: int) = p = p + off
 
-template `+=`*(s: var string, off: int) = 
+template `+=`*(s: string, off: int) = 
   s = s[off..^1]
 
+template `+`*(s: string, off: int):untyped = 
+  cast[ptr char](s.string) + off
 
 template inc*[T](p: ptr T, off: int = 1) = p = p + off
 
@@ -77,9 +82,266 @@ type
     AVCOL_PRI_BT2020 = 9, AVCOL_PRI_SMPTE428 = 10, AVCOL_PRI_SMPTE431 = 11,
     AVCOL_PRI_SMPTE432 = 12, AVCOL_PRI_EBU3213 = 22, AVCOL_PRI_NB
 
+  AVPixelFormat* = enum
+    AV_PIX_FMT_NONE = -1, AV_PIX_FMT_YUV420P, ## /< planar YUV 4:2:0, 12bpp, (1 Cr & Cb sample per 2x2 Y samples)
+    AV_PIX_FMT_YUYV422,       ## /< packed YUV 4:2:2, 16bpp, Y0 Cb Y1 Cr
+    AV_PIX_FMT_RGB24,         ## /< packed RGB 8:8:8, 24bpp, RGBRGB...
+    AV_PIX_FMT_BGR24,         ## /< packed RGB 8:8:8, 24bpp, BGRBGR...
+    AV_PIX_FMT_YUV422P,       ## /< planar YUV 4:2:2, 16bpp, (1 Cr & Cb sample per 2x1 Y samples)
+    AV_PIX_FMT_YUV444P,       ## /< planar YUV 4:4:4, 24bpp, (1 Cr & Cb sample per 1x1 Y samples)
+    AV_PIX_FMT_YUV410P,       ## /< planar YUV 4:1:0,  9bpp, (1 Cr & Cb sample per 4x4 Y samples)
+    AV_PIX_FMT_YUV411P,       ## /< planar YUV 4:1:1, 12bpp, (1 Cr & Cb sample per 4x1 Y samples)
+    AV_PIX_FMT_GRAY8,         ## /<        Y        ,  8bpp
+    AV_PIX_FMT_MONOWHITE,     ## /<        Y        ,  1bpp, 0 is white, 1 is black, in each byte pixels are ordered from the msb to the lsb
+    AV_PIX_FMT_MONOBLACK,     ## /<        Y        ,  1bpp, 0 is black, 1 is white, in each byte pixels are ordered from the msb to the lsb
+    AV_PIX_FMT_PAL8,          ## /< 8 bits with AV_PIX_FMT_RGB32 palette
+    AV_PIX_FMT_YUVJ420P,      ## /< planar YUV 4:2:0, 12bpp, full scale (JPEG), deprecated in favor of AV_PIX_FMT_YUV420P and setting color_range
+    AV_PIX_FMT_YUVJ422P,      ## /< planar YUV 4:2:2, 16bpp, full scale (JPEG), deprecated in favor of AV_PIX_FMT_YUV422P and setting color_range
+    AV_PIX_FMT_YUVJ444P,      ## /< planar YUV 4:4:4, 24bpp, full scale (JPEG), deprecated in favor of AV_PIX_FMT_YUV444P and setting color_range
+    AV_PIX_FMT_UYVY422,       ## /< packed YUV 4:2:2, 16bpp, Cb Y0 Cr Y1
+    AV_PIX_FMT_UYYVYY411,     ## /< packed YUV 4:1:1, 12bpp, Cb Y0 Y1 Cr Y2 Y3
+    AV_PIX_FMT_BGR8,          ## /< packed RGB 3:3:2,  8bpp, (msb)2B 3G 3R(lsb)
+    AV_PIX_FMT_BGR4,          ## /< packed RGB 1:2:1 bitstream,  4bpp, (msb)1B 2G 1R(lsb), a byte contains two pixels, the first pixel in the byte is the one composed by the 4 msb bits
+    AV_PIX_FMT_BGR4_BYTE,     ## /< packed RGB 1:2:1,  8bpp, (msb)1B 2G 1R(lsb)
+    AV_PIX_FMT_RGB8,          ## /< packed RGB 3:3:2,  8bpp, (msb)2R 3G 3B(lsb)
+    AV_PIX_FMT_RGB4,          ## /< packed RGB 1:2:1 bitstream,  4bpp, (msb)1R 2G 1B(lsb), a byte contains two pixels, the first pixel in the byte is the one composed by the 4 msb bits
+    AV_PIX_FMT_RGB4_BYTE,     ## /< packed RGB 1:2:1,  8bpp, (msb)1R 2G 1B(lsb)
+    AV_PIX_FMT_NV12,          ## /< planar YUV 4:2:0, 12bpp, 1 plane for Y and 1 plane for the UV components, which are interleaved (first byte U and the following byte V)
+    AV_PIX_FMT_NV21,          ## /< as above, but U and V bytes are swapped
+    AV_PIX_FMT_ARGB,          ## /< packed ARGB 8:8:8:8, 32bpp, ARGBARGB...
+    AV_PIX_FMT_RGBA,          ## /< packed RGBA 8:8:8:8, 32bpp, RGBARGBA...
+    AV_PIX_FMT_ABGR,          ## /< packed ABGR 8:8:8:8, 32bpp, ABGRABGR...
+    AV_PIX_FMT_BGRA,          ## /< packed BGRA 8:8:8:8, 32bpp, BGRABGRA...
+    AV_PIX_FMT_GRAY16BE,      ## /<        Y        , 16bpp, big-endian
+    AV_PIX_FMT_GRAY16LE,      ## /<        Y        , 16bpp, little-endian
+    AV_PIX_FMT_YUV440P,       ## /< planar YUV 4:4:0 (1 Cr & Cb sample per 1x2 Y samples)
+    AV_PIX_FMT_YUVJ440P,      ## /< planar YUV 4:4:0 full scale (JPEG), deprecated in favor of AV_PIX_FMT_YUV440P and setting color_range
+    AV_PIX_FMT_YUVA420P,      ## /< planar YUV 4:2:0, 20bpp, (1 Cr & Cb sample per 2x2 Y & A samples)
+    AV_PIX_FMT_RGB48BE,       ## /< packed RGB 16:16:16, 48bpp, 16R, 16G, 16B, the 2-byte value for each R/G/B component is stored as big-endian
+    AV_PIX_FMT_RGB48LE,       ## /< packed RGB 16:16:16, 48bpp, 16R, 16G, 16B, the 2-byte value for each R/G/B component is stored as little-endian
+    AV_PIX_FMT_RGB565BE,      ## /< packed RGB 5:6:5, 16bpp, (msb)   5R 6G 5B(lsb), big-endian
+    AV_PIX_FMT_RGB565LE,      ## /< packed RGB 5:6:5, 16bpp, (msb)   5R 6G 5B(lsb), little-endian
+    AV_PIX_FMT_RGB555BE,      ## /< packed RGB 5:5:5, 16bpp, (msb)1X 5R 5G 5B(lsb), big-endian   , X=unused/undefined
+    AV_PIX_FMT_RGB555LE,      ## /< packed RGB 5:5:5, 16bpp, (msb)1X 5R 5G 5B(lsb), little-endian, X=unused/undefined
+    AV_PIX_FMT_BGR565BE,      ## /< packed BGR 5:6:5, 16bpp, (msb)   5B 6G 5R(lsb), big-endian
+    AV_PIX_FMT_BGR565LE,      ## /< packed BGR 5:6:5, 16bpp, (msb)   5B 6G 5R(lsb), little-endian
+    AV_PIX_FMT_BGR555BE,      ## /< packed BGR 5:5:5, 16bpp, (msb)1X 5B 5G 5R(lsb), big-endian   , X=unused/undefined
+    AV_PIX_FMT_BGR555LE, ## /< packed BGR 5:5:5, 16bpp, (msb)1X 5B 5G 5R(lsb), little-endian, X=unused/undefined
+                        ## *
+                        ##   Hardware acceleration through VA-API, data[3] contains a
+                        ##   VASurfaceID.
+                        ##
+    AV_PIX_FMT_VAAPI, AV_PIX_FMT_YUV420P16LE, ## /< planar YUV 4:2:0, 24bpp, (1 Cr & Cb sample per 2x2 Y samples), little-endian
+    AV_PIX_FMT_YUV420P16BE,   ## /< planar YUV 4:2:0, 24bpp, (1 Cr & Cb sample per 2x2 Y samples), big-endian
+    AV_PIX_FMT_YUV422P16LE,   ## /< planar YUV 4:2:2, 32bpp, (1 Cr & Cb sample per 2x1 Y samples), little-endian
+    AV_PIX_FMT_YUV422P16BE,   ## /< planar YUV 4:2:2, 32bpp, (1 Cr & Cb sample per 2x1 Y samples), big-endian
+    AV_PIX_FMT_YUV444P16LE,   ## /< planar YUV 4:4:4, 48bpp, (1 Cr & Cb sample per 1x1 Y samples), little-endian
+    AV_PIX_FMT_YUV444P16BE,   ## /< planar YUV 4:4:4, 48bpp, (1 Cr & Cb sample per 1x1 Y samples), big-endian
+    AV_PIX_FMT_DXVA2_VLD,     ## /< HW decoding through DXVA2, Picture.data[3] contains a LPDIRECT3DSURFACE9 pointer
+    AV_PIX_FMT_RGB444LE,      ## /< packed RGB 4:4:4, 16bpp, (msb)4X 4R 4G 4B(lsb), little-endian, X=unused/undefined
+    AV_PIX_FMT_RGB444BE,      ## /< packed RGB 4:4:4, 16bpp, (msb)4X 4R 4G 4B(lsb), big-endian,    X=unused/undefined
+    AV_PIX_FMT_BGR444LE,      ## /< packed BGR 4:4:4, 16bpp, (msb)4X 4B 4G 4R(lsb), little-endian, X=unused/undefined
+    AV_PIX_FMT_BGR444BE,      ## /< packed BGR 4:4:4, 16bpp, (msb)4X 4B 4G 4R(lsb), big-endian,    X=unused/undefined
+    AV_PIX_FMT_YA8,           ## /< 8 bits gray, 8 bits alpha
+    AV_PIX_FMT_BGR48BE,       ## /< packed RGB 16:16:16, 48bpp, 16B, 16G, 16R, the 2-byte value for each R/G/B component is stored as big-endian
+    AV_PIX_FMT_BGR48LE, ## /< packed RGB 16:16:16, 48bpp, 16B, 16G, 16R, the 2-byte value for each R/G/B component is stored as little-endian
+                       ## *
+                       ##  The following 12 formats have the disadvantage of needing 1 format for each bit depth.
+                       ##  Notice that each 9/10 bits sample is stored in 16 bits with extra padding.
+                       ##  If you want to support multiple bit depths, then using AV_PIX_FMT_YUV420P16* with the bpp stored separately is better.
+                       ##
+    AV_PIX_FMT_YUV420P9BE,    ## /< planar YUV 4:2:0, 13.5bpp, (1 Cr & Cb sample per 2x2 Y samples), big-endian
+    AV_PIX_FMT_YUV420P9LE,    ## /< planar YUV 4:2:0, 13.5bpp, (1 Cr & Cb sample per 2x2 Y samples), little-endian
+    AV_PIX_FMT_YUV420P10BE,   ## /< planar YUV 4:2:0, 15bpp, (1 Cr & Cb sample per 2x2 Y samples), big-endian
+    AV_PIX_FMT_YUV420P10LE,   ## /< planar YUV 4:2:0, 15bpp, (1 Cr & Cb sample per 2x2 Y samples), little-endian
+    AV_PIX_FMT_YUV422P10BE,   ## /< planar YUV 4:2:2, 20bpp, (1 Cr & Cb sample per 2x1 Y samples), big-endian
+    AV_PIX_FMT_YUV422P10LE,   ## /< planar YUV 4:2:2, 20bpp, (1 Cr & Cb sample per 2x1 Y samples), little-endian
+    AV_PIX_FMT_YUV444P9BE,    ## /< planar YUV 4:4:4, 27bpp, (1 Cr & Cb sample per 1x1 Y samples), big-endian
+    AV_PIX_FMT_YUV444P9LE,    ## /< planar YUV 4:4:4, 27bpp, (1 Cr & Cb sample per 1x1 Y samples), little-endian
+    AV_PIX_FMT_YUV444P10BE,   ## /< planar YUV 4:4:4, 30bpp, (1 Cr & Cb sample per 1x1 Y samples), big-endian
+    AV_PIX_FMT_YUV444P10LE,   ## /< planar YUV 4:4:4, 30bpp, (1 Cr & Cb sample per 1x1 Y samples), little-endian
+    AV_PIX_FMT_YUV422P9BE,    ## /< planar YUV 4:2:2, 18bpp, (1 Cr & Cb sample per 2x1 Y samples), big-endian
+    AV_PIX_FMT_YUV422P9LE,    ## /< planar YUV 4:2:2, 18bpp, (1 Cr & Cb sample per 2x1 Y samples), little-endian
+    AV_PIX_FMT_GBRP,          ## /< planar GBR 4:4:4 24bpp
+    AV_PIX_FMT_GBRP9BE,       ## /< planar GBR 4:4:4 27bpp, big-endian
+    AV_PIX_FMT_GBRP9LE,       ## /< planar GBR 4:4:4 27bpp, little-endian
+    AV_PIX_FMT_GBRP10BE,      ## /< planar GBR 4:4:4 30bpp, big-endian
+    AV_PIX_FMT_GBRP10LE,      ## /< planar GBR 4:4:4 30bpp, little-endian
+    AV_PIX_FMT_GBRP16BE,      ## /< planar GBR 4:4:4 48bpp, big-endian
+    AV_PIX_FMT_GBRP16LE,      ## /< planar GBR 4:4:4 48bpp, little-endian
+    AV_PIX_FMT_YUVA422P,      ## /< planar YUV 4:2:2 24bpp, (1 Cr & Cb sample per 2x1 Y & A samples)
+    AV_PIX_FMT_YUVA444P,      ## /< planar YUV 4:4:4 32bpp, (1 Cr & Cb sample per 1x1 Y & A samples)
+    AV_PIX_FMT_YUVA420P9BE,   ## /< planar YUV 4:2:0 22.5bpp, (1 Cr & Cb sample per 2x2 Y & A samples), big-endian
+    AV_PIX_FMT_YUVA420P9LE,   ## /< planar YUV 4:2:0 22.5bpp, (1 Cr & Cb sample per 2x2 Y & A samples), little-endian
+    AV_PIX_FMT_YUVA422P9BE,   ## /< planar YUV 4:2:2 27bpp, (1 Cr & Cb sample per 2x1 Y & A samples), big-endian
+    AV_PIX_FMT_YUVA422P9LE,   ## /< planar YUV 4:2:2 27bpp, (1 Cr & Cb sample per 2x1 Y & A samples), little-endian
+    AV_PIX_FMT_YUVA444P9BE,   ## /< planar YUV 4:4:4 36bpp, (1 Cr & Cb sample per 1x1 Y & A samples), big-endian
+    AV_PIX_FMT_YUVA444P9LE,   ## /< planar YUV 4:4:4 36bpp, (1 Cr & Cb sample per 1x1 Y & A samples), little-endian
+    AV_PIX_FMT_YUVA420P10BE,  ## /< planar YUV 4:2:0 25bpp, (1 Cr & Cb sample per 2x2 Y & A samples, big-endian)
+    AV_PIX_FMT_YUVA420P10LE,  ## /< planar YUV 4:2:0 25bpp, (1 Cr & Cb sample per 2x2 Y & A samples, little-endian)
+    AV_PIX_FMT_YUVA422P10BE,  ## /< planar YUV 4:2:2 30bpp, (1 Cr & Cb sample per 2x1 Y & A samples, big-endian)
+    AV_PIX_FMT_YUVA422P10LE,  ## /< planar YUV 4:2:2 30bpp, (1 Cr & Cb sample per 2x1 Y & A samples, little-endian)
+    AV_PIX_FMT_YUVA444P10BE,  ## /< planar YUV 4:4:4 40bpp, (1 Cr & Cb sample per 1x1 Y & A samples, big-endian)
+    AV_PIX_FMT_YUVA444P10LE,  ## /< planar YUV 4:4:4 40bpp, (1 Cr & Cb sample per 1x1 Y & A samples, little-endian)
+    AV_PIX_FMT_YUVA420P16BE,  ## /< planar YUV 4:2:0 40bpp, (1 Cr & Cb sample per 2x2 Y & A samples, big-endian)
+    AV_PIX_FMT_YUVA420P16LE,  ## /< planar YUV 4:2:0 40bpp, (1 Cr & Cb sample per 2x2 Y & A samples, little-endian)
+    AV_PIX_FMT_YUVA422P16BE,  ## /< planar YUV 4:2:2 48bpp, (1 Cr & Cb sample per 2x1 Y & A samples, big-endian)
+    AV_PIX_FMT_YUVA422P16LE,  ## /< planar YUV 4:2:2 48bpp, (1 Cr & Cb sample per 2x1 Y & A samples, little-endian)
+    AV_PIX_FMT_YUVA444P16BE,  ## /< planar YUV 4:4:4 64bpp, (1 Cr & Cb sample per 1x1 Y & A samples, big-endian)
+    AV_PIX_FMT_YUVA444P16LE,  ## /< planar YUV 4:4:4 64bpp, (1 Cr & Cb sample per 1x1 Y & A samples, little-endian)
+    AV_PIX_FMT_VDPAU,         ## /< HW acceleration through VDPAU, Picture.data[3] contains a VdpVideoSurface
+    AV_PIX_FMT_XYZ12LE,       ## /< packed XYZ 4:4:4, 36 bpp, (msb) 12X, 12Y, 12Z (lsb), the 2-byte value for each X/Y/Z is stored as little-endian, the 4 lower bits are set to 0
+    AV_PIX_FMT_XYZ12BE,       ## /< packed XYZ 4:4:4, 36 bpp, (msb) 12X, 12Y, 12Z (lsb), the 2-byte value for each X/Y/Z is stored as big-endian, the 4 lower bits are set to 0
+    AV_PIX_FMT_NV16,          ## /< interleaved chroma YUV 4:2:2, 16bpp, (1 Cr & Cb sample per 2x1 Y samples)
+    AV_PIX_FMT_NV20LE,        ## /< interleaved chroma YUV 4:2:2, 20bpp, (1 Cr & Cb sample per 2x1 Y samples), little-endian
+    AV_PIX_FMT_NV20BE,        ## /< interleaved chroma YUV 4:2:2, 20bpp, (1 Cr & Cb sample per 2x1 Y samples), big-endian
+    AV_PIX_FMT_RGBA64BE,      ## /< packed RGBA 16:16:16:16, 64bpp, 16R, 16G, 16B, 16A, the 2-byte value for each R/G/B/A component is stored as big-endian
+    AV_PIX_FMT_RGBA64LE,      ## /< packed RGBA 16:16:16:16, 64bpp, 16R, 16G, 16B, 16A, the 2-byte value for each R/G/B/A component is stored as little-endian
+    AV_PIX_FMT_BGRA64BE,      ## /< packed RGBA 16:16:16:16, 64bpp, 16B, 16G, 16R, 16A, the 2-byte value for each R/G/B/A component is stored as big-endian
+    AV_PIX_FMT_BGRA64LE,      ## /< packed RGBA 16:16:16:16, 64bpp, 16B, 16G, 16R, 16A, the 2-byte value for each R/G/B/A component is stored as little-endian
+    AV_PIX_FMT_YVYU422,       ## /< packed YUV 4:2:2, 16bpp, Y0 Cr Y1 Cb
+    AV_PIX_FMT_YA16BE,        ## /< 16 bits gray, 16 bits alpha (big-endian)
+    AV_PIX_FMT_YA16LE,        ## /< 16 bits gray, 16 bits alpha (little-endian)
+    AV_PIX_FMT_GBRAP,         ## /< planar GBRA 4:4:4:4 32bpp
+    AV_PIX_FMT_GBRAP16BE,     ## /< planar GBRA 4:4:4:4 64bpp, big-endian
+    AV_PIX_FMT_GBRAP16LE, ## /< planar GBRA 4:4:4:4 64bpp, little-endian
+                         ## *
+                         ##   HW acceleration through QSV, data[3] contains a pointer to the
+                         ##   mfxFrameSurface1 structure.
+                         ##
+    AV_PIX_FMT_QSV, ## *
+                   ##  HW acceleration though MMAL, data[3] contains a pointer to the
+                   ##  MMAL_BUFFER_HEADER_T structure.
+                   ##
+    AV_PIX_FMT_MMAL, AV_PIX_FMT_D3D11VA_VLD, ## /< HW decoding through Direct3D11 via old API, Picture.data[3] contains a ID3D11VideoDecoderOutputView pointer
+                                           ## *
+                                           ##  HW acceleration through CUDA. data[i] contain CUdeviceptr pointers
+                                           ##  exactly as for system memory frames.
+                                           ##
+    AV_PIX_FMT_CUDA, AV_PIX_FMT_0RGB, ## /< packed RGB 8:8:8, 32bpp, XRGBXRGB...   X=unused/undefined
+    AV_PIX_FMT_RGB0,          ## /< packed RGB 8:8:8, 32bpp, RGBXRGBX...   X=unused/undefined
+    AV_PIX_FMT_0BGR,          ## /< packed BGR 8:8:8, 32bpp, XBGRXBGR...   X=unused/undefined
+    AV_PIX_FMT_BGR0,          ## /< packed BGR 8:8:8, 32bpp, BGRXBGRX...   X=unused/undefined
+    AV_PIX_FMT_YUV420P12BE,   ## /< planar YUV 4:2:0,18bpp, (1 Cr & Cb sample per 2x2 Y samples), big-endian
+    AV_PIX_FMT_YUV420P12LE,   ## /< planar YUV 4:2:0,18bpp, (1 Cr & Cb sample per 2x2 Y samples), little-endian
+    AV_PIX_FMT_YUV420P14BE,   ## /< planar YUV 4:2:0,21bpp, (1 Cr & Cb sample per 2x2 Y samples), big-endian
+    AV_PIX_FMT_YUV420P14LE,   ## /< planar YUV 4:2:0,21bpp, (1 Cr & Cb sample per 2x2 Y samples), little-endian
+    AV_PIX_FMT_YUV422P12BE,   ## /< planar YUV 4:2:2,24bpp, (1 Cr & Cb sample per 2x1 Y samples), big-endian
+    AV_PIX_FMT_YUV422P12LE,   ## /< planar YUV 4:2:2,24bpp, (1 Cr & Cb sample per 2x1 Y samples), little-endian
+    AV_PIX_FMT_YUV422P14BE,   ## /< planar YUV 4:2:2,28bpp, (1 Cr & Cb sample per 2x1 Y samples), big-endian
+    AV_PIX_FMT_YUV422P14LE,   ## /< planar YUV 4:2:2,28bpp, (1 Cr & Cb sample per 2x1 Y samples), little-endian
+    AV_PIX_FMT_YUV444P12BE,   ## /< planar YUV 4:4:4,36bpp, (1 Cr & Cb sample per 1x1 Y samples), big-endian
+    AV_PIX_FMT_YUV444P12LE,   ## /< planar YUV 4:4:4,36bpp, (1 Cr & Cb sample per 1x1 Y samples), little-endian
+    AV_PIX_FMT_YUV444P14BE,   ## /< planar YUV 4:4:4,42bpp, (1 Cr & Cb sample per 1x1 Y samples), big-endian
+    AV_PIX_FMT_YUV444P14LE,   ## /< planar YUV 4:4:4,42bpp, (1 Cr & Cb sample per 1x1 Y samples), little-endian
+    AV_PIX_FMT_GBRP12BE,      ## /< planar GBR 4:4:4 36bpp, big-endian
+    AV_PIX_FMT_GBRP12LE,      ## /< planar GBR 4:4:4 36bpp, little-endian
+    AV_PIX_FMT_GBRP14BE,      ## /< planar GBR 4:4:4 42bpp, big-endian
+    AV_PIX_FMT_GBRP14LE,      ## /< planar GBR 4:4:4 42bpp, little-endian
+    AV_PIX_FMT_YUVJ411P,      ## /< planar YUV 4:1:1, 12bpp, (1 Cr & Cb sample per 4x1 Y samples) full scale (JPEG), deprecated in favor of AV_PIX_FMT_YUV411P and setting color_range
+    AV_PIX_FMT_BAYER_BGGR8,   ## /< bayer, BGBG..(odd line), GRGR..(even line), 8-bit samples
+    AV_PIX_FMT_BAYER_RGGB8,   ## /< bayer, RGRG..(odd line), GBGB..(even line), 8-bit samples
+    AV_PIX_FMT_BAYER_GBRG8,   ## /< bayer, GBGB..(odd line), RGRG..(even line), 8-bit samples
+    AV_PIX_FMT_BAYER_GRBG8,   ## /< bayer, GRGR..(odd line), BGBG..(even line), 8-bit samples
+    AV_PIX_FMT_BAYER_BGGR16LE, ## /< bayer, BGBG..(odd line), GRGR..(even line), 16-bit samples, little-endian
+    AV_PIX_FMT_BAYER_BGGR16BE, ## /< bayer, BGBG..(odd line), GRGR..(even line), 16-bit samples, big-endian
+    AV_PIX_FMT_BAYER_RGGB16LE, ## /< bayer, RGRG..(odd line), GBGB..(even line), 16-bit samples, little-endian
+    AV_PIX_FMT_BAYER_RGGB16BE, ## /< bayer, RGRG..(odd line), GBGB..(even line), 16-bit samples, big-endian
+    AV_PIX_FMT_BAYER_GBRG16LE, ## /< bayer, GBGB..(odd line), RGRG..(even line), 16-bit samples, little-endian
+    AV_PIX_FMT_BAYER_GBRG16BE, ## /< bayer, GBGB..(odd line), RGRG..(even line), 16-bit samples, big-endian
+    AV_PIX_FMT_BAYER_GRBG16LE, ## /< bayer, GRGR..(odd line), BGBG..(even line), 16-bit samples, little-endian
+    AV_PIX_FMT_BAYER_GRBG16BE, ## /< bayer, GRGR..(odd line), BGBG..(even line), 16-bit samples, big-endian
+    AV_PIX_FMT_XVMC,          ## /< XVideo Motion Acceleration via common packet passing
+    AV_PIX_FMT_YUV440P10LE,   ## /< planar YUV 4:4:0,20bpp, (1 Cr & Cb sample per 1x2 Y samples), little-endian
+    AV_PIX_FMT_YUV440P10BE,   ## /< planar YUV 4:4:0,20bpp, (1 Cr & Cb sample per 1x2 Y samples), big-endian
+    AV_PIX_FMT_YUV440P12LE,   ## /< planar YUV 4:4:0,24bpp, (1 Cr & Cb sample per 1x2 Y samples), little-endian
+    AV_PIX_FMT_YUV440P12BE,   ## /< planar YUV 4:4:0,24bpp, (1 Cr & Cb sample per 1x2 Y samples), big-endian
+    AV_PIX_FMT_AYUV64LE,      ## /< packed AYUV 4:4:4,64bpp (1 Cr & Cb sample per 1x1 Y & A samples), little-endian
+    AV_PIX_FMT_AYUV64BE,      ## /< packed AYUV 4:4:4,64bpp (1 Cr & Cb sample per 1x1 Y & A samples), big-endian
+    AV_PIX_FMT_VIDEOTOOLBOX,  ## /< hardware decoding through Videotoolbox
+    AV_PIX_FMT_P010LE,        ## /< like NV12, with 10bpp per component, data in the high bits, zeros in the low bits, little-endian
+    AV_PIX_FMT_P010BE,        ## /< like NV12, with 10bpp per component, data in the high bits, zeros in the low bits, big-endian
+    AV_PIX_FMT_GBRAP12BE,     ## /< planar GBR 4:4:4:4 48bpp, big-endian
+    AV_PIX_FMT_GBRAP12LE,     ## /< planar GBR 4:4:4:4 48bpp, little-endian
+    AV_PIX_FMT_GBRAP10BE,     ## /< planar GBR 4:4:4:4 40bpp, big-endian
+    AV_PIX_FMT_GBRAP10LE,     ## /< planar GBR 4:4:4:4 40bpp, little-endian
+    AV_PIX_FMT_MEDIACODEC,    ## /< hardware decoding through MediaCodec
+    AV_PIX_FMT_GRAY12BE,      ## /<        Y        , 12bpp, big-endian
+    AV_PIX_FMT_GRAY12LE,      ## /<        Y        , 12bpp, little-endian
+    AV_PIX_FMT_GRAY10BE,      ## /<        Y        , 10bpp, big-endian
+    AV_PIX_FMT_GRAY10LE,      ## /<        Y        , 10bpp, little-endian
+    AV_PIX_FMT_P016LE,        ## /< like NV12, with 16bpp per component, little-endian
+    AV_PIX_FMT_P016BE, ## /< like NV12, with 16bpp per component, big-endian
+                      ## *
+                      ##  Hardware surfaces for Direct3D11.
+                      ##
+                      ##  This is preferred over the legacy AV_PIX_FMT_D3D11VA_VLD. The new D3D11
+                      ##  hwaccel API and filtering support AV_PIX_FMT_D3D11 only.
+                      ##
+                      ##  data[0] contains a ID3D11Texture2D pointer, and data[1] contains the
+                      ##  texture array index of the frame as intptr_t if the ID3D11Texture2D is
+                      ##  an array texture (or always 0 if it's a normal texture).
+                      ##
+    AV_PIX_FMT_D3D11, AV_PIX_FMT_GRAY9BE, ## /<        Y        , 9bpp, big-endian
+    AV_PIX_FMT_GRAY9LE,       ## /<        Y        , 9bpp, little-endian
+    AV_PIX_FMT_GBRPF32BE,     ## /< IEEE-754 single precision planar GBR 4:4:4,     96bpp, big-endian
+    AV_PIX_FMT_GBRPF32LE,     ## /< IEEE-754 single precision planar GBR 4:4:4,     96bpp, little-endian
+    AV_PIX_FMT_GBRAPF32BE,    ## /< IEEE-754 single precision planar GBRA 4:4:4:4, 128bpp, big-endian
+    AV_PIX_FMT_GBRAPF32LE, ## /< IEEE-754 single precision planar GBRA 4:4:4:4, 128bpp, little-endian
+                          ## *
+                          ##  DRM-managed buffers exposed through PRIME buffer sharing.
+                          ##
+                          ##  data[0] points to an AVDRMFrameDescriptor.
+                          ##
+    AV_PIX_FMT_DRM_PRIME, ## *
+                         ##  Hardware surfaces for OpenCL.
+                         ##
+                         ##  data[i] contain 2D image objects (typed in C as cl_mem, used
+                         ##  in OpenCL as image2d_t) for each plane of the surface.
+                         ##
+    AV_PIX_FMT_OPENCL, AV_PIX_FMT_GRAY14BE, ## /<        Y        , 14bpp, big-endian
+    AV_PIX_FMT_GRAY14LE,      ## /<        Y        , 14bpp, little-endian
+    AV_PIX_FMT_GRAYF32BE,     ## /< IEEE-754 single precision Y, 32bpp, big-endian
+    AV_PIX_FMT_GRAYF32LE,     ## /< IEEE-754 single precision Y, 32bpp, little-endian
+    AV_PIX_FMT_YUVA422P12BE,  ## /< planar YUV 4:2:2,24bpp, (1 Cr & Cb sample per 2x1 Y samples), 12b alpha, big-endian
+    AV_PIX_FMT_YUVA422P12LE,  ## /< planar YUV 4:2:2,24bpp, (1 Cr & Cb sample per 2x1 Y samples), 12b alpha, little-endian
+    AV_PIX_FMT_YUVA444P12BE,  ## /< planar YUV 4:4:4,36bpp, (1 Cr & Cb sample per 1x1 Y samples), 12b alpha, big-endian
+    AV_PIX_FMT_YUVA444P12LE,  ## /< planar YUV 4:4:4,36bpp, (1 Cr & Cb sample per 1x1 Y samples), 12b alpha, little-endian
+    AV_PIX_FMT_NV24,          ## /< planar YUV 4:4:4, 24bpp, 1 plane for Y and 1 plane for the UV components, which are interleaved (first byte U and the following byte V)
+    AV_PIX_FMT_NV42,          ## /< as above, but U and V bytes are swapped
+                    ## *
+                    ##  Vulkan hardware images.
+                    ##
+                    ##  data[0] points to an AVVkFrame
+                    ##
+    AV_PIX_FMT_VULKAN, AV_PIX_FMT_Y210BE, ## /< packed YUV 4:2:2 like YUYV422, 20bpp, data in the high bits, big-endian
+    AV_PIX_FMT_Y210LE,        ## /< packed YUV 4:2:2 like YUYV422, 20bpp, data in the high bits, little-endian
+    AV_PIX_FMT_X2RGB10LE,     ## /< packed RGB 10:10:10, 30bpp, (msb)2X 10R 10G 10B(lsb), little-endian, X=unused/undefined
+    AV_PIX_FMT_X2RGB10BE,     ## /< packed RGB 10:10:10, 30bpp, (msb)2X 10R 10G 10B(lsb), big-endian, X=unused/undefined
+    AV_PIX_FMT_NB             ## /< number of pixel formats, DO NOT USE THIS if you want to link with shared libav* because the number of formats might differ between versions
+
+
+
+const
+  AV_PIX_FMT_Y400A = AV_PIX_FMT_YA8
+  AV_PIX_FMT_GRAY8A = AV_PIX_FMT_YA8
+  AV_PIX_FMT_GBR24P = AV_PIX_FMT_GBRP
+
 const
   AVCOL_PRI_SMPTEST428_1 = AVCOL_PRI_SMPTE428
   AVCOL_PRI_JEDEC_P22 = AVCOL_PRI_EBU3213
+
+const VIDEO_PICTURE_QUEUE_SIZE = 3
+const SUBPICTURE_QUEUE_SIZE = 16
+const SAMPLE_QUEUE_SIZE = 9
+const FRAME_QUEUE_SIZE = 16
+
+
+
+const
+  SYNC_AUDIO_MASTER* = 0     
+  SYNC_VIDEO_MASTER* = 1
+  SYNC_EXTERNAL_CLOCK* = 2   
 
 const SAMPLE_ARRAY_SIZE = (8 * 65536)
 type
@@ -139,9 +401,96 @@ type
     PICTURE_TYPE_BI
 
 
+const
+  AV_CH_FRONT_LEFT* = 0x00000001
+  AV_CH_FRONT_RIGHT* = 0x00000002
+  AV_CH_FRONT_CENTER* = 0x00000004
+  AV_CH_LOW_FREQUENCY* = 0x00000008
+  AV_CH_BACK_LEFT* = 0x00000010
+  AV_CH_BACK_RIGHT* = 0x00000020
+  AV_CH_FRONT_LEFT_OF_CENTER* = 0x00000040
+  AV_CH_FRONT_RIGHT_OF_CENTER* = 0x00000080
+  AV_CH_BACK_CENTER* = 0x00000100
+  AV_CH_SIDE_LEFT* = 0x00000200
+  AV_CH_SIDE_RIGHT* = 0x00000400
+  AV_CH_TOP_CENTER* = 0x00000800
+  AV_CH_TOP_FRONT_LEFT* = 0x00001000
+  AV_CH_TOP_FRONT_CENTER* = 0x00002000
+  AV_CH_TOP_FRONT_RIGHT* = 0x00004000
+  AV_CH_TOP_BACK_LEFT* = 0x00008000
+  AV_CH_TOP_BACK_CENTER* = 0x00010000
+  AV_CH_TOP_BACK_RIGHT* = 0x00020000
+  AV_CH_STEREO_LEFT* = 0x20000000
+  AV_CH_STEREO_RIGHT* = 0x40000000
+  AV_CH_WIDE_LEFT* = 0x0000000000000000'i64
+  AV_CH_WIDE_RIGHT* = 0x0000000000000000'i64
+  AV_CH_SURROUND_DIRECT_LEFT* = 0x0000000000000000'i64
+  AV_CH_SURROUND_DIRECT_RIGHT* = 0x0000000000000000'i64
+  AV_CH_LOW_FREQUENCY_2* = 0x0000000000000000'i64
+  AV_CH_TOP_SIDE_LEFT* = 0x0000000000000000'i64
+  AV_CH_TOP_SIDE_RIGHT* = 0x0000000000000000'i64
+  AV_CH_BOTTOM_FRONT_CENTER* = 0x0000000000000000'i64
+  AV_CH_BOTTOM_FRONT_LEFT* = 0x0000000000000000'i64
+  AV_CH_BOTTOM_FRONT_RIGHT* = 0x0000000000000000'i64
+
+const
+  AV_CH_LAYOUT_NATIVE* = 0x0000000000000000'i64
+
+const
+  AV_CH_LAYOUT_MONO* = (AV_CH_FRONT_CENTER)
+  AV_CH_LAYOUT_STEREO* = (AV_CH_FRONT_LEFT or AV_CH_FRONT_RIGHT)
+  AV_CH_LAYOUT_2POINT1* = (AV_CH_LAYOUT_STEREO or AV_CH_LOW_FREQUENCY)
+  AV_CH_LAYOUT_2_1* = (AV_CH_LAYOUT_STEREO or AV_CH_BACK_CENTER)
+  AV_CH_LAYOUT_SURROUND* = (AV_CH_LAYOUT_STEREO or AV_CH_FRONT_CENTER)
+  AV_CH_LAYOUT_3POINT1* = (AV_CH_LAYOUT_SURROUND or AV_CH_LOW_FREQUENCY)
+  AV_CH_LAYOUT_4POINT0* = (AV_CH_LAYOUT_SURROUND or AV_CH_BACK_CENTER)
+  AV_CH_LAYOUT_4POINT1* = (AV_CH_LAYOUT_4POINT0 or AV_CH_LOW_FREQUENCY)
+  AV_CH_LAYOUT_2_2* = (AV_CH_LAYOUT_STEREO or AV_CH_SIDE_LEFT or AV_CH_SIDE_RIGHT)
+  AV_CH_LAYOUT_QUAD* = (AV_CH_LAYOUT_STEREO or AV_CH_BACK_LEFT or AV_CH_BACK_RIGHT)
+  AV_CH_LAYOUT_5POINT0* = (
+    AV_CH_LAYOUT_SURROUND or AV_CH_SIDE_LEFT or AV_CH_SIDE_RIGHT)
+  AV_CH_LAYOUT_5POINT1* = (AV_CH_LAYOUT_5POINT0 or AV_CH_LOW_FREQUENCY)
+  AV_CH_LAYOUT_5POINT0_BACK* = (
+    AV_CH_LAYOUT_SURROUND or AV_CH_BACK_LEFT or AV_CH_BACK_RIGHT)
+  AV_CH_LAYOUT_5POINT1_BACK* = (AV_CH_LAYOUT_5POINT0_BACK or AV_CH_LOW_FREQUENCY)
+  AV_CH_LAYOUT_6POINT0* = (AV_CH_LAYOUT_5POINT0 or AV_CH_BACK_CENTER)
+  AV_CH_LAYOUT_6POINT0_FRONT* = (AV_CH_LAYOUT_2_2 or AV_CH_FRONT_LEFT_OF_CENTER or
+      AV_CH_FRONT_RIGHT_OF_CENTER)
+  AV_CH_LAYOUT_HEXAGONAL* = (AV_CH_LAYOUT_5POINT0_BACK or AV_CH_BACK_CENTER)
+  AV_CH_LAYOUT_6POINT1* = (AV_CH_LAYOUT_5POINT1 or AV_CH_BACK_CENTER)
+  AV_CH_LAYOUT_6POINT1_BACK* = (AV_CH_LAYOUT_5POINT1_BACK or AV_CH_BACK_CENTER)
+  AV_CH_LAYOUT_6POINT1_FRONT* = (AV_CH_LAYOUT_6POINT0_FRONT or
+      AV_CH_LOW_FREQUENCY)
+  AV_CH_LAYOUT_7POINT0* = (
+    AV_CH_LAYOUT_5POINT0 or AV_CH_BACK_LEFT or AV_CH_BACK_RIGHT)
+  AV_CH_LAYOUT_7POINT0_FRONT* = (AV_CH_LAYOUT_5POINT0 or
+      AV_CH_FRONT_LEFT_OF_CENTER or AV_CH_FRONT_RIGHT_OF_CENTER)
+  AV_CH_LAYOUT_7POINT1* = (
+    AV_CH_LAYOUT_5POINT1 or AV_CH_BACK_LEFT or AV_CH_BACK_RIGHT)
+  AV_CH_LAYOUT_7POINT1_WIDE* = (AV_CH_LAYOUT_5POINT1 or
+      AV_CH_FRONT_LEFT_OF_CENTER or AV_CH_FRONT_RIGHT_OF_CENTER)
+  AV_CH_LAYOUT_7POINT1_WIDE_BACK* = (AV_CH_LAYOUT_5POINT1_BACK or
+      AV_CH_FRONT_LEFT_OF_CENTER or AV_CH_FRONT_RIGHT_OF_CENTER)
+  AV_CH_LAYOUT_OCTAGONAL* = (AV_CH_LAYOUT_5POINT0 or AV_CH_BACK_LEFT or
+      AV_CH_BACK_CENTER or AV_CH_BACK_RIGHT)
+  AV_CH_LAYOUT_HEXADECAGONAL* = (AV_CH_LAYOUT_OCTAGONAL or AV_CH_WIDE_LEFT or
+      AV_CH_WIDE_RIGHT or AV_CH_TOP_BACK_LEFT or AV_CH_TOP_BACK_RIGHT or
+      AV_CH_TOP_BACK_CENTER or AV_CH_TOP_FRONT_CENTER or AV_CH_TOP_FRONT_LEFT or
+      AV_CH_TOP_FRONT_RIGHT)
+  AV_CH_LAYOUT_STEREO_DOWNMIX* = (AV_CH_STEREO_LEFT or AV_CH_STEREO_RIGHT)
+  AV_CH_LAYOUT_22POINT2* = (AV_CH_LAYOUT_5POINT1_BACK or
+      AV_CH_FRONT_LEFT_OF_CENTER or AV_CH_FRONT_RIGHT_OF_CENTER or
+      AV_CH_BACK_CENTER or AV_CH_LOW_FREQUENCY_2 or AV_CH_SIDE_LEFT or
+      AV_CH_SIDE_RIGHT or AV_CH_TOP_FRONT_LEFT or AV_CH_TOP_FRONT_RIGHT or
+      AV_CH_TOP_FRONT_CENTER or AV_CH_TOP_CENTER or AV_CH_TOP_BACK_LEFT or
+      AV_CH_TOP_BACK_RIGHT or AV_CH_TOP_SIDE_LEFT or AV_CH_TOP_SIDE_RIGHT or
+      AV_CH_TOP_BACK_CENTER or AV_CH_BOTTOM_FRONT_CENTER or
+      AV_CH_BOTTOM_FRONT_LEFT or AV_CH_BOTTOM_FRONT_RIGHT)
+
+
+
+
 type
-
-
   av_intfloat32* {.union.}  = ref object 
     i*: uint32
     f*: cfloat
@@ -208,69 +557,7 @@ type
     queryRanges*: proc (a1: AVOptionRanges; obj: pointer; key: string;flags: int): int
     childClassIterate*: proc (iter: AVClass): AVClass
 
-  AVPixelFormat* = enum
-    PIX_FMT_NONE = -1, PIX_FMT_YUV420P, PIX_FMT_YUYV422, PIX_FMT_RGB24,
-    PIX_FMT_BGR24, PIX_FMT_YUV422P, PIX_FMT_YUV444P, PIX_FMT_YUV410P,
-    PIX_FMT_YUV411P, PIX_FMT_GRAY8, PIX_FMT_MONOWHITE,
-    PIX_FMT_MONOBLACK, PIX_FMT_PAL8, PIX_FMT_YUVJ420P,
-    PIX_FMT_YUVJ422P, PIX_FMT_YUVJ444P, PIX_FMT_UYVY422,
-    PIX_FMT_UYYVYY411, PIX_FMT_BGR8, PIX_FMT_BGR4, PIX_FMT_BGR4_BYTE,
-    PIX_FMT_RGB8, PIX_FMT_RGB4, PIX_FMT_RGB4_BYTE, PIX_FMT_NV12,
-    PIX_FMT_NV21, PIX_FMT_ARGB, PIX_FMT_RGBA, PIX_FMT_ABGR,
-    PIX_FMT_BGRA, PIX_FMT_GRAY16BE, PIX_FMT_GRAY16LE, PIX_FMT_YUV440P,
-    PIX_FMT_YUVJ440P, PIX_FMT_YUVA420P, PIX_FMT_RGB48BE,
-    PIX_FMT_RGB48LE, PIX_FMT_RGB565BE, PIX_FMT_RGB565LE,
-    PIX_FMT_RGB555BE, PIX_FMT_RGB555LE, PIX_FMT_BGR565BE,
-    PIX_FMT_BGR565LE, PIX_FMT_BGR555BE, PIX_FMT_BGR555LE,
-    PIX_FMT_VAAPI_MOCO, PIX_FMT_VAAPI_IDCT, PIX_FMT_VAAPI_VLD,
-    PIX_FMT_YUV420P16LE, PIX_FMT_YUV420P16BE, PIX_FMT_YUV422P16LE,
-    PIX_FMT_YUV422P16BE, PIX_FMT_YUV444P16LE, PIX_FMT_YUV444P16BE,
-    PIX_FMT_DXVA2_VLD, PIX_FMT_RGB444LE, PIX_FMT_RGB444BE,
-    PIX_FMT_BGR444LE, PIX_FMT_BGR444BE, PIX_FMT_YA8, PIX_FMT_BGR48BE,
-    PIX_FMT_BGR48LE, PIX_FMT_YUV420P9BE, PIX_FMT_YUV420P9LE,
-    PIX_FMT_YUV420P10BE, PIX_FMT_YUV420P10LE, PIX_FMT_YUV422P10BE,
-    PIX_FMT_YUV422P10LE, PIX_FMT_YUV444P9BE, PIX_FMT_YUV444P9LE,
-    PIX_FMT_YUV444P10BE, PIX_FMT_YUV444P10LE, PIX_FMT_YUV422P9BE,
-    PIX_FMT_YUV422P9LE, PIX_FMT_GBRP, PIX_FMT_GBRP9BE, PIX_FMT_GBRP9LE,
-    PIX_FMT_GBRP10BE, PIX_FMT_GBRP10LE, PIX_FMT_GBRP16BE,
-    PIX_FMT_GBRP16LE, PIX_FMT_YUVA422P, PIX_FMT_YUVA444P,
-    PIX_FMT_YUVA420P9BE, PIX_FMT_YUVA420P9LE, PIX_FMT_YUVA422P9BE,
-    PIX_FMT_YUVA422P9LE, PIX_FMT_YUVA444P9BE, PIX_FMT_YUVA444P9LE,
-    PIX_FMT_YUVA420P10BE, PIX_FMT_YUVA420P10LE, PIX_FMT_YUVA422P10BE,
-    PIX_FMT_YUVA422P10LE, PIX_FMT_YUVA444P10BE, PIX_FMT_YUVA444P10LE,
-    PIX_FMT_YUVA420P16BE, PIX_FMT_YUVA420P16LE, PIX_FMT_YUVA422P16BE,
-    PIX_FMT_YUVA422P16LE, PIX_FMT_YUVA444P16BE, PIX_FMT_YUVA444P16LE,
-    PIX_FMT_VDPAU, PIX_FMT_XYZ12LE, PIX_FMT_XYZ12BE, PIX_FMT_NV16,
-    PIX_FMT_NV20LE, PIX_FMT_NV20BE, PIX_FMT_RGBA64BE, PIX_FMT_RGBA64LE,
-    PIX_FMT_BGRA64BE, PIX_FMT_BGRA64LE, PIX_FMT_YVYU422,
-    PIX_FMT_YA16BE, PIX_FMT_YA16LE, PIX_FMT_GBRAP, PIX_FMT_GBRAP16BE,
-    PIX_FMT_GBRAP16LE, PIX_FMT_QSV, PIX_FMT_MMAL, PIX_FMT_D3D11VA_VLD,
-    PIX_FMT_CUDA, PIX_FMT_0RGB, PIX_FMT_RGB0, PIX_FMT_0BGR,
-    PIX_FMT_BGR0, PIX_FMT_YUV420P12BE, PIX_FMT_YUV420P12LE,
-    PIX_FMT_YUV420P14BE, PIX_FMT_YUV420P14LE, PIX_FMT_YUV422P12BE,
-    PIX_FMT_YUV422P12LE, PIX_FMT_YUV422P14BE, PIX_FMT_YUV422P14LE,
-    PIX_FMT_YUV444P12BE, PIX_FMT_YUV444P12LE, PIX_FMT_YUV444P14BE,
-    PIX_FMT_YUV444P14LE, PIX_FMT_GBRP12BE, PIX_FMT_GBRP12LE,
-    PIX_FMT_GBRP14BE, PIX_FMT_GBRP14LE, PIX_FMT_YUVJ411P,
-    PIX_FMT_BAYER_BGGR8, PIX_FMT_BAYER_RGGB8, PIX_FMT_BAYER_GBRG8,
-    PIX_FMT_BAYER_GRBG8, PIX_FMT_BAYER_BGGR16LE, PIX_FMT_BAYER_BGGR16BE,
-    PIX_FMT_BAYER_RGGB16LE, PIX_FMT_BAYER_RGGB16BE,
-    PIX_FMT_BAYER_GBRG16LE, PIX_FMT_BAYER_GBRG16BE,
-    PIX_FMT_BAYER_GRBG16LE, PIX_FMT_BAYER_GRBG16BE, PIX_FMT_XVMC,
-    PIX_FMT_YUV440P10LE, PIX_FMT_YUV440P10BE, PIX_FMT_YUV440P12LE,
-    PIX_FMT_YUV440P12BE, PIX_FMT_AYUV64LE, PIX_FMT_AYUV64BE,
-    PIX_FMT_VIDEOTOOLBOX, PIX_FMT_P010LE, PIX_FMT_P010BE,
-    PIX_FMT_GBRAP12BE, PIX_FMT_GBRAP12LE, PIX_FMT_GBRAP10BE,
-    PIX_FMT_GBRAP10LE, PIX_FMT_MEDIACODEC, PIX_FMT_GRAY12BE,
-    PIX_FMT_GRAY12LE, PIX_FMT_GRAY10BE, PIX_FMT_GRAY10LE,
-    PIX_FMT_P016LE, PIX_FMT_P016BE, PIX_FMT_D3D11, PIX_FMT_GRAY9BE,
-    PIX_FMT_GRAY9LE, PIX_FMT_GBRPF32BE, PIX_FMT_GBRPF32LE,
-    PIX_FMT_GBRAPF32BE, PIX_FMT_GBRAPF32LE, PIX_FMT_DRM_PRIME,
-    PIX_FMT_OPENCL, PIX_FMT_GRAY14BE, PIX_FMT_GRAY14LE,
-    PIX_FMT_GRAYF32BE, PIX_FMT_GRAYF32LE, PIX_FMT_YUVA422P12BE,
-    PIX_FMT_YUVA422P12LE, PIX_FMT_YUVA444P12BE, PIX_FMT_YUVA444P12LE,
-    PIX_FMT_NV24, PIX_FMT_NV42, PIX_FMT_VULKAN, PIX_FMT_Y210BE,
-    PIX_FMT_Y210LE, PIX_FMT_X2RGB10LE, PIX_FMT_X2RGB10BE, PIX_FMT_NB
+  
 
 
   AVColorTransferCharacteristic* = enum
@@ -285,10 +572,6 @@ type
 const
   AVCOL_TRC_SMPTEST2084 = AVCOL_TRC_SMPTE2084
   AVCOL_TRC_SMPTEST428_1 = AVCOL_TRC_SMPTE428
-  PIX_FMT_VAAPI = PIX_FMT_VAAPI_VLD
-  PIX_FMT_Y400A = PIX_FMT_YA8
-  PIX_FMT_GRAY8A = PIX_FMT_YA8
-  PIX_FMT_GBR24P = PIX_FMT_GBRP
   AVCOL_SPC_YCOCG = AVCOL_SPC_YCGCO
 
 
@@ -332,10 +615,10 @@ type
     value*: string
 
   AVSampleFormat* = enum
-    SAMPLE_FMT_NONE = -1, SAMPLE_FMT_U8, SAMPLE_FMT_S16, SAMPLE_FMT_S32,
-    SAMPLE_FMT_FLT, SAMPLE_FMT_DBL, SAMPLE_FMT_U8P, SAMPLE_FMT_S16P,
-    SAMPLE_FMT_S32P, SAMPLE_FMT_FLTP, SAMPLE_FMT_DBLP, SAMPLE_FMT_S64,
-    SAMPLE_FMT_S64P, SAMPLE_FMT_NB
+    AV_SAMPLE_FMT_NONE = -1, AV_SAMPLE_FMT_U8, AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_S32,
+    AV_SAMPLE_FMT_FLT, AV_SAMPLE_FMT_DBL, AV_SAMPLE_FMT_U8P, AV_SAMPLE_FMT_S16P,
+    AV_SAMPLE_FMT_S32P, AV_SAMPLE_FMT_FLTP, AV_SAMPLE_FMT_DBLP, AV_SAMPLE_FMT_S64,
+    AV_SAMPLE_FMT_S64P, AV_SAMPLE_FMT_NB
 
 type
   AVBuffer* = ref object
@@ -425,7 +708,7 @@ type
     extended_buf*: string
     nb_extended_buf*: int
     side_data*: seq[AVFrameSideData]
-    nb_side_data*: int
+    nbSideData*: int
     flags*: int
     color_range*: AVColorRange
     color_primaries*: AVColorPrimaries
@@ -551,6 +834,26 @@ const
   HWFRAME_MAP_DIRECT* = 1 shl 3
 
 type
+  AVSideDataParamChangeFlags* = enum
+    SIDE_DATA_PARAM_CHANGE_CHANNEL_COUNT = 0x00000001,
+    SIDE_DATA_PARAM_CHANGE_CHANNEL_LAYOUT = 0x00000002,
+    SIDE_DATA_PARAM_CHANGE_SAMPLE_RATE = 0x00000004,
+    SIDE_DATA_PARAM_CHANGE_DIMENSIONS = 0x00000008
+  
+  AVPacketSideDataType* = enum
+    AV_PKT_DATA_PALETTE, AV_PKT_DATA_NEW_EXTRADATA, AV_PKT_DATA_PARAM_CHANGE,
+    AV_PKT_DATA_H263_MB_INFO, AV_PKT_DATA_REPLAYGAIN, AV_PKT_DATA_DISPLAYMATRIX,
+    AV_PKT_DATA_STEREO3D, AV_PKT_DATA_AUDIO_SERVICE_TYPE,
+    AV_PKT_DATA_QUALITY_STATS, AV_PKT_DATA_FALLBACK_TRACK,
+    AV_PKT_DATA_CPB_PROPERTIES, AV_PKT_DATA_SKIP_SAMPLES, AV_PKT_DATA_JP_DUALMONO,
+    AV_PKT_DATA_STRINGS_METADATA, AV_PKT_DATA_SUBTITLE_POSITION,
+    AV_PKT_DATA_MATROSKA_BLOCKADDITIONAL, AV_PKT_DATA_WEBVTT_IDENTIFIER,
+    AV_PKT_DATA_WEBVTT_SETTINGS, AV_PKT_DATA_METADATA_UPDATE,
+    AV_PKT_DATA_MPEGTS_STREAM_ID, AV_PKT_DATA_MASTERING_DISPLAY_METADATA,
+    AV_PKT_DATA_SPHERICAL, AV_PKT_DATA_CONTENT_LIGHT_LEVEL, AV_PKT_DATA_A53_CC,
+    AV_PKT_DATA_ENCRYPTION_INIT_INFO, AV_PKT_DATA_ENCRYPTION_INFO,
+    AV_PKT_DATA_AFD, AV_PKT_DATA_PRFT, AV_PKT_DATA_ICC_PROFILE,
+    AV_PKT_DATA_DOVI_CONF, AV_PKT_DATA_S12M_TIMECODE, AV_PKT_DATA_NB
   AVCodecID* = enum
     CODEC_ID_NONE, CODEC_ID_MPEG1VIDEO, CODEC_ID_MPEG2VIDEO,
     CODEC_ID_H261, CODEC_ID_H263, CODEC_ID_RV10, CODEC_ID_RV20,
@@ -707,6 +1010,32 @@ const
   CODEC_ID_DVD_SUBTITLE = CODEC_ID_FIRST_SUBTITLE
   CODEC_ID_TTF = CODEC_ID_FIRST_UNKNOWN
 
+  APP_TO_DEV_NONE = ('E'.ord or ('N'.ord shl 8) or ('O'.ord shl 16) or ('N'.ord shl 24)) 
+  APP_TO_DEV_WINDOW_SIZE = ('M'.ord or ('O'.ord shl 8) or ('E'.ord shl 16) or ('G'.ord shl 24))
+  APP_TO_DEV_WINDOW_REPAINT = ('A'.ord or ('P'.ord shl 8) or ('E'.ord shl 16) or ('R'.ord shl 24)) 
+  APP_TO_DEV_PAUSE = ((' ').ord or ('U'.ord shl 8) or ('A'.ord shl 16) or ('P'.ord shl 24))
+  APP_TO_DEV_PLAY = ('Y'.ord or ('A'.ord shl 8) or ('L'.ord shl 16) or ('P'.ord shl 24))
+  APP_TO_DEV_TOGGLE_PAUSE = ('T'.ord or ('U'.ord shl 8) or ('A'.ord shl 16) or ('P'.ord shl 24)) 
+  APP_TO_DEV_SET_VOLUME = ('L'.ord or ('O'.ord shl 8) or ('V'.ord shl 16) or ('S'.ord shl 24))
+  APP_TO_DEV_MUTE = ('T'.ord or ('U'.ord shl 8) or ('M'.ord shl 16) or ((' ').ord shl 24))
+  APP_TO_DEV_UNMUTE = ('T'.ord or ('U'.ord shl 8) or ('M'.ord shl 16) or ('U'.ord shl 24)) 
+  APP_TO_DEV_TOGGLE_MUTE = ('T'.ord or ('U'.ord shl 8) or ('M'.ord shl 16) or ('T'.ord shl 24)) 
+  APP_TO_DEV_GET_VOLUME = ('L'.ord or ('O'.ord shl 8) or ('V'.ord shl 16) or ('G'.ord shl 24)) 
+  APP_TO_DEV_GET_MUTE = ('T'.ord or ('U'.ord shl 8) or ('M'.ord shl 16) or ('G'.ord shl 24))
+
+
+  DEV_TO_APP_NONE = ('E'.ord or ('N'.ord shl 8) or ('O'.ord shl 16) or ('N'.ord shl 24))
+  DEV_TO_APP_CREATE_WINDOW_BUFFER = ('E'.ord or ('R'.ord shl 8) or ('C'.ord shl 16) or ('B'.ord shl 24))
+  DEV_TO_APP_PREPARE_WINDOW_BUFFER = ('E'.ord or ('R'.ord shl 8) or ('P'.ord shl 16) or ('B'.ord shl 24))
+  DEV_TO_APP_DISPLAY_WINDOW_BUFFER = ('S'.ord or ('I'.ord shl 8) or ('D'.ord shl 16) or ('B'.ord shl 24)) 
+  DEV_TO_APP_DESTROY_WINDOW_BUFFER = ('S'.ord or ('E'.ord shl 8) or ('D'.ord shl 16) or ('B'.ord shl 24))
+  DEV_TO_APP_BUFFER_OVERFLOW = ('L'.ord or ('F'.ord shl 8) or ('O'.ord shl 16) or ('B'.ord shl 24))
+  DEV_TO_APP_BUFFER_UNDERFLOW = ('L'.ord or ('F'.ord shl 8) or ('U'.ord shl 16) or ('B'.ord shl 24))
+  DEV_TO_APP_BUFFER_READABLE = ((' ').ord or ('D'.ord shl 8) or ('R'.ord shl 16) or ('B'.ord shl 24))
+  DEV_TO_APP_BUFFER_WRITABLE = ((' ').ord or ('R'.ord shl 8) or ('W'.ord shl 16) or ('B'.ord shl 24))
+  DEV_TO_APP_MUTE_STATE_CHANGED = ('T'.ord or ('U'.ord shl 8) or ('M'.ord shl 16) or ('C'.ord shl 24))
+  DEV_TO_APP_VOLUME_LEVEL_CHANGED = ('L'.ord or ('O'.ord shl 8) or ('V'.ord shl 16) or ('C'.ord shl 24))
+
 type
   AVFieldOrder* = enum
     FIELD_UNKNOWN, FIELD_PROGRESSIVE, FIELD_TT, FIELD_BB, FIELD_TB,
@@ -745,20 +1074,6 @@ type
     trailing_padding*: int
     seek_preroll*: int
 
-  AVPacketSideDataType* = enum
-    PKT_DATA_PALETTE, PKT_DATA_NEW_EXTRADATA, PKT_DATA_PARAM_CHANGE,
-    PKT_DATA_H263_MB_INFO, PKT_DATA_REPLAYGAIN, PKT_DATA_DISPLAYMATRIX,
-    PKT_DATA_STEREO3D, PKT_DATA_AUDIO_SERVICE_TYPE,
-    PKT_DATA_QUALITY_STATS, PKT_DATA_FALLBACK_TRACK,
-    PKT_DATA_CPB_PROPERTIES, PKT_DATA_SKIP_SAMPLES, PKT_DATA_JP_DUALMONO,
-    PKT_DATA_STRINGS_METADATA, PKT_DATA_SUBTITLE_POSITION,
-    PKT_DATA_MATROSKA_BLOCKADDITIONAL, PKT_DATA_WEBVTT_IDENTIFIER,
-    PKT_DATA_WEBVTT_SETTINGS, PKT_DATA_METADATA_UPDATE,
-    PKT_DATA_MPEGTS_STREAM_ID, PKT_DATA_MASTERING_DISPLAY_METADATA,
-    PKT_DATA_SPHERICAL, PKT_DATA_CONTENT_LIGHT_LEVEL, PKT_DATA_A53_CC,
-    PKT_DATA_ENCRYPTION_INIT_INFO, PKT_DATA_ENCRYPTION_INFO,
-    PKT_DATA_AFD, PKT_DATA_PRFT, PKT_DATA_ICC_PROFILE,
-    PKT_DATA_DOVI_CONF, PKT_DATA_S12M_TIMECODE, PKT_DATA_NB
 
 
 type
@@ -785,14 +1100,8 @@ type
     pkt*: AVPacket
     next*: AVPacketList
 
-  AVSideDataParamChangeFlags* = enum
-    SIDE_DATA_PARAM_CHANGE_CHANNEL_COUNT = 0x00000001,
-    SIDE_DATA_PARAM_CHANGE_CHANNEL_LAYOUT = 0x00000002,
-    SIDE_DATA_PARAM_CHANGE_SAMPLE_RATE = 0x00000004,
-    SIDE_DATA_PARAM_CHANGE_DIMENSIONS = 0x00000008
 
 
-type
   AVBSFInternal* = ref object
     bufferPkt*: AVPacket
     eof*: cint
@@ -937,7 +1246,7 @@ type
     gopSize*: int
     pixFmt*: AVPixelFormat
     drawHorizBand*: proc (s: AVCodecContext; src: AVFrame;offset: array[8, int]; y: int; t: int; height: int)
-    getFormat*: proc (s: AVCodecContext; fmt: ptr UncheckedArray[AVPixelFormat]): AVPixelFormat
+    getFormat*: proc (s: AVCodecContext; fmt: ptr seq[AVPixelFormat]): AVPixelFormat
     maxBFrames*: int
     bQuantFactor*: cfloat
     bFrameFtrategy*: int
@@ -1198,9 +1507,6 @@ type
   AVSubtitleType* = enum
     SUBTITLE_NONE, SUBTITLE_BITMAP, SUBTITLE_TEXT, SUBTITLE_ASS
 
-  
-
-
 
   AVPictureStructure* = enum
     PICTURE_STRUCTURE_UNKNOWN, PICTURE_STRUCTURE_TOP_FIELD,
@@ -1217,11 +1523,17 @@ type
     AVIO_DATA_MARKER_BOUNDARY_POINT, AVIO_DATA_MARKER_UNKNOWN,
     AVIO_DATA_MARKER_TRAILER, AVIO_DATA_MARKER_FLUSH_POINT
 
+  AVFilterLinkInitState* = enum
+    AVLINK_UNINIT = 0,          ## /< not started
+    AVLINK_STARTINIT,         ## /< started, but incomplete
+    AVLINK_INIT               ## /< complete
+
+
 type
   AVCodecParserContext* = ref object
-    priv_data*: pointer
+    privData*: pointer
     parser*: AVCodecParser
-    frame_offset*: int64
+    frameOffset*: int64
     cur_offset*: int64
     next_frame_offset*: int64
     pict_type*: int
@@ -1433,18 +1745,18 @@ type
     index*: int
     id*: int
     codec*: AVCodecContext
-    priv_data*: pointer
-    time_base*: Rational[int]
-    start_time*: int64
+    privData*: pointer
+    timeBase*: Rational[int]
+    startTime*: int64
     duration*: int64
-    nb_frames*: int64
+    nbFrames*: int64
     disposition*: int
-    `discard`*: AVDiscard
+    d*: AVDiscard
     sample_aspect_ratio*: Rational[int]
     metadata*: OrderedTable[string,string]
     avg_frame_rate*: Rational[int]
     attached_pic*: AVPacket
-    side_data*: AVPacketSideData
+    sideData*: seq[AVPacketSideData]
     nb_side_data*: int
     event_flags*: int
     r_frame_rate*: Rational[int]
@@ -1530,8 +1842,8 @@ type
     priv_data*: pointer
     pb*: AVIOContext
     ctx_flags*: int
-    nb_streams*: cuint
-    streams*: AVStream
+    nbStreams*: cuint
+    streams*: ptr AVStream
     filename*: array[1024, char]
     url*: string
     start_time*: int64
@@ -1617,8 +1929,6 @@ type
     re*: float
     im*: float
 
-
-
   AVOutputFormat* = ref object
     name*: string
     long_name*: string
@@ -1636,7 +1946,7 @@ type
     write_packet*: proc (a1: AVFormatContext; pkt: AVPacket): int
     write_trailer*: proc (a1: AVFormatContext): int
     interleave_packet*: proc (a1: AVFormatContext; o: AVPacket;
-                            `in`: AVPacket; flush: int): int
+                            i: AVPacket; flush: int): int
     query_codec*: proc (id: AVCodecID; std_compliance: int): int
     get_output_timestamp*: proc (s: AVFormatContext; stream: int;
                                dts: int64; wall: int64)
@@ -1656,7 +1966,7 @@ type
   AVProgram* = ref object
     id*: int
     flags*: int
-    `discard`*: AVDiscard
+    d*: AVDiscard
     stream_index*: cuint
     nb_stream_indexes*: cuint
     metadata*: OrderedTable[string,string]
@@ -1688,6 +1998,10 @@ type
 
 const
   OPT_FLAG_IMPLICIT_KEY* = 1
+const AV_OPT_FLAG_CHILD_CONSTS = (1 shl 18)
+const
+  DECODING_FOR_OST* = 1
+  DECODING_FOR_FILTER* = 2
 
 type
   AVDeviceRect* = ref object
@@ -1696,36 +2010,21 @@ type
     width*: int
     height*: int
 
-const
-    APP_TO_DEV_NONE = ('E'.ord or ('N'.ord shl 8) or ('O'.ord shl 16) or ('N'.ord shl 24)) 
-    APP_TO_DEV_WINDOW_SIZE = ('M'.ord or ('O'.ord shl 8) or ('E'.ord shl 16) or ('G'.ord shl 24))
-    APP_TO_DEV_WINDOW_REPAINT = ('A'.ord or ('P'.ord shl 8) or ('E'.ord shl 16) or ('R'.ord shl 24)) 
-    APP_TO_DEV_PAUSE = ((' ').ord or ('U'.ord shl 8) or ('A'.ord shl 16) or ('P'.ord shl 24))
-    APP_TO_DEV_PLAY = ('Y'.ord or ('A'.ord shl 8) or ('L'.ord shl 16) or ('P'.ord shl 24))
-    APP_TO_DEV_TOGGLE_PAUSE = ('T'.ord or ('U'.ord shl 8) or ('A'.ord shl 16) or ('P'.ord shl 24)) 
-    APP_TO_DEV_SET_VOLUME = ('L'.ord or ('O'.ord shl 8) or ('V'.ord shl 16) or ('S'.ord shl 24))
-    APP_TO_DEV_MUTE = ('T'.ord or ('U'.ord shl 8) or ('M'.ord shl 16) or ((' ').ord shl 24))
-    APP_TO_DEV_UNMUTE = ('T'.ord or ('U'.ord shl 8) or ('M'.ord shl 16) or ('U'.ord shl 24)) 
-    APP_TO_DEV_TOGGLE_MUTE = ('T'.ord or ('U'.ord shl 8) or ('M'.ord shl 16) or ('T'.ord shl 24)) 
-    APP_TO_DEV_GET_VOLUME = ('L'.ord or ('O'.ord shl 8) or ('V'.ord shl 16) or ('G'.ord shl 24)) 
-    APP_TO_DEV_GET_MUTE = ('T'.ord or ('U'.ord shl 8) or ('M'.ord shl 16) or ('G'.ord shl 24))
-
-
-const
-    DEV_TO_APP_NONE = ('E'.ord or ('N'.ord shl 8) or ('O'.ord shl 16) or ('N'.ord shl 24))
-    DEV_TO_APP_CREATE_WINDOW_BUFFER = ('E'.ord or ('R'.ord shl 8) or ('C'.ord shl 16) or ('B'.ord shl 24))
-    DEV_TO_APP_PREPARE_WINDOW_BUFFER = ('E'.ord or ('R'.ord shl 8) or ('P'.ord shl 16) or ('B'.ord shl 24))
-    DEV_TO_APP_DISPLAY_WINDOW_BUFFER = ('S'.ord or ('I'.ord shl 8) or ('D'.ord shl 16) or ('B'.ord shl 24)) 
-    DEV_TO_APP_DESTROY_WINDOW_BUFFER = ('S'.ord or ('E'.ord shl 8) or ('D'.ord shl 16) or ('B'.ord shl 24))
-    DEV_TO_APP_BUFFER_OVERFLOW = ('L'.ord or ('F'.ord shl 8) or ('O'.ord shl 16) or ('B'.ord shl 24))
-    DEV_TO_APP_BUFFER_UNDERFLOW = ('L'.ord or ('F'.ord shl 8) or ('U'.ord shl 16) or ('B'.ord shl 24))
-    DEV_TO_APP_BUFFER_READABLE = ((' ').ord or ('D'.ord shl 8) or ('R'.ord shl 16) or ('B'.ord shl 24))
-    DEV_TO_APP_BUFFER_WRITABLE = ((' ').ord or ('R'.ord shl 8) or ('W'.ord shl 16) or ('B'.ord shl 24))
-    DEV_TO_APP_MUTE_STATE_CHANGED = ('T'.ord or ('U'.ord shl 8) or ('M'.ord shl 16) or ('C'.ord shl 24))
-    DEV_TO_APP_VOLUME_LEVEL_CHANGED = ('L'.ord or ('O'.ord shl 8) or ('V'.ord shl 16) or ('C'.ord shl 24))
 
 
 type
+ AVExprEnum* = enum
+    eValue, eConst, eFunc0, eFunc1, eFunc2, eSquish, eGauss, eLd, eIsnan, eIsinf, eMod,
+    eMax, eMin, eEq, eGt, eGte, eLte, eLt, ePow, eMul, eDiv, eAdd, eLast, eSt, eWhile,
+    eTaylor, eRoot, eFloor, eCeil, eTrunc, eRound, eSqrt, eNot, eRandom, eHypot, eGcd, eIf,
+    eIfnot, ePrint, eBitand, eBitor, eBetween, eClip, eAtan2, eLerp, eSgn
+
+type
+  AVExprA* {.union.} = object 
+    func0*: proc (a1: cdouble): cdouble
+    func1*: proc (a1: pointer; a2: cdouble): cdouble
+    func2*: proc (a1: pointer; a2: cdouble; a3: cdouble): cdouble
+
   AVFilter* = ref object
     name*: string
     description*: string
@@ -1810,22 +2109,94 @@ type
     sinkLinksCount*: cint
     disableAutoConvert*: cuint
 
+  AVFilterPad* = ref object
+    name*: string
+    t*: AVMediaType
+    getVideoBuffer*: proc (link: ptr AVFilterLink; w: cint; h: cint): ptr AVFrame
+    getAudioBuffer*: proc (link: ptr AVFilterLink; nbSamples: cint): ptr AVFrame
+    filterFrame*: proc (link: ptr AVFilterLink; frame: ptr AVFrame): cint
+    requestFrame*: proc (link: ptr AVFilterLink): cint
+    configProps*: proc (link: ptr AVFilterLink): cint
+    needsWritable*: cint
+
+  FFFrameBucket* = ref object
+    frame*: ptr AVFrame
+
+  FFFrameQueue* = ref object
+    queue*: ptr FFFrameBucket 
+    allocated*: csize_t 
+    tail*: csize_t             
+    queued*: csize_t           
+    firstBucket*: FFFrameBucket 
+    totalFramesHead*: uint64  
+    totalFramesTail*: uint64  
+    totalSamplesHead*: uint64 
+    totalSamplesTail*: uint64 
+    samplesSkipped*: cint
+
+
+  AVFilterLink* = ref object
+    src*: ptr AVFilterContext   ## /< source filter
+    srcpad*: ptr AVFilterPad    ## /< output pad on the source filter
+    dst*: ptr AVFilterContext   ## /< dest filter
+    dstpad*: ptr AVFilterPad    ## /< input pad on the dest filter
+    t*: AVMediaType       ## /< filter media type
+    w*: cint                   ## /< agreed upon image width
+    h*: cint                   ## /< agreed upon image height
+    sampleAspectRatio*: Rational[int] ## /< agreed upon sample aspect ratio
+    channelLayout*: uint64    ## /< channel layout of current buffer (see libavutil/channel_layout.h)
+    sampleRate*: cint          ## /< samples per second
+    format*: cint              ## /< agreed upon media format
+    timeBase*: Rational[int]
+    incfg*: AVFilterFormatsConfig
+    outcfg*: AVFilterFormatsConfig
+    initState*: AVFilterLinkInitState
+    graph*: ptr AVFilterGraph
+    currentPts*: int64
+    currentPtsUs*: int64
+    ageIndex*: cint
+    frameRate*: Rational[int]
+    partialBuf*: ptr AVFrame
+    partialBufSize*: cint
+    minSamples*: cint
+    maxSamples*: cint
+    channels*: cint
+    flags*: cuint
+    frameCountIn*: int64
+    frameCountOut*: int64
+    framePool*: pointer
+    frameWantedOut*: cint
+    hwFramesCtx*: ptr AVBufferRef
+    reserved*: array[0x0000F000, char]
+    fifo*: FFFrameQueue
+    frameBlockedIn*: cint
+    statusIn*: cint
+    statusInPts*: int64
+    statusOut*: cint
+
+  AVFilterCommand* = ref object
+    time*: cdouble             ## /< time expressed in seconds
+    command*: string          ## /< command
+    arg*: string              ## /< optional argument for the command
+    flags*: cint
+    next*: ptr AVFilterCommand
+
 
   AVFilterContext* = ref object
     avClass*: AVClass
     filter*: AVFilter
     name*: string
-    # input_pads*: AVFilterPad
-    # inputs*: AVFilterLink
+    inputPads*: ptr AVFilterPad
+    inputs*: ptr AVFilterLink
     nbInputs*: cuint
-    # output_pads*: AVFilterPad
-    # outputs*: AVFilterLink
+    outputPads*:ptr AVFilterPad
+    outputs*: ptr AVFilterLink
     nbOutputs*: cuint
     priv*: pointer
     graph*: AVFilterGraph
     threadType*: int
     internal*: AVFilterInternal
-    # command_queue*: AVFilterCommand
+    commandQueue*: AVFilterCommand
     enableStr*: string
     enable*: pointer
     varValues*: cdouble
@@ -1868,10 +2239,6 @@ type
     # mutex*: SDL_mutex
     # cond*: SDL_cond
 
-const VIDEO_PICTURE_QUEUE_SIZE = 3
-const SUBPICTURE_QUEUE_SIZE = 16
-const SAMPLE_QUEUE_SIZE = 9
-const FRAME_QUEUE_SIZE = 16
 
 
 type
@@ -1893,7 +2260,6 @@ type
     queueSerial*: cint      
 
 
-type
   Frame* = ref object
     frame*: AVFrame
     sub*: AVSubtitle
@@ -1921,12 +2287,8 @@ type
     pktq*: PacketQueue
 
 
-const
-  SYNC_AUDIO_MASTER* = 0     ##  default choice
-  SYNC_VIDEO_MASTER* = 1
-  SYNC_EXTERNAL_CLOCK* = 2   ##  synchronize to an external clock
 
-type
+
   Decoder* = ref object
     pkt*: AVPacket
     queue*: PacketQueue
@@ -1942,7 +2304,6 @@ type
     # decoderTid*: SDL_Thread
 
 
-type
   VideoState* = ref object
     # readTid*: SDL_Thread
     iformat*: AVInputFormat
@@ -2036,14 +2397,534 @@ type
 
 
 
+  ForcedKeyframesConst* = enum
+    FKF_N, FKF_N_FORCED, FKF_PREV_FORCED_N, FKF_PREV_FORCED_T, FKF_T, FKF_NB
 
+
+  INNER_C_STRUCT_test_47* = ref object
+    gotOutput*: cint           ##  previous decoded subtitle and related variables
+    result*: cint
+    subtitle*: AVSubtitle
+
+  sub2video_test_52* = ref object
+    lastPts*: int64
+    endPts*: int64
+    subQueue*: ptr AVFifoBuffer ## /< queue of AVSubtitle* before filter init
+    frame*: AVFrame
+    w*: cint
+    h*: cint
+    initialize*: cuint         ## /< marks if sub2video_update should force an initialization
+
+  InputStream* = ref object
+    fileIndex*: int
+    st*: AVStream
+    d*: cint           ##  true if stream data should be discarded
+    userSetDiscard*: cint
+    decodingNeeded*: cint      ##  non zero if the packets must be decoded in 'raw_fifo', see DECODING_FOR_*
+    decCtx*: ptr AVCodecContext
+    dec*: ptr AVCodec
+    decodedFrame*: ptr AVFrame
+    filterFrame*: ptr AVFrame   ##  a ref of decoded_frame, to be sent to filters
+    start*: int64 ##  time when read started
+                 ##  predicted dts of the next packet read for this stream or (when there are
+                 ##  several frames in a packet) of the next frame in current packet (in AV_TIME_BASE units)
+    nextDts*: int64
+    dts*: int64               ## /< dts of the last packet read for this stream (in AV_TIME_BASE units)
+    nextPts*: int64           ## /< synthetic pts for the next decode frame (in AV_TIME_BASE units)
+    pts*: int64               ## /< current pts of the decoded frame  (in AV_TIME_BASE units)
+    wrapCorrectionDone*: cint
+    filterInRescaleDeltaLast*: int64
+    minPts*: int64            ##  pts with the smallest value in a current stream
+    maxPts*: int64            ##  pts with the higher value in a current stream
+                  ##  when forcing constant input framerate through -r,
+                  ##  this contains the pts that will be given to the next decoded frame
+    cfrNextPts*: int64
+    nbSamples*: int64         ##  number of samples in the last decoded audio frame before looping
+    tsScale*: cdouble
+    sawFirstTs*: cint
+    decoderOpts*: ptr AVDictionary
+    framerate*: Rational[int]     ##  framerate forced with -r
+    topFieldFirst*: cint
+    guessLayoutMax*: cint
+    autorotate*: cint
+    fixSubDuration*: cint
+    prevSub*: INNER_C_STRUCT_test_47
+    sub2video*: sub2video_test_52
+    dr1*: cint ##  decoded data from this stream goes into all those filters
+             ##  currently video and audio only
+    filters*: ptr ptr InputFilter
+    nbFilters*: cint
+    reinitFilters*: cint       ##  hwaccel options
+    # hwaccelId*: HWAccelID
+    hwaccelDeviceType*: AVHWDeviceType
+    hwaccelDevice*: string
+    hwaccelOutputFormat*: AVPixelFormat ##  hwaccel context
+    hwaccelCtx*: pointer
+    hwaccelUninit*: proc (s: ptr AVCodecContext)
+    hwaccelGetBuffer*: proc (s: ptr AVCodecContext; frame: ptr AVFrame; flags: cint): cint
+    hwaccelRetrieveData*: proc (s: ptr AVCodecContext; frame: ptr AVFrame): cint
+    hwaccelPixFmt*: AVPixelFormat
+    hwaccelRetrievedPixFmt*: AVPixelFormat
+    hwFramesCtx*: ptr AVBufferRef ##  stats
+                               ##  combined size of all the packets read
+    dataSize*: uint64         ##  number of packets successfully read for this stream
+    nbPackets*: uint64        ##  number of frames/samples retrieved from the decoder
+    framesDecoded*: uint64
+    samplesDecoded*: uint64
+    dtsBuffer*: ptr int64
+    nbDtsBuffer*: cint
+    gotOutput*: cint
+
+  OutputStream* = ref object
+    fileIndex*: cint           ##  file index
+    index*: cint               ##  stream index in the output file
+    sourceIndex*: cint         ##  InputStream index
+    st*: ptr AVStream           ##  stream in the output file
+    encodingNeeded*: cint      ##  true if encoding needed for this stream
+    frameNumber*: cint         ##  input pts and corresponding output pts
+                     ##        for A/V sync
+    syncIst*: ptr InputStream   ##  input stream to sync against
+    syncOpts*: int64 ##  output frame counter, could be changed to some true timestamp
+                    ##  FIXME look at frame_number
+                    ##  pts of the first frame encoded for this stream, used for limiting
+                    ##  recording time
+    firstPts*: int64          ##  dts of the last packet sent to the muxer
+    lastMuxDts*: int64        ##  the timebase of the packets sent to the muxer
+    muxTimebase*: Rational[int]
+    encTimebase*: Rational[int]
+    bsfCtx*: ptr AVBSFContext
+    encCtx*: ptr AVCodecContext
+    refPar*: ptr AVCodecParameters ##  associated input codec parameters with encoders options applied
+    enc*: ptr AVCodec
+    maxFrames*: int64
+    filteredFrame*: ptr AVFrame
+    lastFrame*: ptr AVFrame
+    lastDropped*: cint
+    lastNb0Frames*: array[3, cint]
+    hwaccelCtx*: pointer       ##  video only
+    frameRate*: Rational[int]
+    isCfr*: cint
+    forceFps*: cint
+    topFieldFirst*: cint
+    rotateOverridden*: cint
+    autoscale*: cint
+    rotateOverrideValue*: cdouble
+    frameAspectRatio*: Rational[int] ##  forced key frames
+    forcedKfRefPts*: int64
+    forcedKfPts*: ptr int64
+    forcedKfCount*: cint
+    forcedKfIndex*: cint
+    forcedKeyframes*: string
+    forcedKeyframesPexpr*: ptr AVExpr
+    forcedKeyframesExprConstValues*: array[FKF_NB, cdouble] ##  audio only
+    audioChannelsMap*: ptr cint ##  list of the channels id to pick from the source stream
+    audioChannelsMapped*: cint ##  number of channels in audio_channels_map
+    logfilePrefix*: string
+    logfile*: ptr File
+    filter*: ptr OutputFilter
+    avfilter*: string
+    filters*: string          ## /< filtergraph associated to the -filter option
+    filtersScript*: string    ## /< filtergraph script associated to the -filter_script option
+    encoderOpts*: ptr AVDictionary
+    swsDict*: ptr AVDictionary
+    swrOpts*: ptr AVDictionary
+    resampleOpts*: ptr AVDictionary
+    apad*: string
+    # finished*: OSTFinished     
+    unavailable*: cint         ##  true if the steram is unavailable (possibly temporarily)
+    streamCopy*: cint ##  init_output_stream() has been called for this stream
+                    ##  The encoder and the bitstream filters have been initialized and the stream
+                    ##  parameters are set in the AVStream.
+    initialized*: cint
+    inputsDone*: cint
+    attachmentFilename*: string
+    copyInitialNonkeyframes*: cint
+    copyPriorStart*: cint
+    disposition*: string
+    keepPixFmt*: cint          ##  stats
+                    ##  combined size of all the packets written
+    dataSize*: uint64         ##  number of packets send to the muxer
+    packetsWritten*: uint64   ##  number of frames/samples sent to the encoder
+    framesEncoded*: uint64
+    samplesEncoded*: uint64   ##  packet quality factor
+    quality*: cint
+    maxMuxingQueueSize*: cint  ##  the packets are buffered here until the muxer is ready to be initialized
+    muxingQueue*: ptr AVFifoBuffer ##
+                                ##  The size of the AVPackets' buffers in queue.
+                                ##  Updated when a packet is either pushed or pulled from the queue.
+                                ##
+    muxingQueueDataSize*: csize_t ##  Threshold after which max_muxing_queue_size will be in effect
+    muxingQueueDataThreshold*: csize_t ##  packet picture type
+    pictType*: cint            ##  frame encode sum of squared error values
+    error*: array[4, int64]
+
+  AVFifoBuffer* = ref object
+    buffer*: ptr uint8
+    rptr*: ptr uint8
+    wptr*: ptr uint8
+    e*: ptr uint8
+    rndx*: uint32
+    wndx*: uint32
+
+
+  InputFilter* = ref object
+    filter*: AVFilterContext
+    ist*: InputStream
+    graph*: FilterGraph
+    name*: string
+    t*: AVMediaType       ##  AVMEDIA_TYPE_SUBTITLE for sub2video
+    frameQueue*: AVFifoBuffer ##  parameters configured for this input
+    format*: cint
+    width*: cint
+    height*: cint
+    sampleAspectRatio*: Rational[int]
+    sampleRate*: cint
+    channels*: cint
+    channelLayout*: uint64
+    hwFramesCtx*: string
+    eof*: cint
+
+  OutputFilter* = ref object
+    filter*: AVFilterContext
+    ost*: OutputStream
+    graph*: FilterGraph
+    name*: string           ##  temporary storage until stream maps are processed
+    outTmp*: AVFilterInOut
+    t*: AVMediaType       ##  desired output stream properties
+    width*: cint
+    height*: cint
+    frameRate*: Rational[int]
+    format*: cint
+    sampleRate*: cint
+    channelLayout*: uint64    ##  those are only set if no format is specified and the encoder gives us multiple options
+    formats*: ptr cint
+    channelLayouts*: ptr uint64
+    sampleRates*: ptr cint
+
+
+  FilterGraph* = ref object
+    index*: cint
+    graphDesc*: string
+    graph*: AVFilterGraph
+    reconfiguration*: cint
+    inputs*: ptr InputFilter
+    nbInputs*: cint
+    outputs*: ptr OutputFilter
+    nbOutputs*: cint
+
+  AVFilterInOut* = ref object
+    name*: string             ## * unique name for this input/output in the list
+    filterCtx*: AVFilterContext ## * index of the filt_ctx pad to use for linking
+    padIdx*: cint              ## * next input/input in the list, NULL if this is the last
+    next*: AVFilterInOut
+
+
+  BufferSourceContext* = ref object
+    class*: AVClass
+    timeBase*: Rational[int]      ## /< time_base to set in the output link
+    frameRate*: Rational[int]     ## /< frame_rate to set in the output link
+    nbFailedRequests*: cuint   ##  video only
+    w*: cint
+    h*: cint
+    pixFmt*: AVPixelFormat
+    pixelAspect*: Rational[int]
+    swsParam*: string
+    hwFramesCtx*: string ##  audio only
+    sampleRate*: cint
+    sampleFmt*: AVSampleFormat
+    channels*: cint
+    channelLayout*: uint64
+    channelLayoutStr*: string
+    eof*: cint
+
+  AVBufferSrcParameters* = ref object
+    format*: cint 
+    timeBase*: Rational[int] 
+    width*: cint
+    height*: cint             
+    sampleAspectRatio*: Rational[int] 
+    frameRate*: Rational[int] 
+    hwFramesCtx*: string 
+    channelLayout*: uint64
+
+ 
+
+  AVExpr* = ref object
+    t*: cint
+    value*: cdouble
+    constIndex*: cint
+    a*: AVExprA
+    param*: array[3, AVExpr]
+    v*: seq[cdouble]
+
+  Parser* = ref object
+    class*: ptr AVClass
+    stackIndex*: int
+    s*: string
+    constValues*: ptr cdouble
+    constNames*: seq[string]
+    funcs1*: proc(p:pointer, a: cdouble): cdouble
+    func1Names*: string  
+    funcs2: proc(p:pointer, a,b: cdouble): cdouble
+    func2Names*: string
+    opaque*: pointer
+    logOffset*: cint
+    logCtx*: pointer
+    v*: seq[cdouble]
+
+  ChannelLayout = ref object
+    name: string
+    nbChannels: int
+    layout: int64
+
+
+const
+  VSYNC_AUTO* = -1
+  VSYNC_PASSTHROUGH* = 0
+  VSYNC_CFR* = 1
+  VSYNC_VFR* = 2
+  VSYNC_VSCFR* = 0x000000FE
+  VSYNC_DROP* = 0x000000FF
+  MAX_STREAMS* = 1024
+
+type
+  AVThreadMessageQueue* {.bycopy.} = object
+    fifo*: ptr AVFifoBuffer
+    lock*: PthreadMutex
+    condRecv*: PthreadCond
+    condSend*: PthreadCond
+    errSend*: cint
+    errRecv*: cint
+    elsize*: cuint
+    freeFunc*: proc (msg: pointer)
+
+  InputFile* = ref object
+    ctx*: ptr AVFormatContext
+    eofReached*: cint          ##  true if eof reached
+    eagain*: cint              ##  true if last read attempt returned EAGAIN
+    istIndex*: cint            ##  index of first stream in input_streams
+    loop*: cint                ##  set number of times input stream should be looped
+    duration*: int64          ##  actual duration of the longest stream in a file
+                    ##                              at the moment when looping happens
+    timeBase*: Rational[int]      ##  time base of the duration
+    inputTsOffset*: int64
+    tsOffset*: int64
+    lastTs*: int64
+    startTime*: int64         ##  user-specified start time in AV_TIME_BASE or AV_NOPTS_VALUE
+    seekTimestamp*: cint
+    recordingTime*: int64
+    nbStreams*: cint ##  number of stream that ffmpeg is aware of; may be different
+                   ##                              from ctx.nb_streams if new streams appear during av_read_frame()
+    nbStreamsWarn*: cint       ##  number of streams that the user was warned of
+    rateEmu*: cint
+    accurateSeek*: cint
+    inThreadQueue*: ptr AVThreadMessageQueue
+    thread*: Pthread         ##  thread reading from this file
+    nonBlocking*: cint         ##  reading packets from the thread should not block
+    joined*: cint              ##  the thread has been joined
+    threadQueueSize*: cint     ##  maximum number of queued packets
+
+  OutputFile* {.bycopy.} = object
+    ctx*: ptr AVFormatContext
+    opts*: ptr AVDictionary
+    ostIndex*: cint            ##  index of the first stream in output_streams
+    recordingTime*: int64     ## /< desired length of the resulting file in microseconds == AV_TIME_BASE units
+    startTime*: int64         ## /< start time in microseconds == AV_TIME_BASE units
+    limitFilesize*: uint64   ##  filesize limit expressed in bytes
+    shortest*: cint
+    headerWritten*: cint
+
+
+
+var vstatsFilename*: string
+var sdpFilename*: string
+var audioDriftThreshold*: cfloat = 0.1
+var dtsDeltaThreshold*: cfloat = 10
+var dtsErrorThreshold*: cfloat = 3600 * 30
+var audioVolume*: cint = 256
+var audioSyncMethod*: cint = 0
+var videoSyncMethod*: cint = VSYNC_AUTO
+var frameDropThreshold*: cfloat = 0
+var doDeinterlace*: cint = 0
+var doBenchmark*: cint = 0
+var doBenchmarkAll*: cint = 0
+var doHexDump*: cint = 0
+var doPktDump*: cint = 0
+var copyTs*: cint = 0
+var startAtZero*: cint = 0
+var copyTb*: cint = -1
+var debugTs*: cint = 0
+var exitOnError*: cint = 0
+var abortOnFlags*: cint = 0
+var printStats*: cint = -1
+var qpHist*: cint = 0
+var stdinInteraction*: cint = 1
+var frameBitsPerRawSample*: cint = 0
+var maxErrorRate*: cfloat = 2.0 / 3
+var filterComplexNbthreads*: cint = 0
+var vstatsVersion*: cint = 2
+var autoConversionFilters*: cint = 1
+var intraOnly*: cint = 0
+var fileOverwrite*: cint = 0
+var noFileOverwrite*: cint = 0
+var doPsnr*: cint = 0
+var inputSync*: cint
+var inputStreamPotentiallyAvailable*: cint = 0
+var ignoreUnknownStreams*: cint = 0
+var copyUnknownStreams*: cint = 0
+var runAsDaemon*: cint = 0
+var nbFramesDup*: cint = 0
+var dupWarning*: cuint = 1000
+var nbFramesDrop*: cint = 0
+var decodeErrorStat*: array[2, int64]
+var wantSdp*: cint = 1
+# var currentTime*: BenchmarkTimeStamps
+var progressAvio*: ptr AVIOContext 
+var subtitleOut*: ptr uint8
+var inputStreams*:  InputStream 
+var nbInputStreams*: cint = 0
+var inputFiles*: ptr InputFile 
+var nbInputFiles*: cint = 0
+var outputStreams*: OutputStream 
+var nbOutputStreams*: cint = 0
+var outputFiles*: ptr OutputFile 
+var nbOutputFiles*: cint = 0
+var filtergraphs*:  FilterGraph
+var nbFiltergraphs*: cint
+
+var channelLayoutMap: seq[ChannelLayout] = @[
+    ChannelLayout(name:"mono",        nbChannels:1,  layout:AV_CH_LAYOUT_MONO),
+    ChannelLayout(name:"stereo",      nbChannels:2,  layout:AV_CH_LAYOUT_STEREO),
+    ChannelLayout(name:"2.1",         nbChannels:3,  layout:AV_CH_LAYOUT_2POINT1),
+    ChannelLayout(name:"3.0",         nbChannels:3,  layout:AV_CH_LAYOUT_SURROUND),
+    ChannelLayout(name:"3.0(back)",   nbChannels:3,  layout:AV_CH_LAYOUT_2_1),
+    ChannelLayout(name:"4.0",         nbChannels:4,  layout:AV_CH_LAYOUT_4POINT0),
+    ChannelLayout(name:"quad",        nbChannels:4,  layout:AV_CH_LAYOUT_QUAD),
+    ChannelLayout(name:"quad(side)",  nbChannels:4,  layout:AV_CH_LAYOUT_2_2),
+    ChannelLayout(name:"3.1",         nbChannels:4,  layout:AV_CH_LAYOUT_3POINT1),
+    ChannelLayout(name:"5.0",         nbChannels:5,  layout:AV_CH_LAYOUT_5POINT0_BACK),
+    ChannelLayout(name:"5.0(side)",   nbChannels:5,  layout:AV_CH_LAYOUT_5POINT0),
+    ChannelLayout(name:"4.1",         nbChannels:5,  layout:AV_CH_LAYOUT_4POINT1),
+    ChannelLayout(name:"5.1",         nbChannels:6,  layout:AV_CH_LAYOUT_5POINT1_BACK),
+    ChannelLayout(name:"5.1(side)",   nbChannels:6,  layout:AV_CH_LAYOUT_5POINT1),
+    ChannelLayout(name:"6.0",         nbChannels:6,  layout:AV_CH_LAYOUT_6POINT0),
+    ChannelLayout(name:"6.0(front)",  nbChannels:6,  layout:AV_CH_LAYOUT_6POINT0_FRONT),
+    ChannelLayout(name:"hexagonal",   nbChannels:6,  layout:AV_CH_LAYOUT_HEXAGONAL),
+    ChannelLayout(name:"6.1",         nbChannels:7,  layout:AV_CH_LAYOUT_6POINT1),
+    ChannelLayout(name:"6.1(back)",   nbChannels:7,  layout:AV_CH_LAYOUT_6POINT1_BACK),
+    ChannelLayout(name:"6.1(front)",  nbChannels:7,  layout:AV_CH_LAYOUT_6POINT1_FRONT),
+    ChannelLayout(name:"7.0",         nbChannels:7,  layout:AV_CH_LAYOUT_7POINT0),
+    ChannelLayout(name:"7.0(front)",  nbChannels:7,  layout:AV_CH_LAYOUT_7POINT0_FRONT),
+    ChannelLayout(name:"7.1",         nbChannels:8,  layout:AV_CH_LAYOUT_7POINT1),
+    ChannelLayout(name:"7.1(wide)",   nbChannels:8,  layout:AV_CH_LAYOUT_7POINT1_WIDE_BACK),
+    ChannelLayout(name:"7.1(wide-side)",   nbChannels:8,  layout:AV_CH_LAYOUT_7POINT1_WIDE),
+    ChannelLayout(name:"octagonal",   nbChannels:8,  layout:AV_CH_LAYOUT_OCTAGONAL),
+    ChannelLayout(name:"hexadecagonal", nbChannels:16, layout: AV_CH_LAYOUT_HEXADECAGONAL),
+    ChannelLayout(name:"downmix",     nbChannels:2,  layout:AV_CH_LAYOUT_STEREO_DOWNMIX),
+    ChannelLayout(name:"22.2",          nbChannels:24, layout:AV_CH_LAYOUT_22POINT2),
+]
+
+type ChannelName = ref object
+    name: string
+    description: string
+
+var channelNames*: OrderedTableRef[int, ChannelName] = newOrderedTable({
+    0: ChannelName(name:"FL",        description:"front left"            ),
+    1: ChannelName(name:"FR",        description:"front right"           ),
+    2: ChannelName(name:"FC",        description:"front center"          ),
+    3: ChannelName(name:"LFE",       description:"low frequency"         ),
+    4: ChannelName(name:"BL",        description:"back left"             ),
+    5: ChannelName(name:"BR",        description:"back right"            ),
+    6: ChannelName(name:"FLC",       description:"front left-of-center"  ),
+    7: ChannelName(name:"FRC",       description:"front right-of-center" ),
+    8: ChannelName(name:"BC",        description:"back center"           ),
+    9: ChannelName(name:"SL",        description:"side left"             ),
+    10: ChannelName(name:"SR",        description:"side right"            ),
+    11: ChannelName(name:"TC",        description:"top center"            ),
+    12: ChannelName(name:"TFL",       description:"top front left"        ),
+    13: ChannelName(name:"TFC",       description:"top front center"      ),
+    14: ChannelName(name:"TFR",       description:"top front right"       ),
+    15: ChannelName(name:"TBL",       description:"top back left"         ),
+    16: ChannelName(name:"TBC",       description:"top back center"       ),
+    17: ChannelName(name:"TBR",       description:"top back right"        ),
+    29: ChannelName(name:"DL",        description:"downmix left"          ),
+    30: ChannelName(name:"DR",        description:"downmix right"         ),
+    31: ChannelName(name:"WL",        description:"wide left"             ),
+    32: ChannelName(name:"WR",        description:"wide right"            ),
+    33: ChannelName(name:"SDL",       description:"surround direct left"  ),
+    34: ChannelName(name:"SDR",       description:"surround direct right" ),
+    35: ChannelName(name:"LFE2",      description:"low frequency 2"       ),
+    36: ChannelName(name:"TSL",       description:"top side left"         ),
+    37: ChannelName(name:"TSR",       description:"top side right"        ),
+    38: ChannelName(name:"BFC",       description:"bottom front center"   ),
+    39: ChannelName(name:"BFL",       description:"bottom front left"     ),
+    40: ChannelName(name:"BFR",       description:"bottom front right"    ),
+})
+
+
+
+const
+  SDL_PIXELFORMAT_RGBA32 = SDL_PIXELFORMAT_ABGR8888
+  SDL_PIXELFORMAT_ARGB32 = SDL_PIXELFORMAT_BGRA8888
+  SDL_PIXELFORMAT_BGRA32 = SDL_PIXELFORMAT_ARGB8888
+  SDL_PIXELFORMAT_ABGR32 = SDL_PIXELFORMAT_RGBA8888
+
+
+type 
+  TextureFormatEntry = ref object
+    format:int 
+    texture_fmt:int
+
+var sdlTextureFormatMap: seq[TextureFormatEntry] = @[
+    TextureFormatEntry(format: AV_PIX_FMT_RGB8.ord,           texture_fmt:SDL_PIXELFORMAT_RGB332.ord ),
+    TextureFormatEntry(format: AV_PIX_FMT_RGB444LE.ord,         texture_fmt:SDL_PIXELFORMAT_RGB444.ord ),
+    TextureFormatEntry(format: AV_PIX_FMT_RGB555LE.ord,         texture_fmt:SDL_PIXELFORMAT_RGB555.ord ),
+    TextureFormatEntry(format: AV_PIX_FMT_BGR555LE.ord,         texture_fmt:SDL_PIXELFORMAT_BGR555.ord ),
+    TextureFormatEntry(format: AV_PIX_FMT_RGB565LE.ord,         texture_fmt:SDL_PIXELFORMAT_RGB565.ord ),
+    TextureFormatEntry(format: AV_PIX_FMT_BGR565LE.ord,         texture_fmt:SDL_PIXELFORMAT_BGR565.ord ),
+    TextureFormatEntry(format: AV_PIX_FMT_RGB24.ord,          texture_fmt:SDL_PIXELFORMAT_RGB24.ord ),
+    TextureFormatEntry(format: AV_PIX_FMT_BGR24.ord,          texture_fmt:SDL_PIXELFORMAT_BGR24.ord ),
+    # TextureFormatEntry(format: AV_PIX_FMT_0RGB32.ord,         texture_fmt:SDL_PIXELFORMAT_RGB888.ord ),
+    # TextureFormatEntry(format: AV_PIX_FMT_0BGR32.ord,         texture_fmt:SDL_PIXELFORMAT_BGR888.ord ),
+    # TextureFormatEntry(format: AV_PIX_FMT_NE0BGR.ord, texture_fmt:SDL_PIXELFORMAT_RGBX8888.ord ),
+    # TextureFormatEntry(format: AV_PIX_FMT_NE0RGB.ord, texture_fmt:SDL_PIXELFORMAT_BGRX8888.ord ),
+    # TextureFormatEntry(format: AV_PIX_FMT_RGB32.ord,          texture_fmt:SDL_PIXELFORMAT_ARGB8888.ord ),
+    # TextureFormatEntry(format: AV_PIX_FMT_RGB32_1.ord,        texture_fmt:SDL_PIXELFORMAT_RGBA8888.ord ),
+    # TextureFormatEntry(format: AV_PIX_FMT_BGR32.ord,          texture_fmt:SDL_PIXELFORMAT_ABGR8888.ord ),
+    # TextureFormatEntry(format: AV_PIX_FMT_BGR32_1.ord,        texture_fmt:SDL_PIXELFORMAT_BGRA8888.ord ),
+    TextureFormatEntry(format: AV_PIX_FMT_YUV420P.ord,        texture_fmt:SDL_PIXELFORMAT_IYUV.ord ),
+    TextureFormatEntry(format: AV_PIX_FMT_YUYV422.ord,        texture_fmt:SDL_PIXELFORMAT_YUY2.ord ),
+    TextureFormatEntry(format: AV_PIX_FMT_UYVY422.ord,        texture_fmt:SDL_PIXELFORMAT_UYVY.ord ),
+    TextureFormatEntry(format: AV_PIX_FMT_NONE.ord,           texture_fmt:SDL_PIXELFORMAT_UNKNOWN.ord ),
+]
+
+type
+  SDL_RendererInfo* = ref object
+    name*: string
+    flags*: uint32
+    num_texture_formats*: uint32
+    textureFormats*: array[16, uint32]
+    max_texture_width*: cint
+    max_texture_height*: cint
+  SDL_AudioDeviceID* = uint32
+
+template defaultNumval*(opt: untyped): untyped =
+  (if (opt.t == AV_OPT_TYPE_INT64 or opt.t == AV_OPT_TYPE_UINT64 or
+      opt.t == AV_OPT_TYPE_CONST or opt.t == AV_OPT_TYPE_FLAGS or
+      opt.t == AV_OPT_TYPE_INT): opt.defaultVal.i64 else: opt.defaultVal.dbl.int64)
+
+
+
+const
+  AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC* = (1 shl 16)
+  AVFILTER_FLAG_SUPPORT_TIMELINE_INTERNAL* = (1 shl 17)
+  AVFILTER_FLAG_SUPPORT_TIMELINE* = (AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC or AVFILTER_FLAG_SUPPORT_TIMELINE_INTERNAL)
 
 
 
 const EAGAIN = 11
 const EINVAL = 22
 const averror_Eof = -('E'.ord or ('O'.ord shl 8) or ('F'.ord shl 16) or (' '.ord shl 24))
-const AVERROR_INPUT_CHANGED    =  (-0x636e6701)
 const INPUT_BUFFER_PADDING_SIZE = 64
 const CODEC_CAP_PARAM_CHANGE = (1 shl 14)
 const EF_EXPLODE  = (1 shl 3) 
@@ -2051,20 +2932,50 @@ const CODEC_CAP_DR1 = (1 shl  1)
 const CODEC_CAP_TRUNCATED = (1 shl  3)
 const HAVE_THREADS = 1
 const FF_DEBUG_THREADS = 0x00010000
-const PIX_FMT_FLAG_BE* = 1 shl 0
-const PIX_FMT_FLAG_PAL* = 1 shl 1
-const PIX_FMT_FLAG_BITSTREAM* = 1 shl 2
-const PIX_FMT_FLAG_HWACCEL = 1 shl 3
-const PIX_FMT_FLAG_PLANAR = 1 shl 4
+const AV_PIX_FMT_FLAG_BE* = 1 shl 0
+const AV_PIX_FMT_FLAG_PAL* = 1 shl 1
+const AV_PIX_FMT_FLAG_BITSTREAM* = 1 shl 2
+const AV_PIX_FMT_FLAG_HWACCEL = 1 shl 3
+const AV_PIX_FMT_FLAG_PLANAR = 1 shl 4
 const NUM_DATA_POINTERS = 8
 const FF_COMPLIANCE_EXPERIMENTAL = -2
 
 proc MKTAG(a,b,c,d:auto):int = (a.ord or (b.ord shl 8) or (c.ord shl 16) or (d.ord shl 24))
 template FFERRTAG(a, b, c, d):untyped = -MKTAG(a, b, c, d)
-const AVERROR_INVALIDDATA =  FFERRTAG( 'I','N','D','A')
-const AVERROR_PATCHWELCOME = FFERRTAG( 'P','A','W','E')
-const AVERROR_BUG = FFERRTAG( 'B','U','G','!')
-const AVERROR_OPTION_NOT_FOUND = FFERRTAG(0xF8,'O','P','T')
+const
+  AVERROR_BSF_NOT_FOUND* = FFERRTAG(0x000000F8, 'B', 'S', 'F') ## /< Bitstream filter not found
+  AVERROR_BUG* = FFERRTAG('B', 'U', 'G', '!') ## /< Internal bug, also see AVERROR_BUG2
+  AVERROR_BUFFER_TOO_SMALL* = FFERRTAG('B', 'U', 'F', 'S') ## /< Buffer too small
+  AVERROR_DECODER_NOT_FOUND* = FFERRTAG(0x000000F8, 'D', 'E', 'C') ## /< Decoder not found
+  AVERROR_DEMUXER_NOT_FOUND* = FFERRTAG(0x000000F8, 'D', 'E', 'M') ## /< Demuxer not found
+  AVERROR_ENCODER_NOT_FOUND* = FFERRTAG(0x000000F8, 'E', 'N', 'C') ## /< Encoder not found
+  AVERROR_EOF* = FFERRTAG('E', 'O', 'F', ' ') ## /< End of file
+  AVERROR_EXIT* = FFERRTAG('E', 'X', 'I', 'T') ## /< Immediate exit was requested; the called function should not be restarted
+  AVERROR_EXTERNAL* = FFERRTAG('E', 'X', 'T', ' ') ## /< Generic error in an external library
+  AVERROR_FILTER_NOT_FOUND* = FFERRTAG(0x000000F8, 'F', 'I', 'L') ## /< Filter not found
+  AVERROR_INVALIDDATA* = FFERRTAG('I', 'N', 'D', 'A') ## /< Invalid data found when processing input
+  AVERROR_MUXER_NOT_FOUND* = FFERRTAG(0x000000F8, 'M', 'U', 'X') ## /< Muxer not found
+  AVERROR_OPTION_NOT_FOUND* = FFERRTAG(0x000000F8, 'O', 'P', 'T') ## /< Option not found
+  AVERROR_PATCHWELCOME* = FFERRTAG('P', 'A', 'W', 'E') ## /< Not yet implemented in FFmpeg, patches welcome
+  AVERROR_PROTOCOL_NOT_FOUND* = FFERRTAG(0x000000F8, 'P', 'R', 'O') ## /< Protocol not found
+  AVERROR_STREAM_NOT_FOUND* = FFERRTAG(0x000000F8, 'S', 'T', 'R') ## /< Stream not found
+                                                            ## *
+                                                            ##  This is semantically identical to AVERROR_BUG
+                                                            ##  it has been introduced in Libav after our AVERROR_BUG and with a modified value.
+                                                            ##
+  AVERROR_BUG2* = FFERRTAG('B', 'U', 'G', ' ')
+  AVERROR_UNKNOWN* = FFERRTAG('U', 'N', 'K', 'N') ## /< Unknown error, typically from an external library
+  AVERROR_EXPERIMENTAL* = (-0x2BB2AFA8) ## /< Requested feature is flagged experimental. Set strict_std_compliance if you really want to use it.
+  AVERROR_INPUT_CHANGED* = (-0x636E6701) ## /< Input changed between calls. Reconfiguration is required. (can be OR-ed with AVERROR_OUTPUT_CHANGED)
+  AVERROR_OUTPUT_CHANGED* = (-0x636E6702) ## /< Output changed between calls. Reconfiguration is required. (can be OR-ed with AVERROR_INPUT_CHANGED)
+                                       ##  HTTP & RTSP errors
+  AVERROR_HTTP_BAD_REQUEST* = FFERRTAG(0x000000F8, '4', '0', '0')
+  AVERROR_HTTP_UNAUTHORIZED* = FFERRTAG(0x000000F8, '4', '0', '1')
+  AVERROR_HTTP_FORBIDDEN* = FFERRTAG(0x000000F8, '4', '0', '3')
+  AVERROR_HTTP_NOT_FOUND* = FFERRTAG(0x000000F8, '4', '0', '4')
+  AVERROR_HTTP_OTHER_4XX* = FFERRTAG(0x000000F8, '4', 'X', 'X')
+  AVERROR_HTTP_SERVER_ERROR* = FFERRTAG(0x000000F8, '5', 'X', 'X')
+
 
 template FFALIGN(x: int, a:int):int = ((x+a-1) and not(a-1))
 template IS_EMPTY(pkt):untyped = (pkt.data == nil and (pkt).side_data_elems == 0)
@@ -2073,10 +2984,10 @@ template IS_EMPTY(pkt):untyped = (pkt.data == nil and (pkt).side_data_elems == 0
 var atomicLock*: Pthread_mutex
 
 var avPixFmtDescriptors = newOrderedTable(
-  {PIX_FMT_YUV420P.ord: AVPixFmtDescriptor(name:"yuv420p",nb_components:3,log2_chroma_w:1,log2_chroma_h:1,
+  {AV_PIX_FMT_YUV420P.ord: AVPixFmtDescriptor(name:"yuv420p",nb_components:3,log2_chroma_w:1,log2_chroma_h:1,
       comp: @[(0, 1, 0, 0, 8, 0, 7, 1),        
             (1, 1, 0, 0, 8, 0, 7, 1 ),        
-            (2, 1, 0, 0, 8, 0, 7, 1 )], flags: PIX_FMT_FLAG_PLANAR)},
+            (2, 1, 0, 0, 8, 0, 7, 1 )], flags: AV_PIX_FMT_FLAG_PLANAR)},
 
   )
 
@@ -2327,7 +3238,7 @@ proc avPacketAddSideData*(pkt: var AVPacket; t: AVPacketSideDataType;data: strin
       pkt.sideData[i].data = data
       pkt.sideData[i].size = int size
       return 0
-  if elems + 1 > PKT_DATA_NB.int:
+  if elems + 1 > AV_PKT_DATA_NB.int:
     return -ERANGE
   pkt.sideData.add tmp
   return 0
@@ -2406,7 +3317,7 @@ proc imageGetLinesize*(width: auto; plane: int; maxStep: cint; maxStepComp: int;
   if shiftedW != 0 and maxStep > int.high div shiftedW:
     return -(EINVAL)
   result = maxStep * shiftedW
-  if (desc.flags and PIX_FMT_FLAG_BITSTREAM) != 0:
+  if (desc.flags and AV_PIX_FMT_FLAG_BITSTREAM) != 0:
     result = (result + 7) shr 3
   return result
 
@@ -2418,7 +3329,7 @@ proc avPixFmtDescGet(pixFmt:int): AVPixFmtDescriptor = avPixFmtDescriptors[pix_f
 #   ##  max pixel step for each plane
 #   var maxStepComp: array[4, cint]
 #   ##  the component for each plane which has the max pixel step
-#   if not desc or desc.flags and PIX_FMT_FLAG_HWACCEL:
+#   if not desc or desc.flags and AV_PIX_FMT_FLAG_HWACCEL:
 #     return -(EINVAL)
 #   avImageFillMaxPixsteps(maxStep, maxStepComp, desc)
 #   return imageGetLinesize(width, plane, maxStep[plane], maxStepComp[plane], desc)
@@ -2452,7 +3363,7 @@ proc avPixFmtDescGet(pixFmt:int): AVPixFmtDescriptor = avPixFmtDescriptors[pix_f
 #       (a + (1 shl b) - 1) shr b
 
 proc ffSetDimensions*(s:var AVCodecContext; width: cint; height: cint): cint =
-#   result = avImageCheckSize2(width, height, s.maxPixels, PIX_FMT_NONE, 0, s)
+#   result = avImageCheckSize2(width, height, s.maxPixels, AV_PIX_FMT_NONE, 0, s)
 #   if result < 0:
 #     height = 0
 #     width = 0 
@@ -2467,7 +3378,7 @@ proc ffSetDimensions*(s:var AVCodecContext; width: cint; height: cint): cint =
 
 
 proc applyParamChange*(avctx: var AVCodecContext; avpkt: var AVPacket): cint =
-  var sideData = avPacketGetSideData(avpkt, PKT_DATA_PARAM_CHANGE)
+  var sideData = avPacketGetSideData(avpkt, AV_PKT_DATA_PARAM_CHANGE)
   var data = newStringStream sideData
   var flags: int32
   var val: int64
@@ -2536,7 +3447,7 @@ const FF_THREAD_FRAME =  1
 const FF_THREAD_SLICE = 2 
 
 type
-  PthreadT* {.bycopy.} = object
+  PthreadT* = ref object
     handle*: pointer
     f*: proc (arg: pointer): pointer
     arg*: pointer
@@ -2617,7 +3528,7 @@ proc avImageFillLinesizes*(linesizes: var seq[int]; pixFmt: int; width: auto): c
   var desc = avPixFmtDescriptors[pixFmt]
   var maxStep: array[4, cint]
   var maxStepComp: array[4, cint]
-  if desc == nil or (desc.flags and PIX_FMT_FLAG_HWACCEL) != 0:
+  if desc == nil or (desc.flags and AV_PIX_FMT_FLAG_HWACCEL) != 0:
     return -(EINVAL)
   for i in 0..3:
     var comp: AVComponentDescriptor = desc.comp[i]
@@ -2637,7 +3548,7 @@ proc avImageFillPlaneSizes*(sizes: var seq[uint]; pixFmt: int;height: cint; line
   var  hasPlane: array[4, int]
   var desc = avPixFmtDescGet(pixFmt.ord)
   sizes[0] = uint linesizes[0] * height
-  if (desc.flags and PIX_FMT_FLAG_PAL) != 0 or (desc.flags and FF_API_PSEUDOPAL) != 0:
+  if (desc.flags and AV_PIX_FMT_FLAG_PAL) != 0 or (desc.flags and FF_API_PSEUDOPAL) != 0:
     sizes[1] = 256 * 4
     return 0
   for i in 0..3:
@@ -2746,22 +3657,29 @@ type
     altform*: AVSampleFormat   
 
 var  sampleFmtInfos = newOrderedTable({
-    SAMPLE_FMT_U8.ord: SampleFmtInfo(name:"u8", bits:8, planar: 0, altform: SAMPLE_FMT_U8P),
-    SAMPLE_FMT_S16.ord: SampleFmtInfo(name:"s16", bits:16, planar: 0, altform: SAMPLE_FMT_S16P),
-    SAMPLE_FMT_S32.ord: SampleFmtInfo(name:"s32", bits:32, planar: 0, altform: SAMPLE_FMT_S32P),
-    SAMPLE_FMT_S64.ord: SampleFmtInfo( name:"s64", bits:64, planar: 0, altform: SAMPLE_FMT_S64P),
-    SAMPLE_FMT_FLT.ord: SampleFmtInfo( name:"flt", bits: 32, planar: 0, altform: SAMPLE_FMT_FLTP),
-    SAMPLE_FMT_DBL.ord: SampleFmtInfo( name: "dbl", bits: 64, planar: 0, altform: SAMPLE_FMT_DBLP),
-    SAMPLE_FMT_U8P.ord: SampleFmtInfo( name: "u8p", bits:  8, planar: 1, altform: SAMPLE_FMT_U8),
-    SAMPLE_FMT_S16P.ord: SampleFmtInfo( name:"s16p", bits: 16, planar: 1, altform: SAMPLE_FMT_S16),
-    SAMPLE_FMT_S32P.ord: SampleFmtInfo( name:"s32p", bits: 32, planar: 1, altform: SAMPLE_FMT_S32),
-    SAMPLE_FMT_S64P.ord: SampleFmtInfo( name:"s64p", bits: 64, planar: 1, altform: SAMPLE_FMT_S64),
-    SAMPLE_FMT_FLTP.ord: SampleFmtInfo( name:"fltp", bits: 32, planar: 1, altform: SAMPLE_FMT_FLT),
-    SAMPLE_FMT_DBLP.ord: SampleFmtInfo( name:"dblp", bits: 64, planar: 1, altform: SAMPLE_FMT_DBL),
+    AV_SAMPLEFMT_U8.ord: SampleFmtInfo(name:"u8", bits:8, planar: 0, altform: AV_SAMPLEFMT_U8P),
+    AV_SAMPLEFMT_S16.ord: SampleFmtInfo(name:"s16", bits:16, planar: 0, altform: AV_SAMPLEFMT_S16P),
+    AV_SAMPLEFMT_S32.ord: SampleFmtInfo(name:"s32", bits:32, planar: 0, altform: AV_SAMPLEFMT_S32P),
+    AV_SAMPLEFMT_S64.ord: SampleFmtInfo( name:"s64", bits:64, planar: 0, altform: AV_SAMPLEFMT_S64P),
+    AV_SAMPLEFMT_FLT.ord: SampleFmtInfo( name:"flt", bits: 32, planar: 0, altform: AV_SAMPLEFMT_FLTP),
+    AV_SAMPLEFMT_DBL.ord: SampleFmtInfo( name: "dbl", bits: 64, planar: 0, altform: AV_SAMPLEFMT_DBLP),
+    AV_SAMPLEFMT_U8P.ord: SampleFmtInfo( name: "u8p", bits:  8, planar: 1, altform: AV_SAMPLEFMT_U8),
+    AV_SAMPLEFMT_S16P.ord: SampleFmtInfo( name:"s16p", bits: 16, planar: 1, altform: AV_SAMPLEFMT_S16),
+    AV_SAMPLEFMT_S32P.ord: SampleFmtInfo( name:"s32p", bits: 32, planar: 1, altform: AV_SAMPLEFMT_S32),
+    AV_SAMPLEFMT_S64P.ord: SampleFmtInfo( name:"s64p", bits: 64, planar: 1, altform: AV_SAMPLEFMT_S64),
+    AV_SAMPLEFMT_FLTP.ord: SampleFmtInfo( name:"fltp", bits: 32, planar: 1, altform: AV_SAMPLEFMT_FLT),
+    AV_SAMPLEFMT_DBLP.ord: SampleFmtInfo( name:"dblp", bits: 64, planar: 1, altform: AV_SAMPLEFMT_DBL),
 })
 
 proc avSampleFmtIsPlanar*(sampleFmt: int): cint =
   return sampleFmtInfos[sampleFmt].planar
+
+proc avGetSampleFmt(name: string):int =
+  for result, info in sampleFmtInfos:
+    if info.name == name:
+      return result
+  return 0
+  
 
 proc avPopcountC*(x: uint32): cint {.inline.} =
   result = x.cint
@@ -2777,7 +3695,7 @@ proc avPopcount64C*(x: uint64): cint {.inline.} =
 proc avGetChannelLayoutNbChannels*(channelLayout: uint64): cint = avPopcount64C(channelLayout)
 
 proc avGetBytesPerSample*(sampleFmt: int): cint =
-  if sampleFmt < 0 or sampleFmt >= SAMPLE_FMT_NB.ord: 0 
+  if sampleFmt < 0 or sampleFmt >= AV_SAMPLE_FMT_NB.ord: 0 
   else: sampleFmtInfos[sampleFmt].bits shr 3
 
 proc avSamplesGetBufferSize*(linesize: ptr int; nbChannels: cint; nbSamples: cint; sampleFmt: int; align: var cint): cint =
@@ -2969,63 +3887,63 @@ proc avcodecAlignDimensions2*(s: var AVCodecContext; width: var auto; height: va
     wAlign = 1 shl desc.log2ChromaW
     hAlign = 1 shl desc.log2ChromaH
   case s.pixFmt
-  of PIX_FMT_YUV420P, PIX_FMT_YUYV422, PIX_FMT_YVYU422, PIX_FMT_UYVY422,
-    PIX_FMT_YUV422P, PIX_FMT_YUV440P, PIX_FMT_YUV444P, PIX_FMT_GBRP,
-    PIX_FMT_GBRAP, PIX_FMT_GRAY8, PIX_FMT_GRAY16BE, PIX_FMT_GRAY16LE,
-    PIX_FMT_YUVJ420P, PIX_FMT_YUVJ422P, PIX_FMT_YUVJ440P,
-    PIX_FMT_YUVJ444P, PIX_FMT_YUVA420P, PIX_FMT_YUVA422P,
-    PIX_FMT_YUVA444P, PIX_FMT_YUV420P9le, PIX_FMT_YUV420P9be,
-    PIX_FMT_YUV420P10le, PIX_FMT_YUV420P10be, PIX_FMT_YUV420P12le,
-    PIX_FMT_YUV420P12be, PIX_FMT_YUV420P14le, PIX_FMT_YUV420P14be,
-    PIX_FMT_YUV420P16le, PIX_FMT_YUV420P16be, PIX_FMT_YUVA420P9LE,
-    PIX_FMT_YUVA420P9BE, PIX_FMT_YUVA420P10LE, PIX_FMT_YUVA420P10BE,
-    PIX_FMT_YUVA420P16LE, PIX_FMT_YUVA420P16BE, PIX_FMT_YUV422P9LE,
-    PIX_FMT_YUV422P9BE, PIX_FMT_YUV422P10LE, PIX_FMT_YUV422P10BE,
-    PIX_FMT_YUV422P12LE, PIX_FMT_YUV422P12BE, PIX_FMT_YUV422P14LE,
-    PIX_FMT_YUV422P14BE, PIX_FMT_YUV422P16LE, PIX_FMT_YUV422P16BE,
-    PIX_FMT_YUVA422P9LE, PIX_FMT_YUVA422P9BE, PIX_FMT_YUVA422P10LE,
-    PIX_FMT_YUVA422P10BE, PIX_FMT_YUVA422P12LE, PIX_FMT_YUVA422P12BE,
-    PIX_FMT_YUVA422P16LE, PIX_FMT_YUVA422P16BE, PIX_FMT_YUV440P10LE,
-    PIX_FMT_YUV440P10BE, PIX_FMT_YUV440P12LE, PIX_FMT_YUV440P12BE,
-    PIX_FMT_YUV444P9LE, PIX_FMT_YUV444P9BE, PIX_FMT_YUV444P10LE,
-    PIX_FMT_YUV444P10BE, PIX_FMT_YUV444P12LE, PIX_FMT_YUV444P12BE,
-    PIX_FMT_YUV444P14LE, PIX_FMT_YUV444P14BE, PIX_FMT_YUV444P16LE,
-    PIX_FMT_YUV444P16BE, PIX_FMT_YUVA444P9LE, PIX_FMT_YUVA444P9BE,
-    PIX_FMT_YUVA444P10LE, PIX_FMT_YUVA444P10BE, PIX_FMT_YUVA444P12LE,
-    PIX_FMT_YUVA444P12BE, PIX_FMT_YUVA444P16LE, PIX_FMT_YUVA444P16BE,
-    PIX_FMT_GBRP9LE, PIX_FMT_GBRP9BE, PIX_FMT_GBRP10LE,
-    PIX_FMT_GBRP10BE, PIX_FMT_GBRP12LE, PIX_FMT_GBRP12BE,
-    PIX_FMT_GBRP14LE, PIX_FMT_GBRP14BE, PIX_FMT_GBRP16LE,
-    PIX_FMT_GBRP16BE, PIX_FMT_GBRAP12LE, PIX_FMT_GBRAP12BE,
-    PIX_FMT_GBRAP16LE, PIX_FMT_GBRAP16BE:
+  of AV_PIX_FMT_YUV420P, AV_PIX_FMT_YUYV422, AV_PIX_FMT_YVYU422, AV_PIX_FMT_UYVY422,
+    AV_PIX_FMT_YUV422P, AV_PIX_FMT_YUV440P, AV_PIX_FMT_YUV444P, AV_PIX_FMT_GBRP,
+    AV_PIX_FMT_GBRAP, AV_PIX_FMT_GRAY8, AV_PIX_FMT_GRAY16BE, AV_PIX_FMT_GRAY16LE,
+    AV_PIX_FMT_YUVJ420P, AV_PIX_FMT_YUVJ422P, AV_PIX_FMT_YUVJ440P,
+    AV_PIX_FMT_YUVJ444P, AV_PIX_FMT_YUVA420P, AV_PIX_FMT_YUVA422P,
+    AV_PIX_FMT_YUVA444P, AV_PIX_FMT_YUV420P9le, AV_PIX_FMT_YUV420P9be,
+    AV_PIX_FMT_YUV420P10le, AV_PIX_FMT_YUV420P10be, AV_PIX_FMT_YUV420P12le,
+    AV_PIX_FMT_YUV420P12be, AV_PIX_FMT_YUV420P14le, AV_PIX_FMT_YUV420P14be,
+    AV_PIX_FMT_YUV420P16le, AV_PIX_FMT_YUV420P16be, AV_PIX_FMT_YUVA420P9LE,
+    AV_PIX_FMT_YUVA420P9BE, AV_PIX_FMT_YUVA420P10LE, AV_PIX_FMT_YUVA420P10BE,
+    AV_PIX_FMT_YUVA420P16LE, AV_PIX_FMT_YUVA420P16BE, AV_PIX_FMT_YUV422P9LE,
+    AV_PIX_FMT_YUV422P9BE, AV_PIX_FMT_YUV422P10LE, AV_PIX_FMT_YUV422P10BE,
+    AV_PIX_FMT_YUV422P12LE, AV_PIX_FMT_YUV422P12BE, AV_PIX_FMT_YUV422P14LE,
+    AV_PIX_FMT_YUV422P14BE, AV_PIX_FMT_YUV422P16LE, AV_PIX_FMT_YUV422P16BE,
+    AV_PIX_FMT_YUVA422P9LE, AV_PIX_FMT_YUVA422P9BE, AV_PIX_FMT_YUVA422P10LE,
+    AV_PIX_FMT_YUVA422P10BE, AV_PIX_FMT_YUVA422P12LE, AV_PIX_FMT_YUVA422P12BE,
+    AV_PIX_FMT_YUVA422P16LE, AV_PIX_FMT_YUVA422P16BE, AV_PIX_FMT_YUV440P10LE,
+    AV_PIX_FMT_YUV440P10BE, AV_PIX_FMT_YUV440P12LE, AV_PIX_FMT_YUV440P12BE,
+    AV_PIX_FMT_YUV444P9LE, AV_PIX_FMT_YUV444P9BE, AV_PIX_FMT_YUV444P10LE,
+    AV_PIX_FMT_YUV444P10BE, AV_PIX_FMT_YUV444P12LE, AV_PIX_FMT_YUV444P12BE,
+    AV_PIX_FMT_YUV444P14LE, AV_PIX_FMT_YUV444P14BE, AV_PIX_FMT_YUV444P16LE,
+    AV_PIX_FMT_YUV444P16BE, AV_PIX_FMT_YUVA444P9LE, AV_PIX_FMT_YUVA444P9BE,
+    AV_PIX_FMT_YUVA444P10LE, AV_PIX_FMT_YUVA444P10BE, AV_PIX_FMT_YUVA444P12LE,
+    AV_PIX_FMT_YUVA444P12BE, AV_PIX_FMT_YUVA444P16LE, AV_PIX_FMT_YUVA444P16BE,
+    AV_PIX_FMT_GBRP9LE, AV_PIX_FMT_GBRP9BE, AV_PIX_FMT_GBRP10LE,
+    AV_PIX_FMT_GBRP10BE, AV_PIX_FMT_GBRP12LE, AV_PIX_FMT_GBRP12BE,
+    AV_PIX_FMT_GBRP14LE, AV_PIX_FMT_GBRP14BE, AV_PIX_FMT_GBRP16LE,
+    AV_PIX_FMT_GBRP16BE, AV_PIX_FMT_GBRAP12LE, AV_PIX_FMT_GBRAP12BE,
+    AV_PIX_FMT_GBRAP16LE, AV_PIX_FMT_GBRAP16BE:
     wAlign = 16
     hAlign = 16 * 2
-  of PIX_FMT_YUV411P, PIX_FMT_YUVJ411P, PIX_FMT_UYYVYY411:
+  of AV_PIX_FMT_YUV411P, AV_PIX_FMT_YUVJ411P, AV_PIX_FMT_UYYVYY411:
     wAlign = 32
     hAlign = 16 * 2
-  of PIX_FMT_YUV410P:
+  of AV_PIX_FMT_YUV410P:
     if s.codecId == CODEC_ID_SVQ1:
       wAlign = 64
       hAlign = 64
-  of PIX_FMT_RGB555LE:
+  of AV_PIX_FMT_RGB555LE:
     if s.codecId == CODEC_ID_RPZA:
       wAlign = 4
       hAlign = 4
     if s.codecId == CODEC_ID_INTERPLAY_VIDEO:
       wAlign = 8
       hAlign = 8
-  of PIX_FMT_PAL8, PIX_FMT_BGR8, PIX_FMT_RGB8:
+  of AV_PIX_FMT_PAL8, AV_PIX_FMT_BGR8, AV_PIX_FMT_RGB8:
     if s.codecId == CODEC_ID_SMC or s.codecId == CODEC_ID_CINEPAK:
       wAlign = 4
       hAlign = 4
     if s.codecId == CODEC_ID_JV or s.codecId == CODEC_ID_INTERPLAY_VIDEO:
       wAlign = 8
       hAlign = 8
-  of PIX_FMT_BGR24:
+  of AV_PIX_FMT_BGR24:
     if (s.codecId == CODEC_ID_MSZH) or (s.codecId == CODEC_ID_ZLIB):
       wAlign = 4
       hAlign = 4
-  of PIX_FMT_RGB24:
+  of AV_PIX_FMT_RGB24:
     if s.codecId == CODEC_ID_CINEPAK:
       wAlign = 4
       hAlign = 4
@@ -3124,7 +4042,7 @@ proc updateFramePool*(avctx: var AVCodecContext; frame: AVFrame): cint =
   # avBufferUnref(addr(poolBuf))
 
 proc avGetPixFmtName*(pixFmt: int): string =
-  if pixFmt < PIX_FMT_NB.int: avPixFmtDescriptors[pixFmt].name else: ""
+  if pixFmt < AV_PIX_FMT_NB.int: avPixFmtDescriptors[pixFmt].name else: ""
 
 proc avBufferPoolGet*(pool: AVBufferPool): string =
   var buf = pool.pool
@@ -3133,33 +4051,33 @@ proc avBufferPoolGet*(pool: AVBufferPool): string =
   buf.next = nil
 
 const
-  PIX_FMT_FLAG_PSEUDOPAL* = (1 shl 6)
-  FF_PSEUDOPAL* = PIX_FMT_FLAG_PSEUDOPAL
+  AV_PIX_FMT_FLAG_PSEUDOPAL* = (1 shl 6)
+  FF_PSEUDOPAL* = AV_PIX_FMT_FLAG_PSEUDOPAL
 
-proc avprivSetSystematicPal2*(pal: ptr UncheckedArray[uint32]; pixFmt: int): cint =
+proc avprivSetSystematicPal2*(pal: ptr seq[uint32]; pixFmt: int): cint =
   for i in 0..255:
     var
       r: int
       g: int
       b: int
     case pixFmt
-    of PIX_FMT_RGB8.ord:
+    of AV_PIX_FMT_RGB8.ord:
       r = (i shr 5) * 36
       g = ((i shr 2) and 7) * 36
       b = (i and 3) * 85
-    of PIX_FMT_BGR8.ord:
+    of AV_PIX_FMT_BGR8.ord:
       b = (i shr 6) * 85
       g = ((i shr 3) and 7) * 36
       r = (i and 7) * 36
-    of PIX_FMT_RGB4_BYTE.ord:
+    of AV_PIX_FMT_RGB4_BYTE.ord:
       r = (i shr 3) * 255
       g = ((i shr 1) and 3) * 85
       b = (i and 1) * 255
-    of PIX_FMT_BGR4_BYTE.ord:
+    of AV_PIX_FMT_BGR4_BYTE.ord:
       b = (i shr 3) * 255
       g = ((i shr 1) and 3) * 85
       r = (i and 1) * 255
-    of PIX_FMT_GRAY8.ord:
+    of AV_PIX_FMT_GRAY8.ord:
       g = i
       b = i
       r = i
@@ -3183,8 +4101,8 @@ proc videoGetBuffer*(s: var AVCodecContext; pic: var AVFrame): cint =
   for i in 4..<NUM_DATA_POINTERS:
     pic.data[i] = ' '
     pic.linesize[i] = 0
-  if (desc.flags and PIX_FMT_FLAG_PAL) != 0 or ((desc.flags and FF_PSEUDOPAL) != 0 and pic.data != ""):
-    var p = cast[ptr UncheckedArray[uint32]](pic.data[1])
+  if (desc.flags and AV_PIX_FMT_FLAG_PAL) != 0 or ((desc.flags and FF_PSEUDOPAL) != 0 and pic.data != ""):
+    var p = cast[ptr seq[uint32]](pic.data[1])
     result = avprivSetSystematicPal2(p, pic.format)
 
 proc audioGetBuffer*(avctx: var AVCodecContext; frame: var AVFrame): cint =
@@ -3231,14 +4149,14 @@ proc avcodecGetHwConfig*(codec: AVCodec; index: auto): AVCodecHWConfig =
   result = codec.hwConfigs[index].public
 
 
-proc avcodecDefaultGetFormat*(avctx: AVCodecContext; fmt: ptr UncheckedArray[AVPixelFormat]): AVPixelFormat =
+proc avcodecDefaultGetFormat*(avctx: AVCodecContext; fmt: ptr seq[AVPixelFormat]): AVPixelFormat =
   var desc: AVPixFmtDescriptor
   var config: AVCodecHWConfig
   var n: cint = 0
   var i = 0
   if avctx.hwDeviceCtx != "" and avctx.codec.hwConfigs != nil:
     var deviceCtx = to[AVHWDeviceContext](avctx.hwDeviceCtx)
-    var hwConfig = cast[ptr UncheckedArray[AVCodecHWConfigInternal]](avctx.codec.hwConfigs)
+    var hwConfig = cast[ptr seq[AVCodecHWConfigInternal]](avctx.codec.hwConfigs)
     while true:
       config = hwConfig[i].public
       if (config.methods and CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX) != 0:
@@ -3246,19 +4164,19 @@ proc avcodecDefaultGetFormat*(avctx: AVCodecContext; fmt: ptr UncheckedArray[AVP
       if deviceCtx.t != config.deviceType:
         continue
       n = 0
-      while fmt[n] != PIX_FMT_NONE:
+      while fmt[n] != AV_PIX_FMT_NONE:
         if config.pixFmt == fmt[n]:
           return fmt[n]
         inc(n)
       inc(i)
   n = 0
-  while fmt[n] != PIX_FMT_NONE:
+  while fmt[n] != AV_PIX_FMT_NONE:
     inc(n)
   desc = avPixFmtDescGet(fmt[n - 1].ord)
-  if (desc.flags and PIX_FMT_FLAG_HWACCEL) == 0:
+  if (desc.flags and AV_PIX_FMT_FLAG_HWACCEL) == 0:
     return fmt[n - 1]
   n = 0
-  while fmt[n] != PIX_FMT_NONE:
+  while fmt[n] != AV_PIX_FMT_NONE:
     i = 0
     while true:
       config = avcodecGetHwConfig(avctx.codec, i)
@@ -3272,7 +4190,7 @@ proc avcodecDefaultGetFormat*(avctx: AVCodecContext; fmt: ptr UncheckedArray[AVP
     if (config.methods and CODEC_HW_CONFIG_METHOD_INTERNAL) != 0:
       return fmt[n]
     inc(n)
-  return PIX_FMT_NONE
+  return AV_PIX_FMT_NONE
 
 
 type
@@ -3314,7 +4232,7 @@ proc avPacketUnpackDictionary*(data:string; size: auto; dict: OrderedTableRef): 
 
 proc addMetadataFromSideData*(avpkt: var AVPacket; frame: AVFrame): cint =
   var frameMd = frame.metadata
-  var sideMetadata = avPacketGetSideData(avpkt, PKT_DATA_STRINGS_METADATA)
+  var sideMetadata = avPacketGetSideData(avpkt, AV_PKT_DATA_STRINGS_METADATA)
   echo "sideMetadata: ", sideMetadata
   return avPacketUnpackDictionary(sideMetadata, sideMetadata.len, frameMd)
 
@@ -3390,16 +4308,16 @@ const FF_SANE_NB_CHANNELS = 512
 
 proc ffDecodeFrameProps*(avctx: AVCodecContext; frame: var AVFrame): cint =
   var pkt = avctx.internal.lastPktProps
-  var sd = [AVSideDataType(packet:PKT_DATA_REPLAYGAIN, frame:FRAME_DATA_REPLAYGAIN),
-    AVSideDataType(packet:PKT_DATA_DISPLAYMATRIX, frame:FRAME_DATA_DISPLAYMATRIX),
-    AVSideDataType(packet:PKT_DATA_SPHERICAL, frame:FRAME_DATA_SPHERICAL),
-    AVSideDataType(packet:PKT_DATA_STEREO3D, frame:FRAME_DATA_STEREO3D), 
-    AVSideDataType(packet:PKT_DATA_AUDIO_SERVICE_TYPE, frame:FRAME_DATA_AUDIO_SERVICE_TYPE), 
-    AVSideDataType(packet:PKT_DATA_MASTERING_DISPLAY_METADATA,frame:FRAME_DATA_MASTERING_DISPLAY_METADATA), 
-    AVSideDataType(packet:PKT_DATA_CONTENT_LIGHT_LEVEL, frame:FRAME_DATA_CONTENT_LIGHT_LEVEL),
-    AVSideDataType(packet:PKT_DATA_A53_CC, frame:FRAME_DATA_A53_CC), 
-    AVSideDataType(packet:PKT_DATA_ICC_PROFILE, frame:FRAME_DATA_ICC_PROFILE), 
-    AVSideDataType(packet:PKT_DATA_S12M_TIMECODE, frame:FRAME_DATA_S12M_TIMECODE)]
+  var sd = [AVSideDataType(packet:AV_PKT_DATA_REPLAYGAIN, frame:FRAME_DATA_REPLAYGAIN),
+    AVSideDataType(packet:AV_PKT_DATA_DISPLAYMATRIX, frame:FRAME_DATA_DISPLAYMATRIX),
+    AVSideDataType(packet:AV_PKT_DATA_SPHERICAL, frame:FRAME_DATA_SPHERICAL),
+    AVSideDataType(packet:AV_PKT_DATA_STEREO3D, frame:FRAME_DATA_STEREO3D), 
+    AVSideDataType(packet:AV_PKT_DATA_AUDIO_SERVICE_TYPE, frame:FRAME_DATA_AUDIO_SERVICE_TYPE), 
+    AVSideDataType(packet:AV_PKT_DATA_MASTERING_DISPLAY_METADATA,frame:FRAME_DATA_MASTERING_DISPLAY_METADATA), 
+    AVSideDataType(packet:AV_PKT_DATA_CONTENT_LIGHT_LEVEL, frame:FRAME_DATA_CONTENT_LIGHT_LEVEL),
+    AVSideDataType(packet:AV_PKT_DATA_A53_CC, frame:FRAME_DATA_A53_CC), 
+    AVSideDataType(packet:AV_PKT_DATA_ICC_PROFILE, frame:FRAME_DATA_ICC_PROFILE), 
+    AVSideDataType(packet:AV_PKT_DATA_S12M_TIMECODE, frame:FRAME_DATA_S12M_TIMECODE)]
   if IS_EMPTY(pkt):
     result = avprivPacketListGet(avctx.internal.pktProps, avctx.internal.pktPropsTail, pkt)
   if pkt != nil:
@@ -3478,7 +4396,7 @@ proc ffGetBuffer*(avctx: var AVCodecContext; frame: var AVFrame; flags: cint): c
   var hwaccel: AVHWAccel = avctx.hwaccel
   var overrideDimensions: cint = 1
   if avctx.codecType == AVMEDIA_TYPE_VIDEO:
-    # result = avImageCheckSize2(FFALIGN(avctx.width, STRIDE_ALIGN), avctx.height, avctx.maxPixels, PIX_FMT_NONE, 0, avctx)
+    # result = avImageCheckSize2(FFALIGN(avctx.width, STRIDE_ALIGN), avctx.height, avctx.maxPixels, AV_PIX_FMT_NONE, 0, avctx)
     if avctx.width > int.high - STRIDE_ALIGN or result < 0 or avctx.pixFmt.ord < 0:
       echo("video_get_buffer: image parameters invalid")
       result = -(EINVAL)
@@ -3532,7 +4450,7 @@ proc hwaccelInit*(avctx: var AVCodecContext; hwConfig: AVCodecHWConfigInternal):
   return 0
 
 
-proc ffGetFormat*(avctx: var AVCodecContext; fmt: ptr UncheckedArray[AVPixelFormat]): cint =
+proc ffGetFormat*(avctx: var AVCodecContext; fmt: ptr seq[AVPixelFormat]): cint =
   var desc: AVPixFmtDescriptor
   var choices: seq[AVPixelFormat]
   var  userChoice: AVPixelFormat
@@ -3543,24 +4461,24 @@ proc ffGetFormat*(avctx: var AVCodecContext; fmt: ptr UncheckedArray[AVPixelForm
     n: cint
     err: cint
   n = 0
-  while fmt[n] != PIX_FMT_NONE:
+  while fmt[n] != AV_PIX_FMT_NONE:
     n.inc
   desc = avPixFmtDescGet(fmt[n - 1].ord)
-  if (desc.flags and PIX_FMT_FLAG_HWACCEL) != 0: discard
+  if (desc.flags and AV_PIX_FMT_FLAG_HWACCEL) != 0: discard
   else:
     avctx.swPixFmt = fmt[n - 1]
   choices.setLen n + 1
   copyMem(choices[0].addr, fmt, (n + 1) * sizeof(AVPixelFormat))
   while true:
-    var choicesPtr = cast[ptr UncheckedArray[AVPixelFormat]](choices[0].addr)
+    var choicesPtr = cast[ptr seq[AVPixelFormat]](choices[0].addr)
     userChoice = avctx.getFormat(avctx, choicesPtr)
-    if userChoice == PIX_FMT_NONE:
-      result = PIX_FMT_NONE.cint
+    if userChoice == AV_PIX_FMT_NONE:
+      result = AV_PIX_FMT_NONE.cint
       break
     desc = avPixFmtDescGet(userChoice.ord)
     if desc == nil:
       echo("Invalid format returned by get_format() callback.\n")
-      result = PIX_FMT_NONE.cint
+      result = AV_PIX_FMT_NONE.cint
       break
     echo("Format %s chosen by get_format().\n", desc.name)
     i = 0
@@ -3570,9 +4488,9 @@ proc ffGetFormat*(avctx: var AVCodecContext; fmt: ptr UncheckedArray[AVPixelForm
       inc(i)
     if i == n:
       echo("Invalid return from get_format(): %s not in possible list.\n",desc.name)
-      result = PIX_FMT_NONE.cint
+      result = AV_PIX_FMT_NONE.cint
       break
-    var hwConfigs = cast[ptr UncheckedArray[AVCodecHWConfigInternal]](avctx.codec.hwConfigs)
+    var hwConfigs = cast[ptr seq[AVCodecHWConfigInternal]](avctx.codec.hwConfigs)
     if hwConfigs != nil:
       i = 0
       while true:
@@ -3657,7 +4575,7 @@ proc submitPacket*(p: var PerThreadContext; userAvctx: AVCodecContext; avpkt: AV
       of STATE_GET_BUFFER:
         p.result = ffGetBuffer(p.avctx, p.requestedFrame, p.requestedFlags)
       of STATE_GET_FORMAT:
-        var fmts = cast[ptr UncheckedArray[AVPixelFormat]](p.availableFormats)
+        var fmts = cast[ptr seq[AVPixelFormat]](p.availableFormats)
         p.resultFormat = AVPixelFormat ffGetFormat(p.avctx, fmts)
       else:
         callDone = 0
@@ -3676,7 +4594,7 @@ proc ffThreadDecodeFrame*(avctx: var AVCodecContext; picture: var AVFrame;gotPic
   var p: PerThreadContext
   var err: cint
   # asyncUnlock(fctx)
-  var threads = cast[ptr UncheckedArray[PerThreadContext]](fctx.threads)
+  var threads = cast[ptr seq[PerThreadContext]](fctx.threads)
   p = threads[fctx.nextDecoding]
   err = submitPacket(p, avctx, avpkt)
   if fctx.nextDecoding > (avctx.threadCount - 1 - int(avctx.codecId.ord == CODEC_ID_FFV1.ord)):
@@ -3801,7 +4719,7 @@ proc decodeSimpleInternal*(avctx: var AVCodecContext; frame: var AVFrame; discar
           frame.width = avctx.width
         if frame.height == 0:
           frame.height = avctx.height
-        if frame.format == PIX_FMT_NONE.ord:
+        if frame.format == AV_PIX_FMT_NONE.ord:
           frame.format = avctx.pixFmt.ord
   # emmsC()
   actualGotFrame = gotFrame
@@ -3816,7 +4734,7 @@ proc decodeSimpleInternal*(avctx: var AVCodecContext; frame: var AVFrame; discar
     var discardReason:uint8 = 0
     if result >= 0 and gotFrame != 0:
       frame.bestEffortTimestamp = guessCorrectPts(avctx, frame.pts, frame.pktDts)
-      if frame.format == SAMPLE_FMT_NONE.ord:
+      if frame.format == AV_SAMPLE_FMT_NONE.ord:
         frame.format = avctx.sampleFmt.ord
       if  frame.channelLayout == 0:
         frame.channelLayout = avctx.channelLayout
@@ -3824,7 +4742,7 @@ proc decodeSimpleInternal*(avctx: var AVCodecContext; frame: var AVFrame; discar
         frame.channels = avctx.channels
       if frame.sampleRate == 0:
         frame.sampleRate = avctx.sampleRate
-    var side = avPacketGetSideData(avci.lastPktProps, PKT_DATA_SKIP_SAMPLES)
+    var side = avPacketGetSideData(avci.lastPktProps, AV_PKT_DATA_SKIP_SAMPLES)
     if side != "" and side.len >= 10:
       avci.skipSamples = cint side[0].uint32 * avci.skipSamplesMultiplier.uint32
       discardPadding = cint side[4].uint32
@@ -3958,7 +4876,7 @@ proc calcCroppingOffsets*(offsets: var array[4, int]; frame: AVFrame;desc: AVPix
     var comp: ptr AVComponentDescriptor = nil
     var shiftX = if (i == 1 or i == 2): desc.log2ChromaW else: 0
     var shiftY = if (i == 1 or i == 2): desc.log2ChromaH else: 0
-    if (desc.flags and (PIX_FMT_FLAG_PAL or FF_PSEUDOPAL)) != 0 and i == 1:
+    if (desc.flags and (AV_PIX_FMT_FLAG_PAL or FF_PSEUDOPAL)) != 0 and i == 1:
       offsets[i] = 0
       break
     for j in 0..<desc.nbComponents.int:
@@ -3984,7 +4902,7 @@ proc avFrameApplyCropping*(frame: AVFrame; flags: cint): auto =
       (frame.cropTop + frame.cropBottom) >= frame.height.uint:
     return -(ERANGE)
   desc = avPixFmtDescGet(frame.format)
-  if (desc.flags and (PIX_FMT_FLAG_BITSTREAM or PIX_FMT_FLAG_HWACCEL)) != 0:
+  if (desc.flags and (AV_PIX_FMT_FLAG_BITSTREAM or AV_PIX_FMT_FLAG_HWACCEL)) != 0:
     frame.width -= frame.cropRight.int
     frame.height -= frame.cropBottom.int
     frame.cropRight = 0
@@ -4164,7 +5082,7 @@ proc ffThreadFlush*(avctx: AVCodecContext) =
   if fctx == nil:
     return
   parkFrameWorkerThreads(fctx, avctx.threadCount)
-  var threads = cast[ptr UncheckedArray[PerThreadContext]](fctx.threads)
+  var threads = cast[ptr seq[PerThreadContext]](fctx.threads)
 
   if fctx.prevThread != nil:
     if fctx.prevThread != threads[0]:
@@ -4567,18 +5485,18 @@ proc getVideoFrame*(vs: VideoState; frame: var AVFrame): cint =
 #   avReduce(addr(b.num), addr(b.den), b.num * c.num, b.den * c.den, int.high)
 #   return b
 
-proc avMulQ*(b: var Rational; c: var Rational): Rational =
+proc avMulQ*(b: var Rational[int]; c: var Rational[int]): Rational[int] =
   var mulNum = b.num * c.num
   var mulDen = b.den * c.den
   discard avReduce(b.num, b.den, mulNum, mulDen, int.high)
   result = b
 
-proc avDivQ( b,c: var Rational):Rational =
+proc avDivQ( b,c: var Rational[int]):Rational[int] =
   result = initRational(c.den, c.num)
   result = avMulQ(b, result)
 
 
-proc avGuessFrameRate*(format: AVFormatContext; st: AVStream;frame: AVFrame): Rational[int] =
+proc avGuessFrameRate*(format: ptr AVFormatContext; st: AVStream;frame: AVFrame): Rational[int] =
   var fr = st.rFrameRate
   var codecFr = st.internal.avctx.framerate
   var avgFr = st.avgFrameRate
@@ -4869,7 +5787,7 @@ proc ffGraphThreadInit*(graph: AVFilterGraph): cint =
   return 0
 
 
-proc avfilterGraphAllocFilter*(graph: AVFilterGraph; filter: AVFilter; name: string): AVFilterContext =
+proc avfilterGraphAllocFilter*(graph: var AVFilterGraph; filter: AVFilter; name: string): AVFilterContext =
   var filters = newSeq[AVFilterContext](graph.nbFilters + 1)
   if graph.threadType != 0 and graph.internal.threadExecute == nil:
     if graph.execute != nil:
@@ -4891,12 +5809,16 @@ const
   DICT_APPEND* = 32
   DICT_MULTIKEY* = 64
 
-proc avDictGet*(m: AVDictionary; key: string; prev: AVDictionaryEntry;flags: cint): AVDictionaryEntry =
+proc avDictGet*(m: AVDictionary; key: string; prev: ptr AVDictionaryEntry;flags: cint): AVDictionaryEntry =
+  for d in m.elems:
+    if d.key == key:
+      return d
+  return nil
   # var
   #   i: cuint
   #   j: cuint
   # if prev != nil:
-  #   i = prev - m.elems + 1
+  #   i = prev - m.elems.len + 1
   # else:
   #   i = 0
   # while i < m.count:
@@ -4922,11 +5844,11 @@ proc getKey*(ropts: var string; delim: string; rkey: var string): cint =
   # var
   #   keyStart: string
   #   keyEnd: string
-  # keyStart = inc(opts, strspn(opts, whitespaces))
+  # keyStart = inc(opts, strspn(opts, WHITESPACES))
   # while isKeyChar(opts[]):
   #   inc(opts)
   # keyEnd = opts
-  # inc(opts, strspn(opts, whitespaces))
+  # inc(opts, strspn(opts, WHITESPACES))
   # inc(opts)
   # copyMem(rkey[0].addr, keyStart[0].addr, keyEnd - keyStart)
   # rkey[keyEnd - keyStart] = 0
@@ -4937,11 +5859,12 @@ const
   WHITESPACES* = " \n\t\c"
 
 proc avGetToken*(buf: string; term: string): string =
-  # var o: string = newString(buf.len + 1)
-  # var  e: string = o
-  # var p: string = buf[0]
-  # inc(p, strspn(p, whitespaces))
-  # while p != " " and strspn(p, term) == 0:
+  result = $buf.filterIt(it notin (WHITESPACES & term))
+  # result = o
+  # var e = o
+  # var p: string = buf
+  # p += p.filterIt(it in WHITESPACES).len
+  # while p != " " and p.anyIt(it notin term):
   #   var c = inc(p)[]
   #   if c == '\b' and p[]:
   #     inc(o)[] = inc(p)[]
@@ -4956,10 +5879,9 @@ proc avGetToken*(buf: string; term: string): string =
   #     inc(o)[] = c
   # while true:
   #   dec(o)[] = 0
-  #   if not (o >= e and strspn(o, whitespaces)):
+  #   if (o >= e and o.filterIt(it in WHITESPACES).len != 0) == 0:
   #     break
   # buf[] = p
-  return result
 
 proc avOptGetKeyValue*(ropts: var string; keyValSep: string; pairsSep: string;
                       flags: int; rkey: var string; rval: var string): cint =
@@ -5002,7 +5924,7 @@ iterator avOptChildNext*(obj: pointer; prev: pointer): pointer =
     yield c.childNext(obj, prev)
 
 
-proc avOptFind2*(obj: pointer; name: string; unit: string; optFlags: cint; searchFlags: cint; targetObj:var pointer): AVOption =
+proc avOptFind2*(obj: pointer; name: string; unit: string; optFlags: cint; searchFlags: cint; targetObj:pointer): AVOption =
   var o: AVOption 
   var c = cast[ptr AVClass](obj)
   if (searchFlags and OPT_SEARCH_CHILDREN) != 0:
@@ -5027,9 +5949,7 @@ proc avOptFind2*(obj: pointer; name: string; unit: string; optFlags: cint; searc
         (unit != "" and o.t == AV_OPT_TYPE_CONST and o.unit != "" and o.unit == unit)):
       if targetObj != nil:
         if (searchFlags and OPT_SEARCH_FAKE_OBJ) == 0:
-          targetObj = obj
-        else:
-          targetObj = nil
+          copyMem(targetObj, obj, sizeof obj)
       return o
   return nil
 
@@ -5048,8 +5968,8 @@ proc hexchar2int*(c: char): int =
     return c.int - 'A'.ord + 10
   return -1
 
-proc setStringBinary*[T](obj: pointer; o: ptr AVOption; val: string; dst: T): cint =
-  var lendst: ptr cint = cast[ptr cint]((dst + 1))
+proc setStringBinary*(obj: pointer; o: AVOption; val: string; dst: ptr cint): cint =
+  var lendst = dst + 1
   var
     bin: ptr uint8
     p: ptr uint8
@@ -5061,63 +5981,15 @@ proc setStringBinary*[T](obj: pointer; o: ptr AVOption; val: string; dst: T): ci
   p = bin
   if p == nil:
     return -(ENOMEM)
-  dst = val.fromHex
-  lendst[] = len
+  dst[] = fromHex[cint](val)
+  lendst[] = cint len
   return 0
 
 proc setString*(obj: pointer; o: ptr AVOption; val: string; dst: var string): cint =
   dst = val
   result = 0
 
-template defaultNumval*(opt: untyped): untyped =
-  (if (opt.t == AV_OPT_TYPE_INT64 or opt.t == AV_OPT_TYPE_UINT64 or
-      opt.t == AV_OPT_TYPE_CONST or opt.t == AV_OPT_TYPE_FLAGS or
-      opt.t == AV_OPT_TYPE_INT): opt.defaultVal.i64 else: opt.defaultVal.dbl.int64)
 
-const AV_OPT_FLAG_CHILD_CONSTS = (1 shl 18)
-
-
-type
-  AVExprEnum* = enum
-    eValue, eConst, eFunc0, eFunc1, eFunc2, eSquish, eGauss, eLd, eIsnan, eIsinf, eMod,
-    eMax, eMin, eEq, eGt, eGte, eLte, eLt, ePow, eMul, eDiv, eAdd, eLast, eSt, eWhile,
-    eTaylor, eRoot, eFloor, eCeil, eTrunc, eRound, eSqrt, eNot, eRandom, eHypot, eGcd, eIf,
-    eIfnot, ePrint, eBitand, eBitor, eBetween, eClip, eAtan2, eLerp, eSgn
-
-  AVExprA* {.union.} = object 
-    func0*: proc (a1: cdouble): cdouble
-    func1*: proc (a1: pointer; a2: cdouble): cdouble
-    func2*: proc (a1: pointer; a2: cdouble; a3: cdouble): cdouble
-
-  AVExpr* = ref object
-    t*: cint
-    value*: cdouble
-    constIndex*: cint
-    a*: AVExprA
-    param*: array[3, AVExpr]
-    v*: seq[cdouble]
-
-
-const
-  AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC* = (1 shl 16)
-  AVFILTER_FLAG_SUPPORT_TIMELINE_INTERNAL* = (1 shl 17)
-  AVFILTER_FLAG_SUPPORT_TIMELINE* = (AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC or AVFILTER_FLAG_SUPPORT_TIMELINE_INTERNAL)
-
-type
-  Parser* {.bycopy.} = object
-    class*: ptr AVClass
-    stackIndex*: int
-    s*: string
-    constValues*: ptr cdouble
-    constNames*: string  
-    funcs1*: proc(p:pointer, a: cdouble): cdouble
-    func1Names*: string  
-    funcs2: proc(p:pointer, a,b: cdouble): cdouble
-    func2Names*: string
-    opaque*: pointer
-    logOffset*: cint
-    logCtx*: pointer
-    v*: seq[cdouble]
 
 var evalClass = AVClass(
     class_name                : "Eval",
@@ -5224,8 +6096,8 @@ proc parsePrimary*(e: var AVExpr; p: var Parser): cint =
   d.value = 1
   ##  named constants
   i = 0
-  while p.constNames != "":
-    if contains(p.s, p.constNames):
+  while p.constNames.len != 0:
+    if contains(p.s, p.constNames[i]):
       p.s += p.constNames.len
       d.t = cint eConst
       d.constIndex = i
@@ -5520,7 +6392,7 @@ proc verifyExpr*(e: var AVExpr): cint =
     return verifyExpr(e.param[0]) and verifyExpr(e.param[1]) and cint e.param[2] == nil
 
 
-proc avExprParse*(exp: var AVExpr; ss: string; constNames: string;
+proc avExprParse*(exp: var AVExpr; ss: string; constNames: seq[string];
                  func1Names: string;
                  funcs1: proc (a1: pointer; a2: cdouble): cdouble;
                  func2Names: string;
@@ -5795,7 +6667,7 @@ proc avExprEval*(e: var AVExpr; constValues: ptr cdouble; opaque: pointer): cdou
   return evalExpr(p, e)
 
 
-proc avExprParseAndEval*(d: var cdouble; s: string; constNames: string;
+proc avExprParseAndEval*(d: var cdouble; s: string; constNames: seq[string];
                         constValues: ptr cdouble; func1Names: string;
                         funcs1: proc (a1: pointer; a2: cdouble): cdouble;
                         func2Names: string; funcs2: proc (a1: pointer;
@@ -5899,7 +6771,7 @@ proc setStringNumber*(obj: pointer; targetObj: pointer; o: AVOption; v: string;d
       constValues[ci] = not 0; ci.inc
       constNames[ci] = ""
       constValues[ci] = 0
-      res = avExprParseAndEval(d, if i != 0: buf else: v, constNames[0], constValues[0].addr, "", nil, "", nil, nil, 0, obj)
+      res = avExprParseAndEval(d, if i != 0: buf else: v, constNames, constValues[0].addr, "", nil, "", nil, nil, 0, obj)
       if res < 0:
         echo("Unable to parse option value \"%s\"", v)
         return res
@@ -6040,12 +6912,12 @@ proc avD2q*(d: cdouble; max: int): Rational[int] =
   return a
 
 
-proc avParseRatio*(q: var Rational; str: string; max: cint; logOffset: cint;logCtx: pointer): cint =
+proc avParseRatio*(q: var Rational[int]; str: string; max: cint; logOffset: cint;logCtx: pointer): cint =
   var c: char
   var result: cint
   if scanf(str, "%d:%d%c", q.num, q.den, c):
     var d: cdouble
-    result = avExprParseAndEval(d, str, "", nil, "", nil, "", nil, nil, logOffset, logCtx)
+    result = avExprParseAndEval(d, str, @[], nil, "", nil, "", nil, nil, logOffset, logCtx)
     if result < 0:
       return result
     q = avD2q(d, max)
@@ -6056,7 +6928,7 @@ proc avParseRatio*(q: var Rational; str: string; max: cint; logOffset: cint;logC
 template avParseRatioQuiet*(rate, str, max: untyped): untyped =
   avParseRatio(rate, str, max, AV_LOG_MAX_OFFSET, nil)
 
-proc avParseVideoRate*(rate: var Rational; arg: string): cint =
+proc avParseVideoRate*(rate: var Rational[int]; arg: string): cint =
   var n = len(videoRateAbbrs)
   for i in 0..<n:
     if videoRateAbbrs[i].abbr == arg:
@@ -6070,7 +6942,7 @@ proc avParseVideoRate*(rate: var Rational; arg: string): cint =
   return 0
 
 
-proc setStringImageSize*(obj: pointer; o: ptr AVOption; val: string; dst: ptr cint): cint =
+proc setStringImageSize*(obj: pointer; o: AVOption; val: string; dst: ptr cint): cint =
   if val == "" or val == "none":
     dst[1] = 0
     dst[0] = 0
@@ -6080,7 +6952,7 @@ proc setStringImageSize*(obj: pointer; o: ptr AVOption; val: string; dst: ptr ci
     echo("Unable to parse option value \"%s\" as image size", val)
   return result
 
-proc setStringVideoRate*(obj: pointer; o: ptr AVOption; val: string; dst: var Rational[int]): cint =
+proc setStringVideoRate*(obj: pointer; o: AVOption; val: string; dst: var Rational[int]): cint =
   var result = avParseVideoRate(dst, val)
   if result < 0:
     echo("Unable to parse option value \"%s\" as video rate\n", val)
@@ -6088,187 +6960,187 @@ proc setStringVideoRate*(obj: pointer; o: ptr AVOption; val: string; dst: var Ra
 
 type
   ColorEntry* = ref object
-    name*: cstring             ## /< a string representing the name of the color
+    name*: string             ## /< a string representing the name of the color
     rgbColor*: array[3, uint8] ## /< RGB values for the color
 
 
-var colorTable*: seq[ColorEntry] = @[
-    ColorEntry(name:"AliceBlue", rgbColor: [0x000000F0'u8, 0x000000F8, 0x000000FF]),
-    ColorEntry(name:"AntiqueWhite", rgbColor: [0x000000FA'u8, 0x000000EB, 0x000000D7]),
-    ColorEntry(name:"Aqua", rgbColor: [0x00000000'u8, 0x000000FF, 0x000000FF]),
-    ColorEntry(name:"Aquamarine", rgbColor: [0x0000007F'u8, 0x000000FF, 0x000000D4]),
-    ColorEntry(name:"Azure", rgbColor: [0x000000F0'u8, 0x000000FF, 0x000000FF]),
-    ColorEntry(name:"Beige", rgbColor: [0x000000F5'u8, 0x000000F5, 0x000000DC]),
-    ColorEntry(name:"Bisque", rgbColor: [0x000000FF'u8, 0x000000E4, 0x000000C4]),
-    ColorEntry(name:"Black", rgbColor: [0x00000000'u8, 0x00000000, 0x00000000]),
-    ColorEntry(name:"BlanchedAlmond", rgbColor: [0x000000FF'u8, 0x000000EB, 0x000000CD]),
-    ColorEntry(name:"Blue", rgbColor: [0x00000000'u8, 0x00000000, 0x000000FF]),
-    ColorEntry(name:"BlueViolet", rgbColor: [0x0000008A'u8, 0x0000002B, 0x000000E2]),
-    ColorEntry(name:"Brown", rgbColor: [0x000000A5'u8, 0x0000002A, 0x0000002A]),
-    ColorEntry(name:"BurlyWood", rgbColor: [0x000000DE'u8, 0x000000B8, 0x00000087]),
-    ColorEntry(name:"CadetBlue", rgbColor: [0x0000005F'u8, 0x0000009E, 0x000000A0]),
-    ColorEntry(name:"Chartreuse", rgbColor: [0x0000007F'u8, 0x000000FF, 0x00000000]),
-    ColorEntry(name:"Chocolate", rgbColor: [0x000000D2'u8, 0x00000069, 0x0000001E]),
-    ColorEntry(name:"Coral", rgbColor: [0x000000FF'u8, 0x0000007F, 0x00000050]),
-    ColorEntry(name:"CornflowerBlue", rgbColor: [0x00000064'u8, 0x00000095, 0x000000ED]),
-    ColorEntry(name:"Cornsilk", rgbColor: [0x000000FF'u8, 0x000000F8, 0x000000DC]),
-    ColorEntry(name:"Crimson", rgbColor: [0x000000DC'u8, 0x00000014, 0x0000003C]),
-    ColorEntry(name:"Cyan", rgbColor: [0x00000000'u8, 0x000000FF, 0x000000FF]),
-    ColorEntry(name:"DarkBlue", rgbColor: [0x00000000'u8, 0x00000000, 0x0000008B]),
-    ColorEntry(name:"DarkCyan", rgbColor: [0x00000000'u8, 0x0000008B, 0x0000008B]),
-    ColorEntry(name:"DarkGoldenRod", rgbColor: [0x000000B8'u8, 0x00000086, 0x0000000B]),
-    ColorEntry(name:"DarkGray", rgbColor: [0x000000A9'u8, 0x000000A9, 0x000000A9]),
-    ColorEntry(name:"DarkGreen", rgbColor: [0x00000000'u8, 0x00000064, 0x00000000]),
-    ColorEntry(name:"DarkKhaki", rgbColor: [0x000000BD'u8, 0x000000B7, 0x0000006B]),
-    ColorEntry(name:"DarkMagenta", rgbColor: [0x0000008B'u8, 0x00000000, 0x0000008B]),
-    ColorEntry(name:"DarkOliveGreen", rgbColor: [0x00000055'u8, 0x0000006B, 0x0000002F]),
-    ColorEntry(name:"Darkorange", rgbColor: [0x000000FF'u8, 0x0000008C, 0x00000000]),
-    ColorEntry(name:"DarkOrchid", rgbColor: [0x00000099'u8, 0x00000032, 0x000000CC]),
-    ColorEntry(name:"DarkRed", rgbColor: [0x0000008B'u8, 0x00000000, 0x00000000]),
-    ColorEntry(name:"DarkSalmon", rgbColor: [0x000000E9'u8, 0x00000096, 0x0000007A]),
-    ColorEntry(name:"DarkSeaGreen", rgbColor: [0x0000008F'u8, 0x000000BC, 0x0000008F]),
-    ColorEntry(name:"DarkSlateBlue", rgbColor: [0x00000048'u8, 0x0000003D, 0x0000008B]),
-    ColorEntry(name:"DarkSlateGray", rgbColor: [0x0000002F'u8, 0x0000004F, 0x0000004F]),
-    ColorEntry(name:"DarkTurquoise", rgbColor: [0x00000000'u8, 0x000000CE, 0x000000D1]),
-    ColorEntry(name:"DarkViolet", rgbColor: [0x00000094'u8, 0x00000000, 0x000000D3]),
-    ColorEntry(name:"DeepPink", rgbColor: [0x000000FF'u8, 0x00000014, 0x00000093]),
-    ColorEntry(name:"DeepSkyBlue", rgbColor: [0x00000000'u8, 0x000000BF, 0x000000FF]),
-    ColorEntry(name:"DimGray", rgbColor: [0x00000069'u8, 0x00000069, 0x00000069]),
-    ColorEntry(name:"DodgerBlue", rgbColor: [0x0000001E'u8, 0x00000090, 0x000000FF]),
-    ColorEntry(name:"FireBrick", rgbColor: [0x000000B2'u8, 0x00000022, 0x00000022]),
-    ColorEntry(name:"FloralWhite", rgbColor: [0x000000FF'u8, 0x000000FA, 0x000000F0]),
-    ColorEntry(name:"ForestGreen", rgbColor: [0x00000022'u8, 0x0000008B, 0x00000022]),
-    ColorEntry(name:"Fuchsia", rgbColor: [0x000000FF'u8, 0x00000000, 0x000000FF]),
-    ColorEntry(name:"Gainsboro", rgbColor: [0x000000DC'u8, 0x000000DC, 0x000000DC]),
-    ColorEntry(name:"GhostWhite", rgbColor: [0x000000F8'u8, 0x000000F8, 0x000000FF]),
-    ColorEntry(name:"Gold", rgbColor: [0x000000FF'u8, 0x000000D7, 0x00000000]),
-    ColorEntry(name:"GoldenRod", rgbColor: [0x000000DA'u8, 0x000000A5, 0x00000020]),
-    ColorEntry(name:"Gray", rgbColor: [0x00000080'u8, 0x00000080, 0x00000080]),
-    ColorEntry(name:"Green", rgbColor: [0x00000000'u8, 0x00000080, 0x00000000]),
-    ColorEntry(name:"GreenYellow", rgbColor: [0x000000AD'u8, 0x000000FF, 0x0000002F]),
-    ColorEntry(name:"HoneyDew", rgbColor: [0x000000F0'u8, 0x000000FF, 0x000000F0]),
-    ColorEntry(name:"HotPink", rgbColor: [0x000000FF'u8, 0x00000069, 0x000000B4]),
-    ColorEntry(name:"IndianRed", rgbColor: [0x000000CD'u8, 0x0000005C, 0x0000005C]),
-    ColorEntry(name:"Indigo", rgbColor: [0x0000004B'u8, 0x00000000, 0x00000082]),
-    ColorEntry(name:"Ivory", rgbColor: [0x000000FF'u8, 0x000000FF, 0x000000F0]),
-    ColorEntry(name:"Khaki", rgbColor: [0x000000F0'u8, 0x000000E6, 0x0000008C]),
-    ColorEntry(name:"Lavender", rgbColor: [0x000000E6'u8, 0x000000E6, 0x000000FA]),
-    ColorEntry(name:"LavenderBlush", rgbColor: [0x000000FF'u8, 0x000000F0, 0x000000F5]),
-    ColorEntry(name:"LawnGreen", rgbColor: [0x0000007C'u8, 0x000000FC, 0x00000000]),
-    ColorEntry(name:"LemonChiffon", rgbColor: [0x000000FF'u8, 0x000000FA, 0x000000CD]),
-    ColorEntry(name:"LightBlue", rgbColor: [0x000000AD'u8, 0x000000D8, 0x000000E6]),
-    ColorEntry(name:"LightCoral", rgbColor: [0x000000F0'u8, 0x00000080, 0x00000080]),
-    ColorEntry(name:"LightCyan", rgbColor: [0x000000E0'u8, 0x000000FF, 0x000000FF]),
-    ColorEntry(name:"LightGoldenRodYellow", rgbColor: [0x000000FA'u8, 0x000000FA, 0x000000D2]),
-    ColorEntry(name:"LightGreen", rgbColor: [0x00000090'u8, 0x000000EE, 0x00000090]),
-    ColorEntry(name:"LightGrey", rgbColor: [0x000000D3'u8, 0x000000D3, 0x000000D3]),
-    ColorEntry(name:"LightPink", rgbColor: [0x000000FF'u8, 0x000000B6, 0x000000C1]),
-    ColorEntry(name:"LightSalmon", rgbColor: [0x000000FF'u8, 0x000000A0, 0x0000007A]),
-    ColorEntry(name:"LightSeaGreen", rgbColor: [0x00000020'u8, 0x000000B2, 0x000000AA]),
-    ColorEntry(name:"LightSkyBlue", rgbColor: [0x00000087'u8, 0x000000CE, 0x000000FA]),
-    ColorEntry(name:"LightSlateGray", rgbColor: [0x00000077'u8, 0x00000088, 0x00000099]),
-    ColorEntry(name:"LightSteelBlue", rgbColor: [0x000000B0'u8, 0x000000C4, 0x000000DE]),
-    ColorEntry(name:"LightYellow", rgbColor: [0x000000FF'u8, 0x000000FF, 0x000000E0]),
-    ColorEntry(name:"Lime", rgbColor: [0x00000000'u8, 0x000000FF, 0x00000000]),
-    ColorEntry(name:"LimeGreen", rgbColor: [0x00000032'u8, 0x000000CD, 0x00000032]),
-    ColorEntry(name:"Linen", rgbColor: [0x000000FA'u8, 0x000000F0, 0x000000E6]),
-    ColorEntry(name:"Magenta", rgbColor: [0x000000FF'u8, 0x00000000, 0x000000FF]),
-    ColorEntry(name:"Maroon", rgbColor: [0x00000080'u8, 0x00000000, 0x00000000]),
-    ColorEntry(name:"MediumAquaMarine", rgbColor: [0x00000066'u8, 0x000000CD, 0x000000AA]),
-    ColorEntry(name:"MediumBlue", rgbColor: [0x00000000'u8, 0x00000000, 0x000000CD]),
-    ColorEntry(name:"MediumOrchid", rgbColor: [0x000000BA'u8, 0x00000055, 0x000000D3]),
-    ColorEntry(name:"MediumPurple", rgbColor: [0x00000093'u8, 0x00000070, 0x000000D8]),
-    ColorEntry(name:"MediumSeaGreen", rgbColor: [0x0000003C'u8, 0x000000B3, 0x00000071]),
-    ColorEntry(name:"MediumSlateBlue", rgbColor: [0x0000007B'u8, 0x00000068, 0x000000EE]),
-    ColorEntry(name:"MediumSpringGreen", rgbColor: [0x00000000'u8, 0x000000FA, 0x0000009A]),
-    ColorEntry(name:"MediumTurquoise", rgbColor: [0x00000048'u8, 0x000000D1, 0x000000CC]),
-    ColorEntry(name:"MediumVioletRed", rgbColor: [0x000000C7'u8, 0x00000015, 0x00000085]),
-    ColorEntry(name:"MidnightBlue", rgbColor: [0x00000019'u8, 0x00000019, 0x00000070]),
-    ColorEntry(name:"MintCream", rgbColor: [0x000000F5'u8, 0x000000FF, 0x000000FA]),
-    ColorEntry(name:"MistyRose", rgbColor: [0x000000FF'u8, 0x000000E4, 0x000000E1]),
-    ColorEntry(name:"Moccasin", rgbColor: [0x000000FF'u8, 0x000000E4, 0x000000B5]),
-    ColorEntry(name:"NavajoWhite", rgbColor: [0x000000FF'u8, 0x000000DE, 0x000000AD]),
-    ColorEntry(name:"Navy", rgbColor: [0x00000000'u8, 0x00000000, 0x00000080]),
-    ColorEntry(name:"OldLace", rgbColor: [0x000000FD'u8, 0x000000F5, 0x000000E6]),
-    ColorEntry(name:"Olive", rgbColor: [0x00000080'u8, 0x00000080, 0x00000000]),
-    ColorEntry(name:"OliveDrab", rgbColor: [0x0000006B'u8, 0x0000008E, 0x00000023]),
-    ColorEntry(name:"Orange", rgbColor: [0x000000FF'u8, 0x000000A5, 0x00000000]),
-    ColorEntry(name:"OrangeRed", rgbColor: [0x000000FF'u8, 0x00000045, 0x00000000]),
-    ColorEntry(name:"Orchid", rgbColor: [0x000000DA'u8, 0x00000070, 0x000000D6]),
-    ColorEntry(name:"PaleGoldenRod", rgbColor: [0x000000EE'u8, 0x000000E8, 0x000000AA]),
-    ColorEntry(name:"PaleGreen", rgbColor: [0x00000098'u8, 0x000000FB, 0x00000098]),
-    ColorEntry(name:"PaleTurquoise", rgbColor: [0x000000AF'u8, 0x000000EE, 0x000000EE]),
-    ColorEntry(name:"PaleVioletRed", rgbColor: [0x000000D8'u8, 0x00000070, 0x00000093]),
-    ColorEntry(name:"PapayaWhip", rgbColor: [0x000000FF'u8, 0x000000EF, 0x000000D5]),
-    ColorEntry(name:"PeachPuff", rgbColor: [0x000000FF'u8, 0x000000DA, 0x000000B9]),
-    ColorEntry(name:"Peru", rgbColor: [0x000000CD'u8, 0x00000085, 0x0000003F]),
-    ColorEntry(name:"Pink", rgbColor: [0x000000FF'u8, 0x000000C0, 0x000000CB]),
-    ColorEntry(name:"Plum", rgbColor: [0x000000DD'u8, 0x000000A0, 0x000000DD]),
-    ColorEntry(name:"PowderBlue", rgbColor: [0x000000B0'u8, 0x000000E0, 0x000000E6]),
-    ColorEntry(name:"Purple", rgbColor: [0x00000080'u8, 0x00000000, 0x00000080]),
-    ColorEntry(name:"Red", rgbColor: [0x000000FF'u8, 0x00000000, 0x00000000]),
-    ColorEntry(name:"RosyBrown", rgbColor: [0x000000BC'u8, 0x0000008F, 0x0000008F]),
-    ColorEntry(name:"RoyalBlue", rgbColor: [0x00000041'u8, 0x00000069, 0x000000E1]),
-    ColorEntry(name:"SaddleBrown", rgbColor: [0x0000008B'u8, 0x00000045, 0x00000013]),
-    ColorEntry(name:"Salmon", rgbColor: [0x000000FA'u8, 0x00000080, 0x00000072]),
-    ColorEntry(name:"SandyBrown", rgbColor: [0x000000F4'u8, 0x000000A4, 0x00000060]),
-    ColorEntry(name:"SeaGreen", rgbColor: [0x0000002E'u8, 0x0000008B, 0x00000057]),
-    ColorEntry(name:"SeaShell", rgbColor: [0x000000FF'u8, 0x000000F5, 0x000000EE]),
-    ColorEntry(name:"Sienna", rgbColor: [0x000000A0'u8, 0x00000052, 0x0000002D]),
-    ColorEntry(name:"Silver", rgbColor: [0x000000C0'u8, 0x000000C0, 0x000000C0]),
-    ColorEntry(name:"SkyBlue", rgbColor: [0x00000087'u8, 0x000000CE, 0x000000EB]),
-    ColorEntry(name:"SlateBlue", rgbColor: [0x0000006A'u8, 0x0000005A, 0x000000CD]),
-    ColorEntry(name:"SlateGray", rgbColor: [0x00000070'u8, 0x00000080, 0x00000090]),
-    ColorEntry(name:"Snow", rgbColor: [0x000000FF'u8, 0x000000FA, 0x000000FA]),
-    ColorEntry(name:"SpringGreen", rgbColor: [0x00000000'u8, 0x000000FF, 0x0000007F]),
-    ColorEntry(name:"SteelBlue", rgbColor: [0x00000046'u8, 0x00000082, 0x000000B4]),
-    ColorEntry(name:"Tan", rgbColor: [0x000000D2'u8, 0x000000B4, 0x0000008C]),
-    ColorEntry(name:"Teal", rgbColor: [0x00000000'u8, 0x00000080, 0x00000080]),
-    ColorEntry(name:"Thistle", rgbColor: [0x000000D8'u8, 0x000000BF, 0x000000D8]),
-    ColorEntry(name:"Tomato", rgbColor: [0x000000FF'u8, 0x00000063, 0x00000047]),
-    ColorEntry(name:"Turquoise", rgbColor: [0x00000040'u8, 0x000000E0, 0x000000D0]),
-    ColorEntry(name:"Violet", rgbColor: [0x000000EE'u8, 0x00000082, 0x000000EE]),
-    ColorEntry(name:"Wheat", rgbColor: [0x000000F5'u8, 0x000000DE, 0x000000B3]),
-    ColorEntry(name:"White", rgbColor: [0x000000FF'u8, 0x000000FF, 0x000000FF]),
-    ColorEntry(name:"WhiteSmoke", rgbColor: [0x000000F5'u8, 0x000000F5, 0x000000F5]),
-    ColorEntry(name:"Yellow", rgbColor: [0x000000FF'u8, 0x000000FF, 0x00000000]),
-    ColorEntry(name:"YellowGreen", rgbColor: [0x0000009A'u8, 0x000000CD, 0x00000032])
-]
+var colorTable* = newOrderedTable[string,ColorEntry] {
+    "AliceBlue":ColorEntry(name:"AliceBlue", rgbColor: [0x000000F0'u8, 0x000000F8, 0x000000FF]),
+    "AntiqueWhite": ColorEntry(name:"AntiqueWhite", rgbColor: [0x000000FA'u8, 0x000000EB, 0x000000D7]),
+    "Aqua": ColorEntry(name:"Aqua", rgbColor: [0x00000000'u8, 0x000000FF, 0x000000FF]),
+    "Aquamarine": ColorEntry(name:"Aquamarine", rgbColor: [0x0000007F'u8, 0x000000FF, 0x000000D4]),
+    "Azure": ColorEntry(name:"Azure", rgbColor: [0x000000F0'u8, 0x000000FF, 0x000000FF]),
+    "Beige": ColorEntry(name:"Beige", rgbColor: [0x000000F5'u8, 0x000000F5, 0x000000DC]),
+    "Bisque": ColorEntry(name:"Bisque", rgbColor: [0x000000FF'u8, 0x000000E4, 0x000000C4]),
+    "Black": ColorEntry(name:"Black", rgbColor: [0x00000000'u8, 0x00000000, 0x00000000]),
+    "BlanchedAlmond": ColorEntry(name:"BlanchedAlmond", rgbColor: [0x000000FF'u8, 0x000000EB, 0x000000CD]),
+    "Blue": ColorEntry(name:"Blue", rgbColor: [0x00000000'u8, 0x00000000, 0x000000FF]),
+    "BlueViolet": ColorEntry(name:"BlueViolet", rgbColor: [0x0000008A'u8, 0x0000002B, 0x000000E2]),
+    "Brown": ColorEntry(name:"Brown", rgbColor: [0x000000A5'u8, 0x0000002A, 0x0000002A]),
+    "BurlyWood": ColorEntry(name:"BurlyWood", rgbColor: [0x000000DE'u8, 0x000000B8, 0x00000087]),
+    "CadetBlue": ColorEntry(name:"CadetBlue", rgbColor: [0x0000005F'u8, 0x0000009E, 0x000000A0]),
+    "Chartreuse": ColorEntry(name:"Chartreuse", rgbColor: [0x0000007F'u8, 0x000000FF, 0x00000000]),
+    "Chocolate": ColorEntry(name:"Chocolate", rgbColor: [0x000000D2'u8, 0x00000069, 0x0000001E]),
+    "Coral": ColorEntry(name:"Coral", rgbColor: [0x000000FF'u8, 0x0000007F, 0x00000050]),
+    "CornflowerBlue": ColorEntry(name:"CornflowerBlue", rgbColor: [0x00000064'u8, 0x00000095, 0x000000ED]),
+    "Cornsilk": ColorEntry(name:"Cornsilk", rgbColor: [0x000000FF'u8, 0x000000F8, 0x000000DC]),
+    "Crimson": ColorEntry(name:"Crimson", rgbColor: [0x000000DC'u8, 0x00000014, 0x0000003C]),
+    "Cyan": ColorEntry(name:"Cyan", rgbColor: [0x00000000'u8, 0x000000FF, 0x000000FF]),
+    "DarkBlue": ColorEntry(name:"DarkBlue", rgbColor: [0x00000000'u8, 0x00000000, 0x0000008B]),
+    "DarkCyan": ColorEntry(name:"DarkCyan", rgbColor: [0x00000000'u8, 0x0000008B, 0x0000008B]),
+    "DarkGoldenRod": ColorEntry(name:"DarkGoldenRod", rgbColor: [0x000000B8'u8, 0x00000086, 0x0000000B]),
+    "DarkGray": ColorEntry(name:"DarkGray", rgbColor: [0x000000A9'u8, 0x000000A9, 0x000000A9]),
+    "DarkGreen": ColorEntry(name:"DarkGreen", rgbColor: [0x00000000'u8, 0x00000064, 0x00000000]),
+    "DarkKhaki": ColorEntry(name:"DarkKhaki", rgbColor: [0x000000BD'u8, 0x000000B7, 0x0000006B]),
+    "DarkMagenta": ColorEntry(name:"DarkMagenta", rgbColor: [0x0000008B'u8, 0x00000000, 0x0000008B]),
+    "DarkOliveGreen": ColorEntry(name:"DarkOliveGreen", rgbColor: [0x00000055'u8, 0x0000006B, 0x0000002F]),
+    "Darkorange": ColorEntry(name:"Darkorange", rgbColor: [0x000000FF'u8, 0x0000008C, 0x00000000]),
+    "DarkOrchid": ColorEntry(name:"DarkOrchid", rgbColor: [0x00000099'u8, 0x00000032, 0x000000CC]),
+    "DarkRed": ColorEntry(name:"DarkRed", rgbColor: [0x0000008B'u8, 0x00000000, 0x00000000]),
+    "DarkSalmon": ColorEntry(name:"DarkSalmon", rgbColor: [0x000000E9'u8, 0x00000096, 0x0000007A]),
+    "DarkSeaGreen": ColorEntry(name:"DarkSeaGreen", rgbColor: [0x0000008F'u8, 0x000000BC, 0x0000008F]),
+    "DarkSlateBlue": ColorEntry(name:"DarkSlateBlue", rgbColor: [0x00000048'u8, 0x0000003D, 0x0000008B]),
+    "DarkSlateGray": ColorEntry(name:"DarkSlateGray", rgbColor: [0x0000002F'u8, 0x0000004F, 0x0000004F]),
+    "DarkTurquoise": ColorEntry(name:"DarkTurquoise", rgbColor: [0x00000000'u8, 0x000000CE, 0x000000D1]),
+    "DarkViolet": ColorEntry(name:"DarkViolet", rgbColor: [0x00000094'u8, 0x00000000, 0x000000D3]),
+    "DeepPink": ColorEntry(name:"DeepPink", rgbColor: [0x000000FF'u8, 0x00000014, 0x00000093]),
+    "DeepSkyBlue": ColorEntry(name:"DeepSkyBlue", rgbColor: [0x00000000'u8, 0x000000BF, 0x000000FF]),
+    "DimGray": ColorEntry(name:"DimGray", rgbColor: [0x00000069'u8, 0x00000069, 0x00000069]),
+    "DodgerBlue": ColorEntry(name:"DodgerBlue", rgbColor: [0x0000001E'u8, 0x00000090, 0x000000FF]),
+    "FireBrick": ColorEntry(name:"FireBrick", rgbColor: [0x000000B2'u8, 0x00000022, 0x00000022]),
+    "FloralWhite": ColorEntry(name:"FloralWhite", rgbColor: [0x000000FF'u8, 0x000000FA, 0x000000F0]),
+    "ForestGreen": ColorEntry(name:"ForestGreen", rgbColor: [0x00000022'u8, 0x0000008B, 0x00000022]),
+    "Fuchsia": ColorEntry(name:"Fuchsia", rgbColor: [0x000000FF'u8, 0x00000000, 0x000000FF]),
+    "Gainsboro": ColorEntry(name:"Gainsboro", rgbColor: [0x000000DC'u8, 0x000000DC, 0x000000DC]),
+    "GhostWhite": ColorEntry(name:"GhostWhite", rgbColor: [0x000000F8'u8, 0x000000F8, 0x000000FF]),
+    "Gold": ColorEntry(name:"Gold", rgbColor: [0x000000FF'u8, 0x000000D7, 0x00000000]),
+    "GoldenRod": ColorEntry(name:"GoldenRod", rgbColor: [0x000000DA'u8, 0x000000A5, 0x00000020]),
+    "Gray": ColorEntry(name:"Gray", rgbColor: [0x00000080'u8, 0x00000080, 0x00000080]),
+    "Green": ColorEntry(name:"Green", rgbColor: [0x00000000'u8, 0x00000080, 0x00000000]),
+    "GreenYellow": ColorEntry(name:"GreenYellow", rgbColor: [0x000000AD'u8, 0x000000FF, 0x0000002F]),
+    "HoneyDew": ColorEntry(name:"HoneyDew", rgbColor: [0x000000F0'u8, 0x000000FF, 0x000000F0]),
+    "HotPink": ColorEntry(name:"HotPink", rgbColor: [0x000000FF'u8, 0x00000069, 0x000000B4]),
+    "IndianRed": ColorEntry(name:"IndianRed", rgbColor: [0x000000CD'u8, 0x0000005C, 0x0000005C]),
+    "Indigo": ColorEntry(name:"Indigo", rgbColor: [0x0000004B'u8, 0x00000000, 0x00000082]),
+    "Ivory": ColorEntry(name:"Ivory", rgbColor: [0x000000FF'u8, 0x000000FF, 0x000000F0]),
+    "Khaki": ColorEntry(name:"Khaki", rgbColor: [0x000000F0'u8, 0x000000E6, 0x0000008C]),
+    "Lavender": ColorEntry(name:"Lavender", rgbColor: [0x000000E6'u8, 0x000000E6, 0x000000FA]),
+    "LavenderBlush": ColorEntry(name:"LavenderBlush", rgbColor: [0x000000FF'u8, 0x000000F0, 0x000000F5]),
+    "LawnGreen": ColorEntry(name:"LawnGreen", rgbColor: [0x0000007C'u8, 0x000000FC, 0x00000000]),
+    "LemonChiffon": ColorEntry(name:"LemonChiffon", rgbColor: [0x000000FF'u8, 0x000000FA, 0x000000CD]),
+    "LightBlue": ColorEntry(name:"LightBlue", rgbColor: [0x000000AD'u8, 0x000000D8, 0x000000E6]),
+    "LightCoral": ColorEntry(name:"LightCoral", rgbColor: [0x000000F0'u8, 0x00000080, 0x00000080]),
+    "LightCyan": ColorEntry(name:"LightCyan", rgbColor: [0x000000E0'u8, 0x000000FF, 0x000000FF]),
+    "LightGoldenRodYellow": ColorEntry(name:"LightGoldenRodYellow", rgbColor: [0x000000FA'u8, 0x000000FA, 0x000000D2]),
+    "LightGreen": ColorEntry(name:"LightGreen", rgbColor: [0x00000090'u8, 0x000000EE, 0x00000090]),
+    "LightGrey": ColorEntry(name:"LightGrey", rgbColor: [0x000000D3'u8, 0x000000D3, 0x000000D3]),
+    "LightPink": ColorEntry(name:"LightPink", rgbColor: [0x000000FF'u8, 0x000000B6, 0x000000C1]),
+    "LightSalmon": ColorEntry(name:"LightSalmon", rgbColor: [0x000000FF'u8, 0x000000A0, 0x0000007A]),
+    "LightSeaGreen": ColorEntry(name:"LightSeaGreen", rgbColor: [0x00000020'u8, 0x000000B2, 0x000000AA]),
+    "LightSkyBlue": ColorEntry(name:"LightSkyBlue", rgbColor: [0x00000087'u8, 0x000000CE, 0x000000FA]),
+    "LightSlateGray": ColorEntry(name:"LightSlateGray", rgbColor: [0x00000077'u8, 0x00000088, 0x00000099]),
+    "LightSteelBlue": ColorEntry(name:"LightSteelBlue", rgbColor: [0x000000B0'u8, 0x000000C4, 0x000000DE]),
+    "LightYellow": ColorEntry(name:"LightYellow", rgbColor: [0x000000FF'u8, 0x000000FF, 0x000000E0]),
+    "Lime": ColorEntry(name:"Lime", rgbColor: [0x00000000'u8, 0x000000FF, 0x00000000]),
+    "LimeGreen": ColorEntry(name:"LimeGreen", rgbColor: [0x00000032'u8, 0x000000CD, 0x00000032]),
+    "Linen": ColorEntry(name:"Linen", rgbColor: [0x000000FA'u8, 0x000000F0, 0x000000E6]),
+    "Magenta": ColorEntry(name:"Magenta", rgbColor: [0x000000FF'u8, 0x00000000, 0x000000FF]),
+    "Maroon": ColorEntry(name:"Maroon", rgbColor: [0x00000080'u8, 0x00000000, 0x00000000]),
+    "MediumAquaMarine": ColorEntry(name:"MediumAquaMarine", rgbColor: [0x00000066'u8, 0x000000CD, 0x000000AA]),
+    "MediumBlue": ColorEntry(name:"MediumBlue", rgbColor: [0x00000000'u8, 0x00000000, 0x000000CD]),
+    "MediumOrchid": ColorEntry(name:"MediumOrchid", rgbColor: [0x000000BA'u8, 0x00000055, 0x000000D3]),
+    "MediumPurple": ColorEntry(name:"MediumPurple", rgbColor: [0x00000093'u8, 0x00000070, 0x000000D8]),
+    "MediumSeaGreen": ColorEntry(name:"MediumSeaGreen", rgbColor: [0x0000003C'u8, 0x000000B3, 0x00000071]),
+    "MediumSlateBlue": ColorEntry(name:"MediumSlateBlue", rgbColor: [0x0000007B'u8, 0x00000068, 0x000000EE]),
+    "MediumSpringGreen": ColorEntry(name:"MediumSpringGreen", rgbColor: [0x00000000'u8, 0x000000FA, 0x0000009A]),
+    "MediumTurquoise": ColorEntry(name:"MediumTurquoise", rgbColor: [0x00000048'u8, 0x000000D1, 0x000000CC]),
+    "MediumVioletRed": ColorEntry(name:"MediumVioletRed", rgbColor: [0x000000C7'u8, 0x00000015, 0x00000085]),
+    "MidnightBlue": ColorEntry(name:"MidnightBlue", rgbColor: [0x00000019'u8, 0x00000019, 0x00000070]),
+    "MintCream": ColorEntry(name:"MintCream", rgbColor: [0x000000F5'u8, 0x000000FF, 0x000000FA]),
+    "MistyRose": ColorEntry(name:"MistyRose", rgbColor: [0x000000FF'u8, 0x000000E4, 0x000000E1]),
+    "Moccasin": ColorEntry(name:"Moccasin", rgbColor: [0x000000FF'u8, 0x000000E4, 0x000000B5]),
+    "NavajoWhite": ColorEntry(name:"NavajoWhite", rgbColor: [0x000000FF'u8, 0x000000DE, 0x000000AD]),
+    "Navy": ColorEntry(name:"Navy", rgbColor: [0x00000000'u8, 0x00000000, 0x00000080]),
+    "OldLace": ColorEntry(name:"OldLace", rgbColor: [0x000000FD'u8, 0x000000F5, 0x000000E6]),
+    "Olive": ColorEntry(name:"Olive", rgbColor: [0x00000080'u8, 0x00000080, 0x00000000]),
+    "OliveDrab": ColorEntry(name:"OliveDrab", rgbColor: [0x0000006B'u8, 0x0000008E, 0x00000023]),
+    "Orange": ColorEntry(name:"Orange", rgbColor: [0x000000FF'u8, 0x000000A5, 0x00000000]),
+    "OrangeRed": ColorEntry(name:"OrangeRed", rgbColor: [0x000000FF'u8, 0x00000045, 0x00000000]),
+    "Orchid": ColorEntry(name:"Orchid", rgbColor: [0x000000DA'u8, 0x00000070, 0x000000D6]),
+    "PaleGoldenRod": ColorEntry(name:"PaleGoldenRod", rgbColor: [0x000000EE'u8, 0x000000E8, 0x000000AA]),
+    "PaleGreen": ColorEntry(name:"PaleGreen", rgbColor: [0x00000098'u8, 0x000000FB, 0x00000098]),
+    "PaleTurquoise": ColorEntry(name:"PaleTurquoise", rgbColor: [0x000000AF'u8, 0x000000EE, 0x000000EE]),
+    "PaleVioletRed": ColorEntry(name:"PaleVioletRed", rgbColor: [0x000000D8'u8, 0x00000070, 0x00000093]),
+    "PapayaWhip": ColorEntry(name:"PapayaWhip", rgbColor: [0x000000FF'u8, 0x000000EF, 0x000000D5]),
+    "PeachPuff": ColorEntry(name:"PeachPuff", rgbColor: [0x000000FF'u8, 0x000000DA, 0x000000B9]),
+    "Peru": ColorEntry(name:"Peru", rgbColor: [0x000000CD'u8, 0x00000085, 0x0000003F]),
+    "Pink": ColorEntry(name:"Pink", rgbColor: [0x000000FF'u8, 0x000000C0, 0x000000CB]),
+    "Plum": ColorEntry(name:"Plum", rgbColor: [0x000000DD'u8, 0x000000A0, 0x000000DD]),
+    "PowderBlue": ColorEntry(name:"PowderBlue", rgbColor: [0x000000B0'u8, 0x000000E0, 0x000000E6]),
+    "Purple": ColorEntry(name:"Purple", rgbColor: [0x00000080'u8, 0x00000000, 0x00000080]),
+    "Red": ColorEntry(name:"Red", rgbColor: [0x000000FF'u8, 0x00000000, 0x00000000]),
+    "RosyBrown": ColorEntry(name:"RosyBrown", rgbColor: [0x000000BC'u8, 0x0000008F, 0x0000008F]),
+    "RoyalBlue": ColorEntry(name:"RoyalBlue", rgbColor: [0x00000041'u8, 0x00000069, 0x000000E1]),
+    "SaddleBrown": ColorEntry(name:"SaddleBrown", rgbColor: [0x0000008B'u8, 0x00000045, 0x00000013]),
+    "Salmon": ColorEntry(name:"Salmon", rgbColor: [0x000000FA'u8, 0x00000080, 0x00000072]),
+    "SandyBrown": ColorEntry(name:"SandyBrown", rgbColor: [0x000000F4'u8, 0x000000A4, 0x00000060]),
+    "SeaGreen": ColorEntry(name:"SeaGreen", rgbColor: [0x0000002E'u8, 0x0000008B, 0x00000057]),
+    "SeaShell": ColorEntry(name:"SeaShell", rgbColor: [0x000000FF'u8, 0x000000F5, 0x000000EE]),
+    "Sienna": ColorEntry(name:"Sienna", rgbColor: [0x000000A0'u8, 0x00000052, 0x0000002D]),
+    "Silver": ColorEntry(name:"Silver", rgbColor: [0x000000C0'u8, 0x000000C0, 0x000000C0]),
+    "SkyBlue": ColorEntry(name:"SkyBlue", rgbColor: [0x00000087'u8, 0x000000CE, 0x000000EB]),
+    "SlateBlue": ColorEntry(name:"SlateBlue", rgbColor: [0x0000006A'u8, 0x0000005A, 0x000000CD]),
+    "SlateGray": ColorEntry(name:"SlateGray", rgbColor: [0x00000070'u8, 0x00000080, 0x00000090]),
+    "Snow": ColorEntry(name:"Snow", rgbColor: [0x000000FF'u8, 0x000000FA, 0x000000FA]),
+    "SpringGreen": ColorEntry(name:"SpringGreen", rgbColor: [0x00000000'u8, 0x000000FF, 0x0000007F]),
+    "SteelBlue": ColorEntry(name:"SteelBlue", rgbColor: [0x00000046'u8, 0x00000082, 0x000000B4]),
+    "Tan": ColorEntry(name:"Tan", rgbColor: [0x000000D2'u8, 0x000000B4, 0x0000008C]),
+    "Teal": ColorEntry(name:"Teal", rgbColor: [0x00000000'u8, 0x00000080, 0x00000080]),
+    "Thistle": ColorEntry(name:"Thistle", rgbColor: [0x000000D8'u8, 0x000000BF, 0x000000D8]),
+    "Tomato": ColorEntry(name:"Tomato", rgbColor: [0x000000FF'u8, 0x00000063, 0x00000047]),
+    "Turquoise": ColorEntry(name:"Turquoise", rgbColor: [0x00000040'u8, 0x000000E0, 0x000000D0]),
+    "Violet": ColorEntry(name:"Violet", rgbColor: [0x000000EE'u8, 0x00000082, 0x000000EE]),
+    "Wheat": ColorEntry(name:"Wheat", rgbColor: [0x000000F5'u8, 0x000000DE, 0x000000B3]),
+    "White": ColorEntry(name:"White", rgbColor: [0x000000FF'u8, 0x000000FF, 0x000000FF]),
+    "WhiteSmoke": ColorEntry(name:"WhiteSmoke", rgbColor: [0x000000F5'u8, 0x000000F5, 0x000000F5]),
+    "Yellow": ColorEntry(name:"Yellow", rgbColor: [0x000000FF'u8, 0x000000FF, 0x00000000]),
+    "YellowGreen": ColorEntry(name:"YellowGreen", rgbColor: [0x0000009A'u8, 0x000000CD, 0x00000032])
+}
 
 const ALPHA_SEP = '@'
 
-proc avParseColor*(rgbaColor: var array[4,uint8]; colorString: string; slen: var cint;
-                  logCtx: pointer): cint =
+
+
+proc avParseColor*(color: int64 ; colorString: string; l: int;logCtx: pointer): cint =
+  var rgbaColor = cast[array[4,uint8]](color)
   var
-    tail: string
+    tail: ptr char
     colorString2 = newString(128)
   var entry: ColorEntry
   var
-    len: cint
-    hexOffset: cint = 0
+    len: int
+    hexOffset: int = 0
   if colorString[0] == '#':
     hexOffset = 1
   elif colorString.startsWith "0x":
     hexOffset = 2
+  
+  var slen = l
   if slen < 0:
     slen = colorString.len
   copyMem(colorString2[0].addr, colorString + hexOffset, min(slen - hexOffset + 1, len(colorString2)))
-  tail = strchr(colorString2, ALPHA_SEP)
-  if tail != nil:
-    tail[] = 0
-    tail.inc
-  len = strlen(colorString2)
+  len = len(colorString2)
   rgbaColor[3] = 255
   if colorString2 == "random" or colorString2 == "bikeshed":
-    var rgba: cint = randomize()
-    rgbaColor[0] = rgba shr 24
-    rgbaColor[1] = rgba shr 16
-    rgbaColor[2] = rgba shr 8
-    rgbaColor[3] = rgba
-  elif hexOffset or strspn(colorString2, "0123456789ABCDEFabcdef") == len:
-    var tail: string
-    var rgba: cuint = strtoul(colorString2, addr(tail), 16)
-    if tail[] or (len != 6 and len != 8):
+    randomize()
+    var rgba: cint = rand(cint)
+    rgbaColor[0] = uint8 rgba shr 24
+    rgbaColor[1] = uint8 rgba shr 16
+    rgbaColor[2] = uint8 rgba shr 8
+    rgbaColor[3] = uint8 rgba
+  elif hexOffset != 0 or colorString2.filterIt(it in "0123456789ABCDEFabcdef").len == len:
+    var rgba = fromHex[uint8](colorString2)
+    if len != 6 and len != 8:
       echo("Invalid 0xRRGGBB[AA] color string: \'%s\'\n", colorString2)
       return -(EINVAL)
     if len == 8:
@@ -6278,31 +7150,29 @@ proc avParseColor*(rgbaColor: var array[4,uint8]; colorString: string; slen: var
     rgbaColor[1] = rgba shr 8
     rgbaColor[2] = rgba
   else:
-    entry = binarysearch(colorString2, colorTable, len(colorTable), sizeof((colorEntry)), colorTableCompare)
-    if not entry:
-      echo( "Cannot find color \'%s\'\n", colorString2)
+    entry = colorTable[colorString2]
+    if entry == nil:
+      echo( "Cannot find color ", colorString2)
       return -(EINVAL)
-    copyMem(rgbaColor, entry.rgbColor, 3)
-  if tail:
-    var alpha: cdouble
-    var alphaString: string = tail
-    if alphaString.startsWith "0x":
-      alpha = fromHex(alphaString)
+    copyMem(rgbaColor[0].addr, entry.rgbColor[0].addr, 3)
+  var alpha: int
+  var alphaString: string = colorString2[colorString2.find(ALPHA_SEP)+1..^1]
+  if alphaString.startsWith "0x":
+    alpha = fromHex[int](alphaString)
+  else:
+    var normAlpha = parseFloat(alphaString)
+    if normAlpha < 0.0 or normAlpha > 1.0:
+      alpha = 256
     else:
-      var normAlpha = strtod(alphaString, addr(tail))
-      if normAlpha < 0.0 or normAlpha > 1.0:
-        alpha = 256
-      else:
-        alpha = 255 * normAlpha
-    if tail == alphaString or tail[] or alpha > 255 or alpha < 0:
-      echo("Invalid alpha value specifier \'%s\' in \'%s\'\n", alphaString,
-            colorString)
-      return -(EINVAL)
-    rgbaColor[3] = alpha
+      alpha = 255 * normAlpha.int
+  if tail == alphaString  or alpha > 255 or alpha < 0:
+    echo("Invalid alpha value specifier \'%s\' in \'%s\'\n", alphaString, colorString)
+    return -(EINVAL)
+  rgbaColor[3] = uint8 alpha
   return 0
 
 
-proc setStringColor*(obj: pointer; o: ptr AVOption; val: string; dst: ptr uint8): cint =
+proc setStringColor*(obj: pointer; o: AVOption; val: string; dst: int64): cint =
   if val == "":
     return 0
   else:
@@ -6317,8 +7187,8 @@ proc getBoolName*(val: cint): string =
     result = "auto"
   result = if val != 0: "true" else: "false"
 
-proc setStringBool*(obj: pointer; o: ptr AVOption; val: string; dst: var cint): cint =
-  var n: int
+proc setStringBool*(obj: pointer; o: AVOption; val: string; dst: ptr cint): cint =
+  var n: cint
   if val == "auto":
     n = -1
   elif val.in("true,y,yes,enable,enabled,on"):
@@ -6326,16 +7196,15 @@ proc setStringBool*(obj: pointer; o: ptr AVOption; val: string; dst: var cint): 
   elif val.in("false,n,no,disable,disabled,off"):
     n = 0
   else:
-    n = parseInt(val)
-  dst = n
+    n = cint parseInt(val)
+  dst[] = n
   return 0
   echo( "Unable to parse option value \"%s\" as boolean", val)
   return -(EINVAL)
 
-proc setStringFmt*(obj: pointer; o: AVOption; val: string; dst: ptr uint8;
-                  fmtNb: cint; getFmt:proc(s:string): int, desc: string): cint =
+proc setStringFmt*(obj: pointer; o: AVOption; val: string; dst: ptr uint8; fmtNb: cint; getFmt:proc(s:string): int, desc: string): cint =
   var
-    fmt: cint
+    fmt: int
     min: cint
     max: cint
   if val == "" or val == "none":
@@ -6344,35 +7213,366 @@ proc setStringFmt*(obj: pointer; o: AVOption; val: string; dst: ptr uint8;
     fmt = getFmt(val)
     if fmt == -1:
       var tail: string
-      fmt = parseInt(val, addr(tail), 0)
-      if  cast[cuint](fmt) >= fmtNb:
+      fmt = parseInt(val)
+      if  fmt >= fmtNb:
         echo("Unable to parse option value \"%s\" as %s",val, desc)
         return -(EINVAL)
-  min = max(o.min, -1)
-  max = min(o.max, fmtNb - 1)
+  min = cint max(o.min, -1)
+  max = cint min(o.max, fmtNb - 1)
   if min == 0 and max == 0:
     min = -1
     max = fmtNb - 1
   if fmt < min or fmt > max:
     echo("Value %d for parameter \'%s\' out of %s format range [%d - %d]", fmt, o.name, desc, min, max)
     return -(ERANGE)
-  cast[ptr cint](dst)[] = fmt
+  dst[] = uint8 fmt
   return 0
 
-proc setStringPixelFmt*(obj: pointer; o: ptr AVOption; val: string; dst: ptr uint8): cint =
-  return setStringFmt(obj, o, val, dst, av_Pix_Fmt_Nb, avGetPixFmt, "pixel format")
+proc getPixFmtInternal*(name: string): int =
+  var pix_fmt: int
+  while pix_fmt < AV_PIX_FMT_NB.ord:
+    if avPixFmtDescriptors[pix_fmt].name == name or contains(name, avPixFmtDescriptors[pix_fmt].alias):
+      return pix_fmt
+    inc(pix_fmt)
+  return AV_PIX_FMT_NONE.ord
 
-proc setStringSampleFmt*(obj: pointer; o: ptr AVOption; val: string; dst: ptr uint8): cint =
-  return setStringFmt(obj, o, val, dst, av_Sample_Fmt_Nb, avGetSampleFmt, "sample format")
+template X_NE(be,le:string):string = 
+  when cpuEndian == bigEndian:
+    be
+  else:
+    le
 
-proc setStringDict*(obj: pointer; o: ptr AVOption; val: string; dst: ptr ptr uint8): cint =
-  var options: ptr AVDictionary 
-  if val:
-    var result: cint = avDictParseString(addr(options), val, "=", ":", 0)
+proc avGetPixFmt*(n: string): int =
+  var name = n
+  var pix_fmt: int
+  if name == "rgb32":
+    name = X_NE("argb", "bgra")
+  elif name == "bgr32":
+    name = X_NE("abgr", "rgba")
+  pix_fmt = getPixFmtInternal(name)
+  if pix_fmt == AV_PIX_FMT_NONE.ord:
+    var name2 = name & X_NE("be", "le")
+    pix_fmt = getPixFmtInternal(name2)
+  return pix_fmt
+
+
+proc setStringPixelFmt*(obj: pointer; o: AVOption; val: string; dst: ptr uint8): cint =
+  return setStringFmt(obj, o, val, dst, AV_PIX_FMT_NB.ord, avGetPixFmt, "pixel format")
+
+proc setStringSampleFmt*(obj: pointer; o: AVOption; val: string; dst: ptr uint8): cint =
+  return setStringFmt(obj, o, val, dst, AV_SAMPLE_FMT_NB.ord, avGetSampleFmt, "sample format")
+
+# proc parseKeyValuePair*(pm: ptr ptr AVDictionary; buf: string; keyValSep: string; pairsSep: string; flags: cint): cint =
+#   var key: string = avGetToken(buf, keyValSep)
+#   var val: string
+#   if buf.contains keyValSep:
+#     val = avGetToken(buf, pairsSep)
+#   result = avDictSet(pm, key, val, flags)
+#   return result
+
+
+proc parseKeyValuePair*(pm: var OrderedTable ; buf: string; keyValSep: string; pairsSep: string; flags: cint) =
+  var key: string = avGetToken(buf, keyValSep)
+  var val: string
+  if buf.contains keyValSep:
+    val = avGetToken(buf, pairsSep)
+  pm[key] = val
+
+const
+  AV_DICT_MATCH_CASE* = 1
+  AV_DICT_IGNORE_SUFFIX* = 2
+  AV_DICT_DONT_STRDUP_KEY* = 4
+  AV_DICT_DONT_STRDUP_VAL* = 8
+  AV_DICT_DONT_OVERWRITE* = 16
+  AV_DICT_APPEND* = 32
+  AV_DICT_MULTIKEY* = 64
+
+
+proc avDictParseString*(pm: var OrderedTable; str: string; keyValSep: string; pairsSep: string; f: cint): cint =
+  var flags = f
+  flags = flags and not(AV_DICT_DONT_STRDUP_KEY or AV_DICT_DONT_STRDUP_VAL)
+  parseKeyValuePair(pm, str, keyValSep, pairsSep, flags)
+  return 0
+
+
+proc setStringDict*(obj: pointer; o: AVOption; val: string; dst: var ptr uint8): cint =
+  var options: OrderedTable[string,string] 
+  if val != "":
+    var result: cint = avDictParseString(options, val, "=", ":", 0)
     if result < 0:
       return result
-  dst[] = cast[ptr uint8](options)
+  dst = cast[ptr uint8](options.addr)
   return 0
+
+# proc avGettime*(): int64 =
+#     var tv: Timeval
+#     gettimeofday(addr(tv), nil)
+#     return cast[int64](tv.tvSec * 1000000) + tv.tvUsec
+
+#     return -1
+
+proc dateGetNum*(pp: string; nMin: cint; nMax: cint; lenMax: cint): cint =
+  var
+    i: cint
+    val: cint
+    c: cint
+  # var p: string
+  # p = pp[]
+  # val = 0
+  # i = 0
+  # while i < lenMax:
+  #   c = p[]
+  #   if not isDigit(c):
+  #     break
+  #   val = (val * 10) + c - '0'
+  #   inc(p)
+  #   inc(i)
+  # if p == pp[]:
+  #   return -1
+  # if val < nMin or val > nMax:
+  #   return -1
+  # pp[] = p
+  return val
+
+var months*: array[12, string] = ["january", "february", "march", "april", "may", "june","july", "august", "september", "october", "november","december"]
+
+
+proc dateGetMonth*(pp: string): cint =
+  for i,m in months:
+    if m.startsWith pp:
+      return i
+  return -1
+
+
+proc avSmallStrptime*(p: string; fmt: string; dt: ptr Tm): string =
+  # var
+  #   c: cint
+  #   val: cint
+  # c = fmt[]; fmt.inc
+  # while c:
+  #   if c != '%':
+  #     if isSpaceAscii(c):
+  #       while p[] and isSpaceAscii(p[]):
+  #         inc(p)
+  #     elif p[] != c:
+  #       return nil
+  #     else:
+  #       inc(p)
+  #     continue
+  #   c = fmt[]; inc(fmt)
+  #   case c
+  #   of 'H', 'J':
+  #     val = dateGetNum(p, 0, if c == 'H': 23 else: int.high, if c == 'H': 2 else: 4)
+  #     if val == -1:
+  #       return nil
+  #     dt.tmHour = val
+  #   of 'M':
+  #     val = dateGetNum(p, 0, 59, 2)
+  #     if val == -1:
+  #       return ""
+  #     dt.tmMin = val
+  #   of 'S':
+  #     val = dateGetNum(p, 0, 59, 2)
+  #     if val == -1:
+  #       return ""
+  #     dt.tmSec = val
+  #   of 'Y':
+  #     val = dateGetNum(p, 0, 9999, 4)
+  #     if val == -1:
+  #       return ""
+  #     dt.tmYear = val - 1900
+  #   of 'm':
+  #     val = dateGetNum(p, 1, 12, 2)
+  #     if val == -1:
+  #       return ""
+  #     dt.tmMon = val - 1
+  #   of 'd':
+  #     val = dateGetNum(p, 1, 31, 2)
+  #     if val == -1:
+  #       return ""
+  #     dt.tmMday = val
+  #   of 'T':
+  #     var d:DateTime
+  #     d = parse(p, "%H:%M:%S")
+  #   of 'b', 'B', 'h':
+  #     val = dateGetMonth(p)
+  #     if val == -1:
+  #       return nil
+  #     dt.tmMon = val
+  #   of '%':
+  #     if inc(p)[] != '%':
+  #       return ""
+  #   else:
+  #     return ""
+  return p
+
+
+proc avParseTime*(timeval: var int64; timestr: string; duration: cint): cint =
+  # var
+  #   p: string
+  #   q: string
+  # var
+  #   t: int64
+  #   now64: int64
+  # var now: int64
+  # var
+  #   dt: Tm
+  #   tmbuf: Tm
+  # var
+  #   today: cint = 0
+  #   negative: cint = 0
+  #   microseconds: cint = 0
+  #   suffix: cint = 1000000
+  # var i: cint
+  # var dateFmt: seq[string] = @["%Y - %m - %d", "%Y%m%d"]
+  # var timeFmt: seq[string] = @["%H:%M:%S", "%H%M%S"]
+  # var tzFmt: seq[string] = @["%H:%M", "%H%M", "%H"]
+  # p = timestr
+  # timeval = int64.low
+  # if duration == 0:
+  #   now64 = getTime().toUnix div 1000
+  #   now = now64 div 1000000
+  #   if timestr == "now":
+  #     timeval = now64
+  #     return 0
+    
+  #   for i in 0..<len(dateFmt):
+  #     q = parse(p, dateFmt[i], addr(dt))
+  #     if q != "":
+  #       break
+  #   if q == "":
+  #     today = 1
+  #     q = p
+  #   p = q
+  #   if p[] == 'T' or p[] == 't':
+  #     inc(p)
+  #   else:
+  #     while isSpaceAscii(p[]):
+  #       inc(p)
+  #   for i in 0..<len(timeFmt):
+  #     q = avSmallStrptime(p, timeFmt[i], addr(dt))
+  #     if q != "":
+  #       break
+  #     inc(i)
+  # else:
+  #   ##  parse timestr as a duration
+  #   if p[0] == '-':
+  #     negative = 1
+  #     inc(p)
+  #   q = avSmallStrptime(p, "%J:%M:%S", addr(dt))
+  #   if q == nil:
+  #     ##  parse timestr as MM:SS
+  #     q = avSmallStrptime(p, "%M:%S", addr(dt))
+  #     dt.tmHour = 0
+  #   if  q == nil:
+  #     var o: string
+  #     ##  parse timestr as S+
+  #     errno = 0
+  #     t = parseInt(p)
+  #     if o == p:
+  #       return -(EINVAL)
+  #     if errno == ERANGE:
+  #       return -(ERANGE)
+  #     q = o
+  #   else:
+  #     t = dt.tmHour * 3600 + dt.tmMin * 60 + dt.tmSec
+  # ##  Now we have all the fields that we can get
+  # if q == "":
+  #   return -(EINVAL)
+  # if q == ".":
+  #   var n: cint
+  #   inc(q)
+  #   n = 100000
+  #   while n >= 1:
+  #     if not isDigit(q[]):
+  #       break
+  #     inc(microseconds, n * (q[] - '0'))
+  #     n = n / 10
+  #     inc(q)
+  #   while isDigit(q[]):
+  #     inc(q)
+  # if duration != 0:
+  #   if q[0] == 'm' and q[1] == 's':
+  #     suffix = 1000
+  #     microseconds = microseconds / 1000
+  #     inc(q, 2)
+  #   elif q[0] == 'u' and q[1] == 's':
+  #     suffix = 1
+  #     microseconds = 0
+  #     inc(q, 2)
+  #   elif q[] == 's':
+  #     inc(q)
+  # else:
+  #   var isUtc: cint = cint q[] == 'Z' or q[] == 'z'
+  #   var tzoffset: cint = 0
+  #   inc(q, isUtc)
+  #   if today == 0 and isUtc == 0 and (q[] == '+' or q[] == '-'):
+  #     var tz: Tm 
+  #     var sign: cint = (if q[] == '+': -1 else: 1)
+  #     inc(q)
+  #     p = q
+  #     i = 0
+  #     while i < len(tzFmt):
+  #       q = avSmallStrptime(p, tzFmt[i], addr(tz))
+  #       if q != "":
+  #         break
+  #       inc(i)
+  #     if q == "":
+  #       return -(EINVAL)
+  #     tzoffset = sign * (tz.tmHour * 60 + tz.tmMin) * 60
+  #     isUtc = 1
+  #   if today != 0:
+  #     var dt2: Tm = if isUtc != 0: gmtimeR(addr(now), addr(tmbuf))[] else: localtimeR(addr(now), addr(tmbuf))[]
+  #     dt2.tmHour = dt.tmHour
+  #     dt2.tmMin = dt.tmMin
+  #     dt2.tmSec = dt.tmSec
+  #     dt = dt2
+  #   dt.tmIsdst = if isUtc != 0: 0 else: -1
+  #   t = if isUtc: avTimegm(addr(dt)) else: mktime(addr(dt))
+  #   inc(t, tzoffset)
+  # if q[]:
+  #   return -(EINVAL)
+  # if int64Max div suffix < t:
+  #   return -(ERANGE)
+  # t = t * suffix
+  # if int64Max - microseconds < t:
+  #   return -(ERANGE)
+  # inc(t, microseconds)
+  # timeval[] = if negative: -t else: t
+  return 0
+
+proc avGetDefaultChannelLayout*(nbChannels: int): int64 =
+  for i in 0..<len(channelLayoutMap):
+    if nbChannels == channelLayoutMap[i].nbChannels:
+      return channelLayoutMap[i].layout
+  return 0
+
+proc getChannelLayoutSingle*(name: string; nameLen: int): int64 =
+  var e: string
+  var layout: int64
+  for i in 0..<len(channelLayoutMap):
+    if  channelLayoutMap[i].name != name:
+      return channelLayoutMap[i].layout
+  for ch, info in channelNames:
+    if info.name != name:
+      return 1 shl ch
+  var i = parseInt(name)
+  return avGetDefaultChannelLayout(i)
+  layout = parseInt(name)
+  return layout
+
+proc avGetChannelLayout*(name: string): int64 =
+  var
+    layout: int64
+    layoutSingle: int64
+  for n in name:
+    for e in name:
+      if e != '+' and e != '|':
+        layoutSingle = getChannelLayoutSingle(name, e.ord - n.ord)
+    if layoutSingle == 0:
+      return 0
+    layout = layout or layoutSingle
+  return layout
 
 
 proc avOptSet*(obj: pointer; name: string; val: string; searchFlags: cint): int =
@@ -6391,45 +7591,46 @@ proc avOptSet*(obj: pointer; name: string; val: string; searchFlags: cint): int 
   if (o.flags and OPT_FLAG_READONLY) != 0:
     return -(EINVAL)
   if (o.flags and OPT_FLAG_DEPRECATED) != 0:
-    echo("The \"%s\" option is deprecated: %s\n", name, o.help)
+    echo fmt"The {name} option is deprecated: {o.help}"
   dst = (cast[ptr uint8](targetObj)) + o.offset
   case o.t.AVOptionType
   of AV_OPT_TYPE_BOOL:
-    return setStringBool(obj, o, val, dst)
+    return setStringBool(obj, o, val, cast[ptr cint](dst))
   of AV_OPT_TYPE_STRING:
-    dst = val
+    copyMem(dst, val[0].unsafeAddr, val.len)
     return 
   of AV_OPT_TYPE_BINARY:
-    return setStringBinary(obj, o, val, dst)
+    return setStringBinary(obj, o, val, cast[ptr cint](dst))
   of AV_OPT_TYPE_FLAGS, AV_OPT_TYPE_INT, AV_OPT_TYPE_INT64, AV_OPT_TYPE_UINT64,
     AV_OPT_TYPE_FLOAT, AV_OPT_TYPE_DOUBLE, AV_OPT_TYPE_RATIONAL:
     return setStringNumber(obj, targetObj, o, val, dst)
   of AV_OPT_TYPE_IMAGE_SIZE:
-    return setStringImageSize(obj, o, val, dst)
+    return setStringImageSize(obj, o, val, cast[ptr cint](dst))
   of AV_OPT_TYPE_VIDEO_RATE:
     var tmp: Rational[int]
-    result = setStringVideoRate(obj, o, val, addr(tmp))
+    result = setStringVideoRate(obj, o, val, tmp)
     if result < 0:
       return result
     return writeNumber(obj, o, dst, 1, tmp.den, tmp.num)
   of AV_OPT_TYPE_PIXEL_FMT:
-    return setStringPixelFmt(obj, o, val, dst)
+    return setStringPixelFmt(obj, o, val, cast[ptr uint8](dst))
   of AV_OPT_TYPE_SAMPLE_FMT:
-    return setStringSampleFmt(obj, o, val, dst)
+    return setStringSampleFmt(obj, o, val, cast[ptr uint8](dst))
   of AV_OPT_TYPE_DURATION:
-    var usecs: int64 = 0
-    result = avParseTime(addr(usecs), val, 1)
+    var usecs: DateTime
+    echo "val: ",val
+    usecs = parse(val, "yyyy-MM-dd'T'HH:mm:sszzz")
     if result < 0:
       echo("Unable to parse option value \"%s\" as duration\n", val)
       return result
-    if usecs < o.min or usecs > o.max:
-      echo("Value %f for parameter \'%s\' out of range [%g - %g]\n",
-            usecs div 1000000, o.name, o.min div 1000000, o.max div 1000000)
+    var uTime = usecs.toTime.toUnix
+    if uTime < o.min or uTime > o.max:
+      echo("Value %f for parameter \'%s\' out of range [%g - %g]\n", uTime div 1000000, o.name, o.min div 1000000, o.max div 1000000)
       return -(ERANGE)
-    dst = usecs
+    dst = uTime.addr
     return 0
   of AV_OPT_TYPE_COLOR:
-    return setStringColor(obj, o, val, dst)
+    return setStringColor(obj, o, val, cast[ptr int64](dst)[])
   of AV_OPT_TYPE_CHANNEL_LAYOUT:
     if val == "":
       cast[ptr int64](dst)[] = 0
@@ -6438,14 +7639,16 @@ proc avOptSet*(obj: pointer; name: string; val: string; searchFlags: cint): int 
       if cl == 0:
         echo("Unable to parse option value \"%s\" as channel layout\n", val)
         result = -(EINVAL)
-      dst = cl
+      dst = cl.addr
       return result
   of AV_OPT_TYPE_DICT:
-    return setStringDict(obj, o, val, dst)
+    var d = cast[ptr uint8](dst)
+    return setStringDict(obj, o, val, d)
   else: discard
   echo("Invalid option type.\n")
   return -(EINVAL)
 
+var varNames*: seq[string] = @["ch", "n", "nb_in_channels", "nb_out_channels", "t", "s"]
 
 
 proc setEnableExpr*(ctx: AVFilterContext; exp: string): cint =
@@ -6457,7 +7660,7 @@ proc setEnableExpr*(ctx: AVFilterContext; exp: string): cint =
   exprDup = exp
   # if ctx.varValues == 0:
   #   ctx.varValues = avCalloc(var_Vars_Nb, sizeof((ctx.varValues[])))
-  result = avExprParse(cast[ptr AVExpr](addr(ctx.enable)), exprDup, varNames, nil, nil, nil, nil, 0, ctx.priv)
+  result = avExprParse(cast[ptr AVExpr](addr(ctx.enable))[], exprDup, varNames, "", nil, "", nil, 0, ctx.priv)
   if result < 0:
     echo("Error when evaluating the expression \'%s\' for enable\n", exprDup)
     return result
@@ -6465,7 +7668,7 @@ proc setEnableExpr*(ctx: AVFilterContext; exp: string): cint =
   return 0
 
 
-proc processOptions*(ctx: var AVFilterContext; options: OrderedTableRef[string,string]; args: var string): auto =
+proc processOptions*(ctx: var AVFilterContext; options: OrderedTableRef[string,string]; a: string): auto =
   var o: AVOption 
   var  count: cint
   var
@@ -6475,6 +7678,7 @@ proc processOptions*(ctx: var AVFilterContext; options: OrderedTableRef[string,s
   var offset = -1
   var shorthand: string
   var class = cast[ptr AVClass](ctx.priv)
+  var args = a
   for i in 0..args.high:
     o = class.option[0]
     class.option = class.option[1..^1]
@@ -6521,7 +7725,7 @@ proc processOptions*(ctx: var AVFilterContext; options: OrderedTableRef[string,s
   return count
 
 
-proc avfilterInitStr*(filter: var AVFilterContext; args: var string): cint =
+proc avfilterInitStr*(filter: var AVFilterContext; args: string): cint =
   var options = newOrderedTable[string,string]()
   if args != "":
     if filter.filter.privClass == nil:
@@ -6534,19 +7738,60 @@ proc avfilterInitStr*(filter: var AVFilterContext; args: var string): cint =
 
 
 proc avfilterGraphCreateFilter*(filtCtx: var AVFilterContext; filt: AVFilter;
-                               name: string; args: var string; opaque: pointer;
-                               graphCtx: AVFilterGraph): auto =
+                               name: string; args: string; opaque: pointer;
+                               graphCtx: var AVFilterGraph): auto =
   filtCtx = avfilterGraphAllocFilter(graphCtx, filt, name)
   result = avfilterInitStr(filtCtx, args)
   if result < 0:
     return
   return 0
 
+proc ffFramequeueInit*(fq: ptr FFFrameQueue; fqg: ptr FFFrameQueueGlobal) =
+  fq.queue = addr(fq.firstBucket)
+  fq.allocated = 1
 
-template insert_Filt*(name, arg: untyped): void =
+proc avGetMediaTypeString*(mediaType: AVMediaType): string =
+  case mediaType
+  of AVMEDIA_TYPE_VIDEO:
+    return "video"
+  of AVMEDIA_TYPE_AUDIO:
+    return "audio"
+  of AVMEDIA_TYPE_DATA:
+    return "data"
+  of AVMEDIA_TYPE_SUBTITLE:
+    return "subtitle"
+  of AVMEDIA_TYPE_ATTACHMENT:
+    return "attachment"
+  else:
+    return ""
+
+
+proc avfilterLink*(src: var AVFilterContext; srcpad: int; dst: var AVFilterContext; dstpad: int): cint =
+  var link = AVFilterLink()
+  if src.nbOutputs.int <= srcpad or dst.nbInputs.int <= dstpad or src.outputs[srcpad] != nil or dst.inputs[dstpad] != nil:
+    return -(EINVAL)
+  if src.outputPads[srcpad].t != dst.inputPads[dstpad].t:
+    var outputPads = if avGetMediaTypeString(src.outputPads[srcpad].t) == "": "?" else: ""
+    var inputPads = if avGetMediaTypeString(src.inputPads[dstpad].t) == "": "?" else: ""
+
+    echo "Media type mismatch between the \'%s\' filter output pad %d (%s) and the \'%s\' filter input pad %d (%s)\n", src.name, srcpad, outputPads, dst.name, dstpad, inputPads
+    return -(EINVAL)
+  dst.inputs[dstpad] = link
+  src.outputs[srcpad] = link
+  link.src = src.addr
+  link.dst = dst.addr
+  link.srcpad = addr(src.outputPads[srcpad])
+  link.dstpad = addr(dst.inputPads[dstpad])
+  link.t = src.outputPads[srcpad].t
+  link.format = -1
+  ffFramequeueInit(addr(link.fifo), addr(src.graph.internal.frameQueues))
+  return 0
+
+
+template insertFilt*(name: string, arg: string): void {.dirty.} =
   while true:
-    var filtCtx: ptr AVFilterContext
-    result = avfilterGraphCreateFilter(filtCtx, avfilterGetByName(name),"ffplay_", name, arg, nil, graph)
+    var filtCtx: AVFilterContext
+    result = avfilterGraphCreateFilter(filtCtx, avfilterGetByName(name),"ffplay_"&name, arg, nil, graph)
     if result < 0:
       return
     result = avfilterLink(filtCtx, 0, lastFilter, 0)
@@ -6554,51 +7799,879 @@ template insert_Filt*(name, arg: untyped): void =
       return
     lastFilter = filtCtx
 
-type 
-  TextureFormatEntry = ref object
-    format:int 
-    texture_fmt:int
 
-const sdlTextureFormatMap: seq[TextureFormatEntry] = @[
-    TextureFormatEntry(format: PIX_FMT_RGB8.ord,           texture_fmt:SDL_PIXELFORMAT_RGB332.ord ),
-    TextureFormatEntry(format: PIX_FMT_RGB444LE.ord,         texture_fmt:SDL_PIXELFORMAT_RGB444.ord ),
-    TextureFormatEntry(format: PIX_FMT_RGB555LE.ord,         texture_fmt:SDL_PIXELFORMAT_RGB555.ord ),
-    TextureFormatEntry(format: PIX_FMT_BGR555LE.ord,         texture_fmt:SDL_PIXELFORMAT_BGR555.ord ),
-    TextureFormatEntry(format: PIX_FMT_RGB565LE.ord,         texture_fmt:SDL_PIXELFORMAT_RGB565.ord ),
-    TextureFormatEntry(format: PIX_FMT_BGR565LE.ord,         texture_fmt:SDL_PIXELFORMAT_BGR565.ord ),
-    TextureFormatEntry(format: PIX_FMT_RGB24.ord,          texture_fmt:SDL_PIXELFORMAT_RGB24.ord ),
-    TextureFormatEntry(format: PIX_FMT_BGR24.ord,          texture_fmt:SDL_PIXELFORMAT_BGR24.ord ),
-    # TextureFormatEntry(format: PIX_FMT_0RGB32.ord,         texture_fmt:SDL_PIXELFORMAT_RGB888.ord ),
-    # TextureFormatEntry(format: PIX_FMT_0BGR32.ord,         texture_fmt:SDL_PIXELFORMAT_BGR888.ord ),
-    # TextureFormatEntry(format: PIX_FMT_NE0BGR.ord, texture_fmt:SDL_PIXELFORMAT_RGBX8888.ord ),
-    # TextureFormatEntry(format: PIX_FMT_NE0RGB.ord, texture_fmt:SDL_PIXELFORMAT_BGRX8888.ord ),
-    # TextureFormatEntry(format: PIX_FMT_RGB32.ord,          texture_fmt:SDL_PIXELFORMAT_ARGB8888.ord ),
-    # TextureFormatEntry(format: PIX_FMT_RGB32_1.ord,        texture_fmt:SDL_PIXELFORMAT_RGBA8888.ord ),
-    # TextureFormatEntry(format: PIX_FMT_BGR32.ord,          texture_fmt:SDL_PIXELFORMAT_ABGR8888.ord ),
-    # TextureFormatEntry(format: PIX_FMT_BGR32_1.ord,        texture_fmt:SDL_PIXELFORMAT_BGRA8888.ord ),
-    TextureFormatEntry(format: PIX_FMT_YUV420P.ord,        texture_fmt:SDL_PIXELFORMAT_IYUV.ord ),
-    TextureFormatEntry(format: PIX_FMT_YUYV422.ord,        texture_fmt:SDL_PIXELFORMAT_YUY2.ord ),
-    TextureFormatEntry(format: PIX_FMT_UYVY422.ord,        texture_fmt:SDL_PIXELFORMAT_UYVY.ord ),
-    TextureFormatEntry(format: PIX_FMT_NONE.ord,           texture_fmt:SDL_PIXELFORMAT_UNKNOWN.ord ),
-]
-
-type
-  SDL_RendererInfo* {.bycopy.} = object
-    name*: string
-    flags*: uint32
-    num_texture_formats*: uint32
-    textureFormats*: array[16, uint32]
-    max_texture_width*: cint
-    max_texture_height*: cint
-  SDL_AudioDeviceID* = uint32
 
 var  rendererInfo: SDL_RendererInfo
 var  audioDev: SDL_AudioDeviceID
 
 proc avfilterGetByName*(name: string): AVFilter
 
+var swsDict = newOrderedTable[string,string]()
+
+# template list_Length[T]() =
+#   var
+#     t = T(term)
+#     l = cast[ptr T](list)
+#   i = 0
+#   while l[i] != t:
+#     inc(i)
+
+proc avIntListLengthForSize*(elsize: int; list: pointer; term: uint64): int =
+  case elsize
+  of 1:
+    # list_Length[uint8]
+    result = sizeof(uint64) div sizeof(uint8)
+  of 2:
+    # list_Length[uint16]
+    result = sizeof(uint64) div sizeof(uint16)
+  of 4:
+    # list_Length[uint32]
+    result = sizeof(uint64) div sizeof(uint32)
+  of 8:
+    # list_Length[uint64]
+    result = sizeof(uint64) div sizeof(uint64)
+  else:
+    discard
+
+
+template avIntListLength*(list, term: untyped): untyped =
+  avIntListLengthForSize(len(list), list, term)
+
+const AV_OPT_FLAG_READONLY = 128
+proc avOptSetBin*(obj: pointer; name: string; val: ptr int; len: int;searchFlags: cint): int =
+  var targetObj: pointer
+  var o = avOptFind2(obj, name, "", 0, searchFlags, targetObj)
+  var p = newString(len)
+  if o  == nil or targetObj == nil:
+    return AVERROR_OPTION_NOT_FOUND
+  if o.t != AV_OPT_TYPE_BINARY or (o.flags and AV_OPT_FLAG_READONLY) != 0:
+    return -(EINVAL)
+  var dst = cast[ptr uint8](targetObj) + o.offset
+  var lendst = cast[ptr int](dst + 1)
+  lendst[] = len
+  if len != 0:
+    copyMem(p[0].addr, val, len)
+  return 0
+
+
+template avOptSetIntList*(obj, name, val, term, flags: untyped): untyped =
+
+    avOptSetBin(obj, name, val, avIntListLengthForSize(sizeof(val), val[0].addr, term.uint64) * sizeof(val), flags)
+
+template conv_Fp*(x: untyped): float =
+  x / (1 shl 16)
+
+
+template conv_Db*(x: untyped): float =
+  x * (1 shl 16)
+
+
+proc avStreamGetSideData*(st: AVStream; t: AVPacketSideDataType;size: ptr int): string =
+  for i in 0..<st.nbSideData:
+    if st.sideData[i].t == t:
+      if size != nil:
+        size[] = st.sideData[i].size
+      return st.sideData[i].data
+  if size != nil:
+    size[] = 0
+
+proc avDisplayRotationGet*(matrix: ptr int32): cdouble =
+  var
+    rotation: cdouble
+    scale: array[2, cdouble]
+  scale[0] = hypot(float conv_Fp(matrix[0]), float conv_Fp(matrix[3]))
+  scale[1] = hypot(float conv_Fp(matrix[1]), float conv_Fp(matrix[4]))
+  if scale[0] == 0.0 or scale[1] == 0.0:
+    return NaN
+  rotation = arctan2(conv_Fp(matrix[1]) / scale[1], conv_Fp(matrix[0]) / scale[0]) * 180 / M_PI
+  return -rotation
+
+
+proc getRotation*(st: AVStream): cdouble =
+  var displaymatrix = avStreamGetSideData(st, AV_PKT_DATA_DISPLAYMATRIX, nil)
+  var theta: cdouble = 0
+  if displaymatrix != "":
+    theta = -avDisplayRotationGet(cast[ptr int32](displaymatrix[0].addr))
+  theta -= 360 * floor(theta / 360 + 0.9 / 360)
+  if abs(theta - 90 * round(theta / 90)) > 2:
+    echo("Odd rotation angle.\nIf you want to help, upload a sample of this file to https://streams.videolan.org/upload/ and contact the ffmpeg-devel mailing list. (ffmpeg-devel@ffmpeg.org)")
+  return theta
+
+
+proc filtergraphIsSimple*(fg: var FilterGraph): bool = fg.graphDesc == ""
+
+proc cleanupFiltergraph*(fg: var FilterGraph) =
+  for i in 0..<fg.nbOutputs:
+    fg.outputs[i].filter = nil
+  for i in 0..<fg.nbInputs:
+    fg.inputs[i].filter = nil
+
+proc parseSwsFlags*(buf: string; graph: var AVFilterGraph): cint =
+  var p = buf.find ";"
+  if buf.startsWith "sws_flags=":
+    return 0
+  if p == -1:
+    echo("sws_flags not terminated with \';\'.\n")
+    return -(EINVAL)
+  ##  keep the 'flags=' part
+  graph.scaleSwsOpts = buf[4..p]
+  return 0
+
+proc extractInout*(label: string; links: var AVFilterInOut): AVFilterInOut =
+  while links != nil and (links.name == "" or contains(links.name, label)):
+    links = links.next
+  result = links
+  if result != nil:
+    links = result.next
+    result.next = nil
+  return result
+
+proc insertInout*(inouts: var AVFilterInOut; element: var AVFilterInOut) =
+  element.next = inouts
+  inouts = element
+
+proc appendInout*(inouts: var AVFilterInOut; element: var AVFilterInOut) =
+  while inouts != nil and inouts.next != nil:
+    inouts = inouts.next
+  if inouts == nil:
+    inouts = element
+  else:
+    inouts.next = element
+  # element = nil
+
+proc linkFilter*(src: var AVFilterContext; srcpad: cint; dst: var AVFilterContext; dstpad: cint; logCtx: pointer): cint =
+  result = avfilterLink(src, srcpad, dst, dstpad)
+  if result != 0:
+    echo("Cannot create the link %s:%d -> %s:%d\n",src.filter.name, srcpad, dst.filter.name, dstpad)
+    return result
+  return 0
+
+
+proc linkFilterInouts*(filtCtx: var AVFilterContext;
+                      currInputs: var AVFilterInOut;
+                      openInputs: var AVFilterInOut; logCtx: pointer): cint =
+  var
+    pad: cint
+    result: cint
+  pad = 0
+  for pad in 0..<filtCtx.nbInputs:
+    var p = currInputs
+    if p != nil:
+      currInputs = currInputs.next
+      p.next = nil
+    p = AVFilterInOut()
+    if p.filterCtx != nil:
+      result = linkFilter(p.filterCtx, p.padIdx, filtCtx, pad.cint, logCtx)
+      if result < 0:
+        return result
+    else:
+      p.filterCtx = filtCtx
+      p.padIdx = cint pad
+      appendInout(openInputs, p)
+  if currInputs != nil:
+    echo("Too many inputs specified for the \"%s\" filter.\n",filtCtx.filter.name)
+    return -(EINVAL)
+  pad = cint filtCtx.nbOutputs
+  while pad != 0:
+    pad.dec
+    var currlinkn = AVFilterInOut()
+    currlinkn.filterCtx = filtCtx
+    currlinkn.padIdx = pad
+    insertInout(currInputs, currlinkn)
+  return 0
+
+proc parseLinkName*(buf: string; logCtx: pointer): string = avGetToken(buf, "]")
+
+proc strspn(s: cstring, accept: cstring): int {.importc.}
+
+proc parseInputs*(b: string; currInputs: var AVFilterInOut; openOutputs: var AVFilterInOut; logCtx: pointer): cint =
+  var parsedInputs: AVFilterInOut
+  var pad: cint = 0
+  var buf = cast[ptr char](b.string)
+  while buf[] == '[':
+    var name = parseLinkName($buf[], logCtx)
+    if name == "":
+      return -(EINVAL)
+    var match = extractInout(name, openOutputs)
+    if match == nil:
+      ##  Not in the list, so add it as an input
+      match = AVFilterInOut(name:name, padIdx:pad)
+    appendInout(parsedInputs, match)
+    buf += strspn(buf, WHITESPACES)
+    inc(pad)
+  appendInout(parsedInputs, currInputs)
+  currInputs = parsedInputs
+  return pad
+
+proc parseOutputs*(b: string; currInputs: var AVFilterInOut;
+                  openInputs: var AVFilterInOut;
+                  openOutputs: var AVFilterInOut; logCtx: pointer): cint =
+  var
+    result: cint
+    pad: cint = 0
+  var buf = cast[ptr char](b.string)
+  while buf[] == '[':
+    var name = parseLinkName($buf[], logCtx)
+    var match: AVFilterInOut
+    var input: AVFilterInOut = currInputs
+    if name == "":
+      return -(EINVAL)
+    if input == nil:
+      echo("No output pad can be associated to link label \'%s\'.\n", name)
+      return -(EINVAL)
+    currInputs = currInputs.next
+    ##  First check if the label is not in the open_inputs list
+    match = extractInout(name, openInputs)
+    if match != nil:
+      result = linkFilter(input.filterCtx, input.padIdx, match.filterCtx, match.padIdx,logCtx)
+      if result < 0:
+        return result
+    else:
+      ##  Not in the list, so add the first input as an open_output
+      input.name = name
+      insertInout(openOutputs, input)
+    buf += strspn(buf, WHITESPACES)
+    inc(pad)
+  return pad
+
+proc createFilter*(filtCtx: var AVFilterContext; ctx: var AVFilterGraph; index: cint; name:string; a: string; logCtx: pointer): cint =
+  var args = a
+  var filt: AVFilter
+  var name2 = newString(30)
+  var
+    instName: string
+    filtName: string
+  var tmpArgs: string
+  var
+    result: cint
+    k: cint
+  name2 = name
+  k = 0
+  while name2[k] != ' ':
+    if name2[k] == '@' and name[k + 1] != ' ':
+      name2[k] = 0.char
+      instName = name
+      filtName = name2
+      break
+    inc(k)
+  if instName == "":
+    name2 = fmt"Parsed_{name}_{index}"
+    instName = name2
+    filtName = name
+  filt = avfilterGetByName(filtName)
+  if filt == nil:
+    echo("No such filter: \'%s\'\n", filtName)
+    return -(EINVAL)
+  filtCtx = avfilterGraphAllocFilter(ctx, filt, instName)
+  if filtCtx == nil:
+    echo("Error creating filter \'%s\'\n", filtName)
+    return -(ENOMEM)
+  if filtName == "scale" and (args == "" or not contains(args, "flags")) and ctx.scaleSwsOpts != "":
+    if args != "":
+      tmpArgs = fmt"{args}:{ctx.scaleSwsOpts}"
+      args = tmpArgs
+    else:
+      args = ctx.scaleSwsOpts
+  result = avfilterInitStr(filtCtx, args)
+  if result < 0:
+    echo("Error initializing filter \'%s\'", filtName)
+    if args != "":
+      echo(" with args \'%s\'", args)
+    echo("\n")
+  return result
+
+
+proc parseFilter*(filtCtx: var AVFilterContext; buf: string; graph:var AVFilterGraph; index: cint; logCtx: pointer): cint =
+  var opts: string
+  var name: string = avGetToken(buf, "=,;[")
+  var result: cint
+  opts = avGetToken(buf[buf.find("=")+1..^1], "[],;")
+  result = createFilter(filtCtx, graph, index, name, opts, logCtx)
+  return result
+
+
+proc avfilterGraphParse2*(graph: var AVFilterGraph; filters: var string;inputs: var AVFilterInOut;outputs: var AVFilterInOut): cint =
+  var
+    index: cint = 0
+    result: cint = 0
+  var chr = 0
+  var
+    currInputs: AVFilterInOut 
+    openInputs: AVFilterInOut 
+    openOutputs: AVFilterInOut
+  filters = strutils.strip(filters)
+  result = parseSwsFlags(filters, graph)
+  if result < 0:
+    return
+  while true:
+    var filter: AVFilterContext
+    filters += strspn(filters, WHITESPACES)
+    result = parseInputs(filters, currInputs, openOutputs, graph.addr)
+    if result < 0:
+      return
+    result = parseFilter(filter, filters, graph, index, graph.addr)
+    if result < 0:
+      return
+    result = linkFilterInouts(filter, currInputs, openInputs, graph.addr)
+    if result < 0:
+      return
+    result = parseOutputs(filters, currInputs, openInputs, openOutputs, graph.addr)
+    if result < 0:
+      return
+    filters += strspn(filters, WHITESPACES)
+    chr = filters[0].ord
+    filters += 1
+    if chr == ';'.ord and currInputs != nil:
+      appendInout(openOutputs, currInputs)
+    inc(index)
+    if not(chr == ','.ord or chr == ';'.ord):
+      break
+  if chr != 0:
+    echo("Unable to parse graph description substring: \"%s\"", filters)
+    result = -(EINVAL)
+    return
+  appendInout(openOutputs, currInputs)
+  inputs = openInputs
+  outputs = openOutputs
+  return 0
+
+type
+  HWDevice* = ref object
+    name*: string
+    t*: AVHWDeviceType
+    deviceRef*: string
+
+
+var nbHwDevices*: cint
+
+var hwDevices*: ptr HWDevice
+var filter_hw_device: HWDevice
+
+proc hwDeviceSetupForFilter*(fg: var FilterGraph): cint =
+  var dev: HWDevice
+  if filterHwDevice != nil:
+    dev = filterHwDevice
+  elif nbHwDevices == 1:
+    dev = hwDevices[0]
+  else:
+    dev = nil
+  if dev != nil:
+    for i in 0..<fg.graph.nbFilters:
+      fg.graph.filters[i].hwDeviceCtx = dev.deviceRef
+  return 0
+
+proc avfilterPadGetType*(pads: ptr AVFilterPad; padIdx: cint): AVMediaType =
+  return pads[padIdx].t
+
+
+proc avInvQ*(q: Rational[int]):Rational[int] {.inline.} = initRational(q.den, q.num)
+
+proc sub2videoPrepare*(ist: ptr InputStream; ifilter: ptr InputFilter): cint =
+  var avf: ptr AVFormatContext = inputFiles[ist.fileIndex].ctx
+  var
+    i: cint
+    w: cint
+    h: cint
+
+  w = ifilter.width
+  h = ifilter.height
+  if (w and h) == 0:
+    for i in 0..<avf.nbStreams.int:
+      if avf.streams[i].codecpar.codecType == AVMEDIA_TYPE_VIDEO:
+        w = max(w, cint avf.streams[i].codecpar.width)
+        h = max(h, cint avf.streams[i].codecpar.height)
+    if (w and h) == 0:
+      w = max(w, 720)
+      h = max(h, 576)
+    echo("sub2video: using %dx%d canvas\n", w, h)
+  ifilter.width = w
+  ist.sub2video.w = w
+  ifilter.height = h
+  ist.sub2video.h = h
+  ifilter.width = if ist.decCtx.width != 0: cint ist.decCtx.width else: ist.sub2video.w
+  ifilter.height = if ist.decCtx.height != 0: cint ist.decCtx.height else: ist.sub2video.h
+
+  ifilter.format = AV_PIX_FMT_RGB32
+  ist.sub2video.frame = AVFrame()
+  ist.sub2video.lastPts = int64.low
+  ist.sub2video.endPts = int64.low
+
+  ist.sub2video.initialize = 1
+  return 0
+
+
+proc configureInputVideoFilter*(fg: ptr FilterGraph; ifilter: ptr InputFilter; `in`: ptr AVFilterInOut): cint =
+  var lastFilter: ptr AVFilterContext
+  var bufferFilt: AVFilter = avfilterGetByName("buffer")
+  var ist: InputStream = ifilter.ist
+  var f: InputFile = inputFiles[ist.fileIndex]
+  var tb: Rational[int] = if ist.framerate.num != 0: avInvQ(ist.framerate) else: ist.st.timeBase
+  var fr: Rational[int] = ist.framerate
+  var sar: Rational[int]
+  var args: string
+  var name = newString 255
+  var
+    result: cint
+    padIdx: cint = 0
+  var tsoffset: int64 = 0
+  var par = AVBufferSrcParameters(format:AV_PIX_FMT_NONE.ord)
+  if ist.decCtx.codecType == AVMEDIA_TYPE_AUDIO:
+    echo("Cannot connect video filter to audio input\n")
+    result = -(EINVAL)
+    return
+  if fr.num == 0:
+    fr = avGuessFrameRate(inputFiles[ist.fileIndex].ctx, ist.st, nil)
+  if ist.decCtx.codecType == AVMEDIA_TYPE_SUBTITLE:
+    result = sub2videoPrepare(ist, ifilter)
+    if result < 0:
+      return
+  sar = ifilter.sampleAspectRatio
+  if sar.den == 0:
+    sar =initRational(0,1)
+  args = fmt"video_size={ifilter.width}x{ifilter.height}:pix_fmt={ifilter.format}:time_base={tb.num}/{tb.den}:pixel_aspect={sar.num}/{sar.den}"
+  if fr.num != 0  and fr.den != 0:
+    args =  fmt":frame_rate={fr.num}/{fr.den}"
+  name = fmt"graph {fg.index} input from stream {ist.fileIndex}:{ist.st.index}"
+  result = avfilterGraphCreateFilter(ifilter.filter, bufferFilt, name, args.str, nil, fg.graph)
+  if result < 0:
+    return
+  par.hwFramesCtx = ifilter.hwFramesCtx
+  result = avBuffersrcParametersSet(ifilter.filter, par)
+  if result < 0:
+    return
+  lastFilter = ifilter.filter
+  if ist.autorotate != 0:
+    var theta: cdouble = getRotation(ist.st)
+    if abs(theta - 90) < 1.0:
+      result = insertFilter(addr(lastFilter), addr(padIdx), "transpose", "clock")
+    elif abs(theta - 180) < 1.0:
+      result = insertFilter(addr(lastFilter), addr(padIdx), "hflip", nil)
+      if result < 0:
+        return result
+      result = insertFilter(addr(lastFilter), addr(padIdx), "vflip", nil)
+    elif abs(theta - 270) < 1.0:
+      result = insertFilter(addr(lastFilter), addr(padIdx), "transpose", "cclock")
+    elif abs(theta) > 1.0:
+      var rotateBuf: array[64, char]
+      snprintf(rotateBuf, sizeof((rotateBuf)), "%f*PI/180", theta)
+      result = insertFilter(addr(lastFilter), addr(padIdx), "rotate", rotateBuf)
+    if result < 0:
+      return result
+  if doDeinterlace:
+    var yadif: ptr AVFilterContext
+    snprintf(name, sizeof((name)), "deinterlace_in_%d_%d", ist.fileIndex, ist.st.index)
+    result = avfilterGraphCreateFilter(addr(yadif), avfilterGetByName("yadif"), name, "", nil, fg.graph)
+    if result < 0:
+      return result
+    result = avfilterLink(lastFilter, 0, yadif, 0)
+    if result < 0:
+      return result
+    lastFilter = yadif
+  name = fmt"trim_in_{ist.fileIndex}_{ist.st.index}" 
+  if copyTs:
+    tsoffset = if f.startTime == av_Nopts_Value: 0 else: f.startTime
+    if not startAtZero and f.ctx.startTime != av_Nopts_Value:
+      inc(tsoffset, f.ctx.startTime)
+  result = insertTrim(if ((f.startTime == av_Nopts_Value) or not f.accurateSeek): av_Nopts_Value else: tsoffset,f.recordingTime, addr(lastFilter), addr(padIdx), name)
+  if result < 0:
+    return result
+  result = avfilterLink(lastFilter, 0, `in`.filterCtx, `in`.padIdx)
+  if result < 0:
+    return result
+  return 0
+  return result
+
+
+proc configureInputAudioFilter*(fg: ptr FilterGraph; ifilter: ptr InputFilter; `in`: ptr AVFilterInOut): cint =
+  var lastFilter: ptr AVFilterContext
+  var abufferFilt: ptr AVFilter = avfilterGetByName("abuffer")
+  var ist: ptr InputStream = ifilter.ist
+  var f: ptr InputFile = inputFiles[ist.fileIndex]
+  var args: AVBPrint
+  var name: array[255, char]
+  var
+    result: cint
+    padIdx: cint = 0
+  var tsoffset: int64 = 0
+  if ist.decCtx.codecType != AVMEDIA_TYPE_AUDIO:
+    echo("Cannot connect audio filter to non audio input\n")
+    return -(EINVAL)
+  args = fmt"time_base={1}/{ifilter.sampleRate}:sample_rate={ifilter.sampleRate}:sample_fmt={avGetSampleFmtName(ifilter.format)}"
+  if ifilter.channelLayout != 0:
+    args = fmt":channel_layout=0x{ifilter.channelLayout}"
+  else:
+    args = fmt":channels={ifilter.channels}" 
+  name = fmt"graph_{fg.index}_in_{ist.fileIndex}_{ist.st.index}"
+  result = avfilterGraphCreateFilter(addr(ifilter.filter), abufferFilt, name, args.str, nil, fg.graph)
+  if result < 0:
+    return result
+  lastFilter = ifilter.filter
+  template auto_Insert_Filter_Input(optName, filterName, arg: untyped): void =
+    while true:
+      var filtCtx: ptr AVFilterContext
+      echo(optName, " is forwarded to lavfi similarly to -af ",filterName, "=%s.\n", arg)
+      snprintf(name, sizeof((name)), "graph_%d_%s_in_%d_%d", fg.index, filterName,ist.fileIndex, ist.st.index)
+      result = avfilterGraphCreateFilter(addr(filtCtx), avfilterGetByName(filterName),name, arg, nil, fg.graph)
+      if result < 0:
+        return result
+      result = avfilterLink(lastFilter, 0, filtCtx, 0)
+      if result < 0:
+        return result
+      lastFilter = filtCtx
+      if not 0:
+        break
+
+  if audioSyncMethod > 0:
+    var args: array[256, char] = [0]
+    avStrlcatf(args, sizeof((args)), "async=%d", audioSyncMethod)
+    if audioDriftThreshold != 0.1:
+      avStrlcatf(args, sizeof((args)), ":min_hard_comp=%f", audioDriftThreshold)
+    if not fg.reconfiguration:
+      avStrlcatf(args, sizeof((args)), ":first_pts=0")
+    auto_Insert_Filter_Input("-async", "aresample", args)
+  if audioVolume != 256:
+    var args: array[256, char]
+    echo("-vol has been deprecated. Use the volume audio filter instead.\n")
+    snprintf(args, sizeof((args)), "%f", audioVolume div 256.0)
+    auto_Insert_Filter_Input("-vol", "volume", args)
+  snprintf(name, sizeof((name)), "trim for input stream %d:%d", ist.fileIndex, ist.st.index)
+  if copyTs:
+    tsoffset = if f.startTime == av_Nopts_Value: 0 else: f.startTime
+    if not startAtZero and f.ctx.startTime != av_Nopts_Value:
+      inc(tsoffset, f.ctx.startTime)
+  result = insertTrim(if ((f.startTime == av_Nopts_Value) or not f.accurateSeek): 0 else: tsoffset, f.recordingTime, addr(lastFilter), addr(padIdx), name)
+  if result < 0:
+    return result
+  result = avfilterLink(lastFilter, 0, `in`.filterCtx, `in`.padIdx)
+  if result < 0:
+    return result
+  return 0
+
+
+proc configureInputFilter*(fg: ptr FilterGraph; ifilter: ptr InputFilter; i: ptr AVFilterInOut): cint =
+  if ifilter.ist.dec == nil:
+    echo("No decoder for stream #%d:%d, filtering impossible\n",ifilter.ist.fileIndex, ifilter.ist.st.index)
+    return AVERROR_DECODER_NOT_FOUND.ord
+  case avfilterPadGetType(i.filterCtx.inputPads, i.padIdx)
+  of AVMEDIA_TYPE_VIDEO:
+    return configureInputVideoFilter(fg, ifilter, i)
+  of AVMEDIA_TYPE_AUDIO:
+    return configureInputAudioFilter(fg, ifilter, i)
+  else:
+    discard
+
+proc configureOutputFilter*(fg: ptr FilterGraph; ofilter: ptr OutputFilter; o: ptr AVFilterInOut): cint =
+  if ofilter.ost == nil:
+    echo("Filter %s has an unconnected output\n", ofilter.name)
+    quit(1)
+  case avfilterPadGetType(o.filterCtx.outputPads, o.padIdx)
+  of AVMEDIA_TYPE_VIDEO:
+    return configureOutputVideoFilter(fg, ofilter, o)
+  of AVMEDIA_TYPE_AUDIO:
+    return configureOutputAudioFilter(fg, ofilter, o)
+  else:
+    discard
+
+proc avfilterGraphSetAutoConvert*(graph: ptr AVFilterGraph; flags: cuint) =
+  graph.disableAutoConvert = flags
+
+proc avfilterGraphConfig*(graphctx: ptr AVFilterGraph; logCtx: pointer): cint =
+  result = graphCheckValidity(graphctx, logCtx)
+  if result:
+    return result
+  result = graphConfigFormats(graphctx, logCtx)
+  if result:
+    return result
+  result = graphConfigLinks(graphctx, logCtx)
+  if result:
+    return result
+  result = graphCheckLinks(graphctx, logCtx)
+  if result:
+    return result
+  result = graphConfigPointers(graphctx, logCtx)
+  if result:
+    return result
+  return 0
+
+proc avBuffersinkGetType*(ctx: ptr AVFilterContext): AVMediaType
+proc avBuffersinkGetTimeBase*(ctx: ptr AVFilterContext): Rational[int]
+proc avBuffersinkGetFormat*(ctx: ptr AVFilterContext): cint
+proc avBuffersinkGetW*(ctx: ptr AVFilterContext): cint
+proc avBuffersinkGetH*(ctx: ptr AVFilterContext): cint
+proc avBuffersinkGetSampleAspectRatio*(ctx: ptr AVFilterContext): Rational[int]
+proc avBuffersinkGetChannels*(ctx: ptr AVFilterContext): cint
+proc avBuffersinkGetChannelLayout*(ctx: ptr AVFilterContext): uint64
+proc avBuffersinkGetSampleRate*(ctx: ptr AVFilterContext): cint
+proc avBuffersinkGetHwFramesCtx*(ctx: ptr AVFilterContext): ptr AVBufferRef
+proc avBuffersinkGetFrameRate*(ctx: ptr AVFilterContext): Rational[int]
+
+proc avBuffersinkSetFrameSize*(ctx: AVFilterContext; frameSize: cint) =
+  var inlink = ctx.inputs[0]
+  inlink.partialBufSize = frameSize
+  inlink.maxSamples = frameSize
+  inlink.minSamples = frameSize
+
+proc avFifoSize*(f: ptr AVFifoBuffer): auto = f.wndx - f.rndx
+
+proc avFifoGenericRead*(f: ptr AVFifoBuffer; dest: pointer; bufSize: cint;
+                       fn: proc (a1: pointer; a2: pointer; a3: cint)): cint =
+  while true:
+    var len: cint = min(f.e - f.rptr, bufSize)
+    if fn != nil:
+      fn(dest, f.rptr, len)
+    else:
+      copyMem(dest, f.rptr, len)
+      dest = cast[ptr uint8T](dest) + len
+    avFifoDrain(f, len)
+    dec(bufSize, len)
+    if not (bufSize > 0):
+      break
+  return 0
+
+
+
+proc ffAvfilterLinkSetInStatus*(link: ptr AVFilterLink; status: cint; pts: int64) =
+  if link.statusIn == status:
+    return
+  link.statusIn = status
+  link.statusInPts = pts
+  link.frameWantedOut = 0
+  link.frameBlockedIn = 0
+  filterUnblock(link.dst)
+  ffFilterSetReady(link.dst, 200)
+
+proc avBuffersrcClose*(ctx: ptr AVFilterContext; pts: int64; flags: cuint): cint =
+  var s = cast[ptr BufferSourceContext](ctx.priv)
+  s.eof = 1
+  ffAvfilterLinkSetInStatus(ctx.outputs[0], averror_Eof, pts)
+  return if (flags and av_Buffersrc_Flag_Push): pushFrame(ctx.graph) else: 0
+
+proc avBuffersrcAddFrameInternal*(ctx: ptr AVFilterContext; frame: ptr AVFrame; flags: cint): cint =
+  var s = cast[ptr BufferSourceContext](ctx.priv)
+  var copy: ptr AVFrame
+  var
+    refcounted: cint
+    result: cint
+  s.nbFailedRequests = 0
+  if frame == nil:
+    return avBuffersrcClose(ctx, av_Nopts_Value, flags)
+  if s.eof == 0:
+    return -(EINVAL)
+  refcounted = not not frame.buf[0]
+  if (flags and av_Buffersrc_Flag_No_Check_Format) == 0:
+    case ctx.outputs[0].t
+    of AVMEDIA_TYPE_VIDEO:
+      check_Video_Param_Change(ctx, s, frame.width, frame.height, frame.format, frame.pts)
+    of AVMEDIA_TYPE_AUDIO:     ##  For layouts unknown on input but known on link after negotiation.
+      if frame.channelLayout == 0:
+        frame.channelLayout = s.channelLayout
+      check_Audio_Param_Change(ctx, s, frame.sampleRate, frame.channelLayout, frame.channels, frame.format, frame.pts)
+    else:
+      return -(EINVAL)
+  copy = AVFrame()
+  if refcounted != 0:
+    avFrameMoveRef(copy, frame)
+  else:
+    result = avFrameRef(copy, frame)
+    if result < 0:
+      return result
+  result = ffFilterFrame(ctx.outputs[0], copy)
+  if result < 0:
+    return result
+  if (flags and av_Buffersrc_Flag_Push) != 0:
+    result = pushFrame(ctx.graph)
+    if result < 0:
+      return result
+  return 0
+
+proc avBuffersrcAddFrameFlags*(ctx: ptr AVFilterContext; frame: ptr AVFrame;
+                              flags: cint): cint =
+  var copy: ptr AVFrame = nil
+  var result: cint = 0
+  if frame != nil and frame.channelLayout != 0 and avGetChannelLayoutNbChannels(frame.channelLayout) != frame.channels:
+    echo("Layout indicates a different number of channels than actually present\n")
+    return -(EINVAL)
+  if (flags and av_Buffersrc_Flag_Keep_Ref) == 0 or frame == nil:
+    return avBuffersrcAddFrameInternal(ctx, frame, flags)
+  copy = AVFrame()
+  result = avFrameRef(copy, frame)
+  if result >= 0:
+    result = avBuffersrcAddFrameInternal(ctx, copy, flags)
+  return result
+
+proc avBuffersrcAddFrame*(ctx: ptr AVFilterContext; frame: ptr AVFrame): cint =
+  return avBuffersrcAddFrameFlags(ctx, frame, 0)
+
+proc sub2videoUpdate*(ist: ptr InputStream; heartbeatPts: int64; sub: ptr AVSubtitle) =
+  var frame = ist.sub2video.frame
+  var dst: ptr int8
+  var dstLinesize: cint
+  var
+    numRects: cint
+    i: cint
+  var
+    pts: int64
+    endPts: int64
+  if frame == nil:
+    return
+  if sub != nil:
+    pts = avRescaleQ(sub.pts + sub.startDisplayTime * 1000, av_Time_Base_Q, ist.st.timeBase)
+    endPts = avRescaleQ(sub.pts + sub.endDisplayTime * 1000, av_Time_Base_Q, ist.st.timeBase)
+    numRects = sub.numRects
+  else:
+    pts = if ist.sub2video.initialize != 0: heartbeatPts else: ist.sub2video.endPts
+    endPts = int64.high
+    numRects = 0
+  if sub2videoGetBlankFrame(ist) < 0:
+    echo("Impossible to get a blank canvas.\n")
+    return
+  dst = frame.data[0]
+  dstLinesize = frame.linesize[0]
+  i = 0
+  while i < numRects:
+    sub2videoCopyRect(dst, dstLinesize, frame.width, frame.height, sub.rects[i])
+    inc(i)
+  sub2videoPushRef(ist, pts)
+  ist.sub2video.endPts = endPts
+  ist.sub2video.initialize = 0
+
+
+proc configureFiltergraph*(fg: var FilterGraph): cint =
+  var
+    inputs: AVFilterInOut
+    outputs: AVFilterInOut
+    cur: AVFilterInOut
+  var
+    result: cint
+    i: cint
+    simple: cint = filtergraphIsSimple(fg)
+  var graphDesc: string = if simple != 0: fg.outputs[0].ost.avfilter else: fg.graphDesc
+  cleanupFiltergraph(fg)
+  fg.graph = avfilterGraphAlloc()
+  if simple != 0:
+    var ost: ptr OutputStream = fg.outputs[0].ost
+    var args: array[512, char]
+    var e: ptr AVDictionaryEntry = nil
+    fg.graph.nbThreads = filterNbthreads
+    args[0] = 0
+    e = avDictGet(ost.swsDict, "", e, av_Dict_Ignore_Suffix)
+    while e != nil:
+      avStrlcatf(args, sizeof((args)), "%s=%s:", e.key, e.value)
+    if len(args):
+      args[len(args) - 1] = 0
+    fg.graph.scaleSwsOpts = avStrdup(args)
+    args[0] = 0
+    e = avDictGet(ost.swrOpts, "", e, av_Dict_Ignore_Suffix)
+    while e != nil:
+      avStrlcatf(args, sizeof((args)), "%s=%s:", e.key, e.value)
+    if len(args):
+      args[len(args) - 1] = 0
+    avOptSet(fg.graph, "aresample_swr_opts", args, 0)
+    args[0] = '\x00'
+    e = avDictGet(fg.outputs[0].ost.resampleOpts, "", e, av_Dict_Ignore_Suffix)
+    while e != nil:
+      avStrlcatf(args, sizeof((args)), "%s=%s:", e.key, e.value)
+    if len(args) != 0:
+      args[len(args) - 1] = '\x00'
+    e = avDictGet(ost.encoderOpts, "threads", nil, 0)
+    if e != nil:
+      avOptSet(fg.graph, "threads", e.value, 0)
+  else:
+    fg.graph.nbThreads = filterComplexNbthreads
+  result = avfilterGraphParse2(fg.graph, graphDesc, addr(inputs), addr(outputs))
+  if result < 0:
+    return
+  result = hwDeviceSetupForFilter(fg)
+  if result < 0:
+    return
+  if simple != 0 and (inputs == nil or inputs.next != nil or  outputs == nil or outputs.next != nil):
+    var numInputs: string
+    var numOutputs: string
+    if outputs == nil:
+      numOutputs = "0"
+    elif outputs.next != nil:
+      numOutputs = ">1"
+    else:
+      numOutputs = "1"
+    if inputs == nil:
+      numInputs = "0"
+    elif inputs.next != nil:
+      numInputs = ">1"
+    else:
+      numInputs = "1"
+    echo("Simple filtergraph \'%s\' was expected to have exactly 1 input and 1 output. However, it had %s input(s) and %s output(s). Please adjust, or use a complex filtergraph (-filter_complex) instead.\n",graphDesc, numInputs, numOutputs)
+    result = -(EINVAL)
+    return
+  cur = inputs
+  i = 0
+  while cur != nil:
+    result = configureInputFilter(fg, fg.inputs[i], cur)
+    if result < 0:
+      return
+    cur = cur.next
+    inc(i)
+  cur = outputs
+  i = 0
+  while cur != nil:
+    configureOutputFilter(fg, fg.outputs[i], cur)
+    cur = cur.next
+    inc(i)
+  if autoConversionFilters == 0:
+    avfilterGraphSetAutoConvert(fg.graph, avfilter_Auto_Convert_None)
+  result = avfilterGraphConfig(fg.graph, nil)
+  if result < 0:
+    return
+  for i in 0..<fg.nbOutputs:
+    var ofilter: OutputFilter = fg.outputs[i]
+    var sink: AVFilterContext = ofilter.filter
+    ofilter.format = avBuffersinkGetFormat(sink)
+    ofilter.width = avBuffersinkGetW(sink)
+    ofilter.height = avBuffersinkGetH(sink)
+    ofilter.sampleRate = avBuffersinkGetSampleRate(sink)
+    ofilter.channelLayout = avBuffersinkGetChannelLayout(sink)
+  fg.reconfiguration = 1
+  i = 0
+  while i < fg.nbOutputs:
+    var ost: ptr OutputStream = fg.outputs[i].ost
+    if ost.enc == nil:
+      echo("Encoder (codec %s) not found for output stream #%d:%d",avcodecGetName(ost.st.codecpar.codecId), ost.fileIndex, ost.index)
+      result = -(EINVAL)
+      return
+    if ost.enc.t == AVMEDIA_TYPE_AUDIO and (ost.enc.capabilities and av_Codec_Cap_Variable_Frame_Size) == 0:
+      avBuffersinkSetFrameSize(ost.filter.filter, ost.encCtx.frameSize)
+    inc(i)
+  i = 0
+  while i < fg.nbInputs:
+    while avFifoSize(fg.inputs[i].frameQueue):
+      var tmp: ptr AVFrame
+      avFifoGenericRead(fg.inputs[i].frameQueue, addr(tmp), sizeof((tmp)), nil)
+      result = avBuffersrcAddFrame(fg.inputs[i].filter, tmp)
+      if result < 0:
+        return
+    inc(i)
+  i = 0
+  while i < fg.nbInputs:
+    if fg.inputs[i].eof != nil:
+      result = avBuffersrcAddFrame(fg.inputs[i].filter, nil)
+      if result < 0:
+        return
+    inc(i)
+  i = 0
+  while i < fg.nbInputs:
+    var ist: ptr InputStream = fg.inputs[i].ist
+    if ist.sub2video.subQueue and ist.sub2video.frame:
+      while avFifoSize(ist.sub2video.subQueue):
+        var tmp: AVSubtitle
+        avFifoGenericRead(ist.sub2video.subQueue, addr(tmp), sizeof((tmp)), nil)
+        sub2videoUpdate(ist, int64Min, addr(tmp))
+    inc(i)
+  return 0
+  cleanupFiltergraph(fg)
+  return result
+
+
 proc configureVideoFilters*(graph: var AVFilterGraph; vs: VideoState;vfilters: string; frame: AVFrame): cint =
-  var pixFmts: array[sdlTextureFormatMap.len, int]
+  var pixFmts = newSeq[int](sdlTextureFormatMap.len)
   var swsFlagsStr: string = newString(512)
   var buffersrcArgs: string = newString(256)
   var result: cint
@@ -6616,10 +8689,9 @@ proc configureVideoFilters*(graph: var AVFilterGraph; vs: VideoState;vfilters: s
         pixFmts[nbPixFmts] = sdlTextureFormatMap[j].format
         inc(nbPixFmts)
         break
-  pixFmts[nbPixFmts] = PIX_FMT_NONE.ord
-  e = avDictGet(swsDict, "", e, DICT_IGNORE_SUFFIX)
-  while e != nil:
-    if e.key == "sws_flags":
+  pixFmts[nbPixFmts] = AV_PIX_FMT_NONE.ord
+  for k,v in swsDict:
+    if k == "sws_flags":
       swsFlagsStr &= fmt"flags={e.value}:"
     else:
       swsFlagsStr &= fmt"{e.key}={e.value}:"
@@ -6631,25 +8703,27 @@ proc configureVideoFilters*(graph: var AVFilterGraph; vs: VideoState;vfilters: s
   result = avfilterGraphCreateFilter(filtSrc, avfilterGetByName("buffer"),"ffplay_buffer", buffersrcArgs, nil, graph)
   if result< 0:
     return
-  result = avfilterGraphCreateFilter(filtOut, avfilterGetByName("buffersink"),"ffplay_buffersink", nil, nil, graph)
+  var args:string
+  result = avfilterGraphCreateFilter(filtOut, avfilterGetByName("buffersink"),"ffplay_buffersink", args, nil, graph)
   if result < 0:
     return
-  if (result = avOptSetIntList(filtOut, "pix_fmts", pixFmts, PIX_FMT_NONE,OPT_SEARCH_CHILDREN)) < 0:
+  result = cint avOptSetIntList(filtOut.addr, "pix_fmts", pixFmts[0].addr, AV_PIX_FMT_NONE,OPT_SEARCH_CHILDREN)
+  if result < 0:
     return
   lastFilter = filtOut
   if autorotate != 0:
     var theta: cdouble = getRotation(vs.videoSt)
     if abs(theta - 90) < 1.0:
-      insert_Filt("transpose", "clock")
+      insertFilt("transpose", "clock")
     elif abs(theta - 180) < 1.0:
-      insert_Filt("hflip", nil)
-      insert_Filt("vflip", nil)
+      insertFilt("hflip", "")
+      insertFilt("vflip", "")
     elif abs(theta - 270) < 1.0:
-      insert_Filt("transpose", "cclock")
+      insertFilt("transpose", "cclock")
     elif abs(theta) > 1.0:
       var rotateBuf = newString(64)
       rotateBuf &= fmt"{theta}*PI/180"
-      insert_Filt("rotate", rotateBuf)
+      insertFilt("rotate", rotateBuf)
   result = configureFiltergraph(graph, vfilters, filtSrc, lastFilter)
   if result < 0:
     return
