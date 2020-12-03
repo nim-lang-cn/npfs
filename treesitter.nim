@@ -12,6 +12,49 @@ import streams
 import algorithm
 import compiler/[ast, idents, modulegraphs, options]
 
+import strformat
+import tables
+import sets
+import algorithm
+import sequtils
+import strutils
+
+type 
+  Vertex* = ref object
+    indegree: int
+    name: string
+    edge: HashSet[string]
+
+proc topoSort*(gl: var OrderedTable[string, Vertex]):seq[string] = 
+  var zeroIndegree: seq[string]
+  for f,vertex in gl.mpairs:
+    var indegree = vertex.indegree
+    # echo fmt"{f} with indegree {indegree}"
+    if indegree == 0:
+      zeroIndegree.add f
+  
+  while zeroIndegree.len > 0:
+    var z = zeroIndegree.pop
+    result.add z
+
+    for e in gl[z].edge:
+      gl[e].indegree.dec
+      for f,vertex in gl.mpairs:
+        if f notin result and f notin zeroIndegree and vertex.indegree == 0:
+          zeroIndegree.add f
+  
+
+proc addEdge*(gl: OrderedTable,k:string,v:string) =
+  if not gl[k].edge.contains v:
+    gl[k].edge.incl v
+    gl[v].inDegree.inc
+
+
+proc initVertex*(gl:var OrderedTable, k:varargs[string]) =
+  for i in k:
+    gl[i] = Vertex(name: i)
+
+
 macro defineEnum(typ: untyped): untyped =
   result = newNimNode(nnkStmtList)
 
@@ -1261,7 +1304,6 @@ proc topParent(n:TSNode,ntype: string):TSNode =
 
 var stdTypes: seq[string] = @["string","unordered_map","string_view","array","vector","pair","FILE","sockaddr","socklen_t","cmsghdr","T","operator","F","in6_addr","nanoseconds","ifstream","ostream"]
 
-import dag
 
 var funcState = State(mode:"cpp")
 
@@ -1350,6 +1392,11 @@ proc addTypeCalls(state:State, typeIdent:string, n:TSNode) =
         typeGraph.initVertex childTypeIdent
         typeCalls[childTypeIdent] = typeIdent
 
+var undefined = @["av_mallocz", "av_free", "av_malloc", "av_malloc_array", "av_freep", "av_frame_free", "av_packet_free", "av_log", "av_dict_get", "av_cpu_count", "avcodec_alloc_context3", "av_opt_copy", "av_dict_copy", "av_dict_set", "avcodec_open2", "av_dict_free", "av_bsf_list_parse_str", "av_strerror", "av_bsf_init", "av_bsf_free", "av_buffer_unref", "av_buffer_ref", "av_frame_unref", "av_packet_unref", "av_opt_free", "av_packet_alloc", "av_init_packet", "av_packet_make_refcounted", "av_frame_alloc", "av_frame_ref", "avcodec_receive_frame", "av_rescale_q", "avcodec_flush_buffers", "av_packet_move_ref", 
+"avcodec_decode_subtitle2", "avcodec_send_packet", "avcodec_free_context", "avsubtitle_free", "av_mul_q", "av_rescale", "sws_getCachedContext", "sws_scale", "av_gettime_relative", "av_rdft_end", "av_rdft_init", "av_rdft_calc", "swr_free", "avformat_close_input", "sws_freeContext", "avformat_network_deinit", "av_bprint_init", "av_bprintf", "av_log_get_level", "av_bprint_finalize", "av_frame_move_ref", "av_guess_sample_aspect_ratio", "avfilter_inout_alloc", "av_strdup", "avfilter_graph_parse_ptr", "avfilter_link", "avfilter_graph_config", "avfilter_inout_free", "av_guess_frame_rate", "av_strlcatf", "avfilter_get_by_name", "avfilter_graph_create_filter", "av_int_list_length_for_size", "av_opt_set_bin", "avfilter_graph_free", "avfilter_graph_alloc", "av_opt_set", "av_get_sample_fmt_name", "av_opt_set_int", "av_get_channel_layout_nb_channels", "av_get_packed_sample_fmt", "av_get_channel_layout_string", "av_buffersrc_add_frame", "av_buffersink_get_time_base", "av_buffersink_get_frame_flags", "av_get_pix_fmt_name", "av_buffersink_get_frame_rate", "av_usleep", "av_samples_get_buffer_size", "av_get_default_channel_layout", "swr_alloc_set_opts", "swr_init", "swr_set_compensation", "av_fast_malloc", "swr_convert", "av_get_bytes_per_sample", "av_log2", "avcodec_parameters_to_context", "avcodec_find_decoder", "avcodec_find_decoder_by_name", "avcodec_get_name", "av_dict_set_int", "av_buffersink_get_sample_rate", "av_buffersink_get_channels", "av_buffersink_get_channel_layout", "av_match_name", "av_realloc_f", "av_opt_get", "av_reallocp", "avio_rl16", "avio_r8", "avio_flush", "avio_context_free", "avio_open_dyn_buf", "avio_w8", "avio_rb16", "avio_seek", "av_strcasecmp", "avio_rb32", "avio_skip", "avio_get_str", "av_strncasecmp", "av_buffer_alloc", "av_asprintf", "avio_rb24", "uncompress", "av_strlcpy", "avformat_new_stream", "av_dynarray_add", "av_dynarray_add_nofree", "av_bprint_chars", "av_parser_close", "av_opt_set_dict", "av_match_list", "av_filename_number_test", "av_opt_set_defaults", "avformat_queue_attached_pictures", "avio_closep", "avformat_free_context", "av_strstart", "avio_alloc_context", "av_mallocz_array", "__imp_WSAStartup", "__imp_WSACleanup", "avio_close", "av_format_inject_global_side_data", "avformat_find_stream_info", "avformat_seek_file", "av_dump_format", "av_get_media_type_string", "av_find_best_stream", "av_read_pause", "av_read_play", "av_packet_ref", "av_read_frame", "av_find_program_from_stream", "av_compare_ts", "avio_size", "av_find_input_format", "av_parse_time", "av_realloc_array", "av_stream_get_side_data", "av_realloc", "avcodec_get_class", "avcodec_find_encoder", "av_opt_find", "avformat_get_class", "sws_get_class", "swr_get_class", "av_log_set_level", "sws_alloc_context", "swr_alloc", "av_strtod", "av_log_format_line2", "av_log_default_callback", "av_opt_get_key_value", "av_log_set_callback", "av_log_set_flags", "avdevice_register_all", "avformat_network_init"]
+
+var enablePreprocessing = false
+
 proc process(source: string) =
     var state = State(mode:"cpp",includeDirs: @["/mnt/c/openssl","/mnt/c/openssl/ssl","/mnt/c/openssl/include","/mnt/c/nghttp3/lib/includes","/mnt/c/nghttp3/lib","/mnt/c/ngtcp2/crypto/includes",
       "/mnt/c/ngtcp2/crypto","/mnt/c/ngtcp2/lib","/mnt/c/ngtcp2/lib/includes","/mnt/c/ngtcp2/third-party","/mnt/c/ngtcp2/third-party/http-parser"])
@@ -1359,75 +1406,94 @@ proc process(source: string) =
     #与definition表匹配，匹配到的将topParent->definition的边加入DAG中，完成后进行排序
     #将排序的结果倒着写入文件
     withCodeAst(state.code, state.mode):
-      var preprocInclude = root.any("preproc_include")
+      if not enablePreprocessing:
+        echo state.code.printLisp root
+      if not fileExists "all.cpp":
+        var preprocInclude = root.any("preproc_include")
+        #找函数和类型定义
+        var definitions = root.any("type_definition","function_definition")
+        for def in definitions:
+          case def.getName
+          of "type_definition":
+            # echo state.getNodeVal def
+            var typeIdentNode = def[0].tsNodeNextNamedSibling
+            if typeIdentNode.len > 0:  #形如typedef void (*sk_X509_ALGOR_freefunc)(X509_ALGOR *a);
+              var typeIdent = state.getNodeVal typeIdentNode.anyChildInTree("type_identifier")
+              if not typeDefs.hasKey typeIdent:
+                typeGraph.initVertex typeIdent
+                typeDefs[typeIdent] = state.getNodeVal def 
+              else:
+                echo fmt"duplicated typeDefs: {state.getNodeVal def}, old value: {typeDefs[typeIdent]}"
+            else: #形如typedef struct/union/enum {} X;
+              var typeIdent = state.getNodeVal typeIdentNode
+              if not typeDefs.hasKey typeIdent:
+                typeGraph.initVertex typeIdent
+                typeDefs[typeIdent] = state.getNodeVal def
+              else:
+                echo fmt"duplicated typeDefs: {state.getNodeVal def}, old value: {typeDefs[typeIdent]}"
+              state.addTypeCalls(typeIdent, def)
+          of "function_definition":
+            var identifier = def.anyChildInTree("identifier")
+            if not identifier.isNil:
+              var funcIdent = state.getNodeVal identifier
+              funcGraph.initVertex funcIdent
+              funcDefs[funcIdent] = state.getNodeVal def
 
-      var definitions = root.any("type_definition","function_definition")
-      for def in definitions:
-        case def.getName
-        of "type_definition":
-          # echo state.getNodeVal def
-          var typeIdentNode = def[0].tsNodeNextNamedSibling
-          if typeIdentNode.len > 0:  #形如typedef void (*sk_X509_ALGOR_freefunc)(X509_ALGOR *a);
-            var typeIdent = state.getNodeVal typeIdentNode.anyChildInTree("type_identifier")
-            if not typeDefs.hasKey typeIdent:
-              typeGraph.initVertex typeIdent
-              typeDefs[typeIdent] = state.getNodeVal def 
-            else:
-              echo fmt"duplicated typeDefs: {state.getNodeVal def}, old value: {typeDefs[typeIdent]}"
-          else: #形如typedef struct/union/enum {} X;
-            var typeIdent = state.getNodeVal typeIdentNode
-            if not typeDefs.hasKey typeIdent:
-              typeGraph.initVertex typeIdent
-              typeDefs[typeIdent] = state.getNodeVal def
-            else:
-              echo fmt"duplicated typeDefs: {state.getNodeVal def}, old value: {typeDefs[typeIdent]}"
-            state.addTypeCalls(typeIdent, def)
-        of "function_definition":
-          var identifier = def.anyChildInTree("identifier")
-          if not identifier.isNil:
-            var funcIdent = state.getNodeVal identifier
-            funcGraph.initVertex funcIdent
-            funcDefs[funcIdent] = state.getNodeVal def
+        #找类型调用
+        var specifiers = root.findTypeSpecifiers()#找到不是字段声明的struct/union/enum关键字,可能包含定义
+        for s in specifiers:
+          var specifier = state.getNodeVal s
+          var specifierIdent = state.getNodeVal s[0]
+          if typeDefs.hasKey(specifierIdent) and typeDefs[specifierIdent] != specifier:
+            typeDefs[specifierIdent] = typeDefs[specifierIdent] & specifier
+          else:
+            typeGraph.initVertex specifierIdent
+            echo fmt"duplicated typeSpecifier: {state.getNodeVal s}, old value: {typeSpecifier[specifierIdent]}"
+          state.addTypeCalls(specifierIdent, s)
 
-      var specifiers = root.findTypeSpecifiers()#找到不是字段声明的struct/union/enum关键字,可能包含定义
-      for s in specifiers:
-        var specifier = state.getNodeVal s
-        var specifierIdent = state.getNodeVal s[0]
-        if typeDefs.hasKey(specifierIdent) and typeDefs[specifierIdent] != specifier:
-          typeDefs[specifierIdent] = typeDefs[specifierIdent] & specifier
-        else:
-          typeGraph.initVertex specifierIdent
-          echo fmt"duplicated typeSpecifier: {state.getNodeVal s}, old value: {typeSpecifier[specifierIdent]}"
-        state.addTypeCalls(specifierIdent, s)
+        for parent,ident in typeCalls:
+          if typeDefs.hasKey ident:
+            typeGraph.addEdge(parent,ident)
+        #找函数调用
+        var calls = root.any("call_expression")
+        for call in calls:
+            var callee = state.getNodeVal call.firstChildInTree("identifier")
+            var functionDefinition = call.topParent("function_definition")
+            if not functionDefinition.isNil:
+              var functionDeclarator = functionDefinition.anyChildInTree("function_declarator")
+              if not functionDeclarator.isNil:
+                var caller = state.getNodeVal functionDeclarator[0]
+                funcGraph.initVertex caller
+                if not funcCalls.hasKey caller:
+                  funcCalls[caller] = callee
+            # else:
+              # echo "call_expression not from function_definition: ", state.getNodeVal call
 
-      for parent,ident in typeCalls:
-        if typeDefs.hasKey ident:
-          typeGraph.addEdge(parent,ident)
-
-      var calls = root.any("call_expression")
-      for call in calls:
-          var callIdent = state.getNodeVal call.firstChildInTree("identifier")
-          var functionDefinition = call.topParent("function_definition")
-          if not functionDefinition.isNil:
-            var functionDeclarator = functionDefinition.anyChildInTree("function_declarator")
-            if not functionDeclarator.isNil:
-              var callParentIdent = state.getNodeVal functionDeclarator[0]
-              funcGraph.initVertex callParentIdent
-              if not funcCalls.hasKey callParentIdent:
-                funcCalls[callParentIdent] = callIdent
-          # else:
-            # echo "call_expression not from function_definition: ", state.getNodeVal call
-      
-      for parent,ident in funcCalls:
-        if funcDefs.hasKey(ident):
-          funcGraph.addEdge(parent, ident)
+        for parent,ident in funcCalls:
+          if funcDefs.hasKey(ident):
+            funcGraph.addEdge(parent, ident)
+      else:
+        
+        #TODO: 如果目标文件中有未定义的函数声明，在声明后追加定义
+        if undefined.len != 0:
+          var targetState = State(mode:"cpp", code: readFile("ffplay.cc"))
+          withCodeAst(targetState.code, targetState.mode):
+            var delarations = root.any("declaration")
+            for d in delarations:
+              var fd = d.anyChildInTree("function_declarator")
+              if not fd.isNil:
+                var ds = targetState.getNodeVal d
+                if ds.startsWith "extern": continue
+                var caller = targetState.getNodeVal fd[0]
+                if caller in undefined:
+                  echo caller
+          
 
 
-var source: seq[string] = @["test.cpp"]
+var source: seq[string] = @["test.c"]
 var all: string
 var hAndC: seq[string]
 
-var enablePreprocessing = true
 if enablePreprocessing:
   var csources = @["/mnt/c/nghttp3/lib","/mnt/c/ngtcp2/crypto","/mnt/c/ngtcp2/lib","/mnt/c/ngtcp2/third-party/http-parser","/mnt/c/ngtcp2/examples"]
   for dir in csources:
@@ -1440,7 +1506,7 @@ if enablePreprocessing:
     all &= readFile(hc)
     # preprocess(hc) 
   writeFile("all.cpp",all)
-  quit()
+  # quit()
   process("all.cpp") 
 
   # var sorted = funcGraph.topoSort()

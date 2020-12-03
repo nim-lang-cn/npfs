@@ -424,8 +424,8 @@ const
   AV_CH_STEREO_RIGHT* = 0x40000000
   AV_CH_WIDE_LEFT* = 0x0000000000000000'i64
   AV_CH_WIDE_RIGHT* = 0x0000000000000000'i64
-  AV_CH_SURROUND_DIRECT_LEFT* = 0x0000000000000000'i64
-  AV_CH_SURROUND_DIRECT_RIGHT* = 0x0000000000000000'i64
+  AV_CH_SURAV_ROUND_DIRECT_LEFT* = 0x0000000000000000'i64
+  AV_CH_SURAV_ROUND_DIRECT_RIGHT* = 0x0000000000000000'i64
   AV_CH_LOW_FREQUENCY_2* = 0x0000000000000000'i64
   AV_CH_TOP_SIDE_LEFT* = 0x0000000000000000'i64
   AV_CH_TOP_SIDE_RIGHT* = 0x0000000000000000'i64
@@ -500,8 +500,8 @@ type
     f*: cdouble
 
   AVRounding* = enum
-    ROUND_ZERO = 0, ROUND_INF = 1, ROUND_DOWN = 2, ROUND_UP = 3,
-    ROUND_NEAR_INF = 5, ROUND_PASS_MINMAX = 8192
+    AV_ROUND_ZERO = 0, AV_ROUND_INF = 1, AV_ROUND_DOWN = 2, AV_ROUND_UP = 3,
+    AV_ROUND_NEAR_INF = 5, AV_ROUND_PASS_MINMAX = 8192
 
   AVClassCategory* = enum
     CLASS_CATEGORY_NA = 0, CLASS_CATEGORY_INPUT, CLASS_CATEGORY_OUTPUT,
@@ -599,7 +599,7 @@ type
 
   AVPixFmtDescriptor* = ref object
     name*: string
-    nb_components*: uint8
+    nb_components*: int
     log2_chroma_w*: uint8
     log2_chroma_h*: uint8
     flags*: uint64
@@ -833,6 +833,7 @@ const
   HWFRAME_MAP_OVERWRITE* = 1 shl 2
   HWFRAME_MAP_DIRECT* = 1 shl 3
 
+
 type
   AVSideDataParamChangeFlags* = enum
     SIDE_DATA_PARAM_CHANGE_CHANNEL_COUNT = 0x00000001,
@@ -854,161 +855,172 @@ type
     AV_PKT_DATA_ENCRYPTION_INIT_INFO, AV_PKT_DATA_ENCRYPTION_INFO,
     AV_PKT_DATA_AFD, AV_PKT_DATA_PRFT, AV_PKT_DATA_ICC_PROFILE,
     AV_PKT_DATA_DOVI_CONF, AV_PKT_DATA_S12M_TIMECODE, AV_PKT_DATA_NB
+
+
   AVCodecID* = enum
-    CODEC_ID_NONE, CODEC_ID_MPEG1VIDEO, CODEC_ID_MPEG2VIDEO,
-    CODEC_ID_H261, CODEC_ID_H263, CODEC_ID_RV10, CODEC_ID_RV20,
-    CODEC_ID_MJPEG, CODEC_ID_MJPEGB, CODEC_ID_LJPEG, CODEC_ID_SP5X,
-    CODEC_ID_JPEGLS, CODEC_ID_MPEG4, CODEC_ID_RAWVIDEO,
-    CODEC_ID_MSMPEG4V1, CODEC_ID_MSMPEG4V2, CODEC_ID_MSMPEG4V3,
-    CODEC_ID_WMV1, CODEC_ID_WMV2, CODEC_ID_H263P, CODEC_ID_H263I,
-    CODEC_ID_FLV1, CODEC_ID_SVQ1, CODEC_ID_SVQ3, CODEC_ID_DVVIDEO,
-    CODEC_ID_HUFFYUV, CODEC_ID_CYUV, CODEC_ID_H264, CODEC_ID_INDEO3,
-    CODEC_ID_VP3, CODEC_ID_THEORA, CODEC_ID_ASV1, CODEC_ID_ASV2,
-    CODEC_ID_FFV1, CODEC_ID_4XM, CODEC_ID_VCR1, CODEC_ID_CLJR,
-    CODEC_ID_MDEC, CODEC_ID_ROQ, CODEC_ID_INTERPLAY_VIDEO,
-    CODEC_ID_XAN_WC3, CODEC_ID_XAN_WC4, CODEC_ID_RPZA,
-    CODEC_ID_CINEPAK, CODEC_ID_WS_VQA, CODEC_ID_MSRLE,
-    CODEC_ID_MSVIDEO1, CODEC_ID_IDCIN, CODEC_ID_8BPS, CODEC_ID_SMC,
-    CODEC_ID_FLIC, CODEC_ID_TRUEMOTION1, CODEC_ID_VMDVIDEO,
-    CODEC_ID_MSZH, CODEC_ID_ZLIB, CODEC_ID_QTRLE, CODEC_ID_TSCC,
-    CODEC_ID_ULTI, CODEC_ID_QDRAW, CODEC_ID_VIXL, CODEC_ID_QPEG,
-    CODEC_ID_PNG, CODEC_ID_PPM, CODEC_ID_PBM, CODEC_ID_PGM,
-    CODEC_ID_PGMYUV, CODEC_ID_PAM, CODEC_ID_FFVHUFF, CODEC_ID_RV30,
-    CODEC_ID_RV40, CODEC_ID_VC1, CODEC_ID_WMV3, CODEC_ID_LOCO,
-    CODEC_ID_WNV1, CODEC_ID_AASC, CODEC_ID_INDEO2, CODEC_ID_FRAPS,
-    CODEC_ID_TRUEMOTION2, CODEC_ID_BMP, CODEC_ID_CSCD,
-    CODEC_ID_MMVIDEO, CODEC_ID_ZMBV, CODEC_ID_AVS, CODEC_ID_SMACKVIDEO,
-    CODEC_ID_NUV, CODEC_ID_KMVC, CODEC_ID_FLASHSV, CODEC_ID_CAVS,
-    CODEC_ID_JPEG2000, CODEC_ID_VMNC, CODEC_ID_VP5, CODEC_ID_VP6,
-    CODEC_ID_VP6F, CODEC_ID_TARGA, CODEC_ID_DSICINVIDEO,
-    CODEC_ID_TIERTEXSEQVIDEO, CODEC_ID_TIFF, CODEC_ID_GIF,
-    CODEC_ID_DXA, CODEC_ID_DNXHD, CODEC_ID_THP, CODEC_ID_SGI,
-    CODEC_ID_C93, CODEC_ID_BETHSOFTVID, CODEC_ID_PTX, CODEC_ID_TXD,
-    CODEC_ID_VP6A, CODEC_ID_AMV, CODEC_ID_VB, CODEC_ID_PCX,
-    CODEC_ID_SUNRAST, CODEC_ID_INDEO4, CODEC_ID_INDEO5, CODEC_ID_MIMIC,
-    CODEC_ID_RL2, CODEC_ID_ESCAPE124, CODEC_ID_DIRAC, CODEC_ID_BFI,
-    CODEC_ID_CMV, CODEC_ID_MOTIONPIXELS, CODEC_ID_TGV, CODEC_ID_TGQ,
-    CODEC_ID_TQI, CODEC_ID_AURA, CODEC_ID_AURA2, CODEC_ID_V210X,
-    CODEC_ID_TMV, CODEC_ID_V210, CODEC_ID_DPX, CODEC_ID_MAD,
-    CODEC_ID_FRWU, CODEC_ID_FLASHSV2, CODEC_ID_CDGRAPHICS,
-    CODEC_ID_R210, CODEC_ID_ANM, CODEC_ID_BINKVIDEO, CODEC_ID_IFF_ILBM,
-    CODEC_ID_KGV1, CODEC_ID_YOP, CODEC_ID_VP8, CODEC_ID_PICTOR,
-    CODEC_ID_ANSI, CODEC_ID_A64_MULTI, CODEC_ID_A64_MULTI5,
-    CODEC_ID_R10K, CODEC_ID_MXPEG, CODEC_ID_LAGARITH, CODEC_ID_PRORES,
-    CODEC_ID_JV, CODEC_ID_DFA, CODEC_ID_WMV3IMAGE, CODEC_ID_VC1IMAGE,
-    CODEC_ID_UTVIDEO, CODEC_ID_BMV_VIDEO, CODEC_ID_VBLE,
-    CODEC_ID_DXTORY, CODEC_ID_V410, CODEC_ID_XWD, CODEC_ID_CDXL,
-    CODEC_ID_XBM, CODEC_ID_ZEROCODEC, CODEC_ID_MSS1, CODEC_ID_MSA1,
-    CODEC_ID_TSCC2, CODEC_ID_MTS2, CODEC_ID_CLLC, CODEC_ID_MSS2,
-    CODEC_ID_VP9, CODEC_ID_AIC, CODEC_ID_ESCAPE130, CODEC_ID_G2M,
-    CODEC_ID_WEBP, CODEC_ID_HNM4_VIDEO, CODEC_ID_HEVC, CODEC_ID_FIC,
-    CODEC_ID_ALIAS_PIX, CODEC_ID_BRENDER_PIX, CODEC_ID_PAF_VIDEO,
-    CODEC_ID_EXR, CODEC_ID_VP7, CODEC_ID_SANM, CODEC_ID_SGIRLE,
-    CODEC_ID_MVC1, CODEC_ID_MVC2, CODEC_ID_HQX, CODEC_ID_TDSC,
-    CODEC_ID_HQ_HQA, CODEC_ID_HAP, CODEC_ID_DDS, CODEC_ID_DXV,
-    CODEC_ID_SCREENPRESSO, CODEC_ID_RSCC, CODEC_ID_AVS2, CODEC_ID_PGX,
-    CODEC_ID_AVS3, CODEC_ID_Y41P = 0x00008000, CODEC_ID_AVRP,
-    CODEC_ID_012V, CODEC_ID_AVUI, CODEC_ID_AYUV, CODEC_ID_TARGA_Y216,
-    CODEC_ID_V308, CODEC_ID_V408, CODEC_ID_YUV4, CODEC_ID_AVRN,
-    CODEC_ID_CPIA, CODEC_ID_XFACE, CODEC_ID_SNOW, CODEC_ID_SMVJPEG,
-    CODEC_ID_APNG, CODEC_ID_DAALA, CODEC_ID_CFHD,
-    CODEC_ID_TRUEMOTION2RT, CODEC_ID_M101, CODEC_ID_MAGICYUV,
-    CODEC_ID_SHEERVIDEO, CODEC_ID_YLC, CODEC_ID_PSD, CODEC_ID_PIXLET,
-    CODEC_ID_SPEEDHQ, CODEC_ID_FMVC, CODEC_ID_SCPR,
-    CODEC_ID_CLEARVIDEO, CODEC_ID_XPM, CODEC_ID_AV1,
-    CODEC_ID_BITPACKED, CODEC_ID_MSCC, CODEC_ID_SRGC, CODEC_ID_SVG,
-    CODEC_ID_GDV, CODEC_ID_FITS, CODEC_ID_IMM4, CODEC_ID_PROSUMER,
-    CODEC_ID_MWSC, CODEC_ID_WCMV, CODEC_ID_RASC, CODEC_ID_HYMT,
-    CODEC_ID_ARBC, CODEC_ID_AGM, CODEC_ID_LSCR, CODEC_ID_VP4,
-    CODEC_ID_IMM5, CODEC_ID_MVDV, CODEC_ID_MVHA, CODEC_ID_CDTOONS,
-    CODEC_ID_MV30, CODEC_ID_NOTCHLC, CODEC_ID_PFM, CODEC_ID_MOBICLIP,
-    CODEC_ID_PHOTOCD, CODEC_ID_IPU, CODEC_ID_ARGO, CODEC_ID_CRI,
-    CODEC_ID_FIRST_AUDIO = 0x00010000, CODEC_ID_PCM_S16BE,
-    CODEC_ID_PCM_U16LE, CODEC_ID_PCM_U16BE, CODEC_ID_PCM_S8,
-    CODEC_ID_PCM_U8, CODEC_ID_PCM_MULAW, CODEC_ID_PCM_ALAW,
-    CODEC_ID_PCM_S32LE, CODEC_ID_PCM_S32BE, CODEC_ID_PCM_U32LE,
-    CODEC_ID_PCM_U32BE, CODEC_ID_PCM_S24LE, CODEC_ID_PCM_S24BE,
-    CODEC_ID_PCM_U24LE, CODEC_ID_PCM_U24BE, CODEC_ID_PCM_S24DAUD,
-    CODEC_ID_PCM_ZORK, CODEC_ID_PCM_S16LE_PLANAR, CODEC_ID_PCM_DVD,
-    CODEC_ID_PCM_F32BE, CODEC_ID_PCM_F32LE, CODEC_ID_PCM_F64BE,
-    CODEC_ID_PCM_F64LE, CODEC_ID_PCM_BLURAY, CODEC_ID_PCM_LXF,
-    CODEC_ID_S302M, CODEC_ID_PCM_S8_PLANAR, CODEC_ID_PCM_S24LE_PLANAR,
-    CODEC_ID_PCM_S32LE_PLANAR, CODEC_ID_PCM_S16BE_PLANAR,
-    CODEC_ID_PCM_S64LE = 0x00010800, CODEC_ID_PCM_S64BE,
-    CODEC_ID_PCM_F16LE, CODEC_ID_PCM_F24LE, CODEC_ID_PCM_VIDC,
-    CODEC_ID_ADPCM_IMA_QT = 0x00011000, CODEC_ID_ADPCM_IMA_WAV,
-    CODEC_ID_ADPCM_IMA_DK3, CODEC_ID_ADPCM_IMA_DK4,
-    CODEC_ID_ADPCM_IMA_WS, CODEC_ID_ADPCM_IMA_SMJPEG, CODEC_ID_ADPCM_MS,
-    CODEC_ID_ADPCM_4XM, CODEC_ID_ADPCM_XA, CODEC_ID_ADPCM_ADX,
-    CODEC_ID_ADPCM_EA, CODEC_ID_ADPCM_G726, CODEC_ID_ADPCM_CT,
-    CODEC_ID_ADPCM_SWF, CODEC_ID_ADPCM_YAMAHA, CODEC_ID_ADPCM_SBPRO_4,
-    CODEC_ID_ADPCM_SBPRO_3, CODEC_ID_ADPCM_SBPRO_2, CODEC_ID_ADPCM_THP,
-    CODEC_ID_ADPCM_IMA_AMV, CODEC_ID_ADPCM_EA_R1, CODEC_ID_ADPCM_EA_R3,
-    CODEC_ID_ADPCM_EA_R2, CODEC_ID_ADPCM_IMA_EA_SEAD,
-    CODEC_ID_ADPCM_IMA_EA_EACS, CODEC_ID_ADPCM_EA_XAS,
-    CODEC_ID_ADPCM_EA_MAXIS_XA, CODEC_ID_ADPCM_IMA_ISS,
-    CODEC_ID_ADPCM_G722, CODEC_ID_ADPCM_IMA_APC, CODEC_ID_ADPCM_VIMA,
-    CODEC_ID_ADPCM_AFC = 0x00011800, CODEC_ID_ADPCM_IMA_OKI,
-    CODEC_ID_ADPCM_DTK, CODEC_ID_ADPCM_IMA_RAD, CODEC_ID_ADPCM_G726LE,
-    CODEC_ID_ADPCM_THP_LE, CODEC_ID_ADPCM_PSX, CODEC_ID_ADPCM_AICA,
-    CODEC_ID_ADPCM_IMA_DAT4, CODEC_ID_ADPCM_MTAF, CODEC_ID_ADPCM_AGM,
-    CODEC_ID_ADPCM_ARGO, CODEC_ID_ADPCM_IMA_SSI, CODEC_ID_ADPCM_ZORK,
-    CODEC_ID_ADPCM_IMA_APM, CODEC_ID_ADPCM_IMA_ALP,
-    CODEC_ID_ADPCM_IMA_MTF, CODEC_ID_ADPCM_IMA_CUNNING,
-    CODEC_ID_ADPCM_IMA_MOFLEX, CODEC_ID_AMR_NB = 0x00012000,
-    CODEC_ID_AMR_WB, CODEC_ID_RA_144 = 0x00013000, CODEC_ID_RA_288,
-    CODEC_ID_ROQ_DPCM = 0x00014000, CODEC_ID_INTERPLAY_DPCM,
-    CODEC_ID_XAN_DPCM, CODEC_ID_SOL_DPCM,
-    CODEC_ID_SDX2_DPCM = 0x00014800, CODEC_ID_GREMLIN_DPCM,
-    CODEC_ID_DERF_DPCM, CODEC_ID_MP2 = 0x00015000, CODEC_ID_MP3,
-    CODEC_ID_AAC, CODEC_ID_AC3, CODEC_ID_DTS, CODEC_ID_VORBIS,
-    CODEC_ID_DVAUDIO, CODEC_ID_WMAV1, CODEC_ID_WMAV2, CODEC_ID_MACE3,
-    CODEC_ID_MACE6, CODEC_ID_VMDAUDIO, CODEC_ID_FLAC, CODEC_ID_MP3ADU,
-    CODEC_ID_MP3ON4, CODEC_ID_SHORTEN, CODEC_ID_ALAC,
-    CODEC_ID_WESTWOOD_SND1, CODEC_ID_GSM, CODEC_ID_QDM2, CODEC_ID_COOK,
-    CODEC_ID_TRUESPEECH, CODEC_ID_TTA, CODEC_ID_SMACKAUDIO,
-    CODEC_ID_QCELP, CODEC_ID_WAVPACK, CODEC_ID_DSICINAUDIO,
-    CODEC_ID_IMC, CODEC_ID_MUSEPACK7, CODEC_ID_MLP, CODEC_ID_GSM_MS,
-    CODEC_ID_ATRAC3, CODEC_ID_APE, CODEC_ID_NELLYMOSER,
-    CODEC_ID_MUSEPACK8, CODEC_ID_SPEEX, CODEC_ID_WMAVOICE,
-    CODEC_ID_WMAPRO, CODEC_ID_WMALOSSLESS, CODEC_ID_ATRAC3P,
-    CODEC_ID_EAC3, CODEC_ID_SIPR, CODEC_ID_MP1, CODEC_ID_TWINVQ,
-    CODEC_ID_TRUEHD, CODEC_ID_MP4ALS, CODEC_ID_ATRAC1,
-    CODEC_ID_BINKAUDIO_RDFT, CODEC_ID_BINKAUDIO_DCT, CODEC_ID_AAC_LATM,
-    CODEC_ID_QDMC, CODEC_ID_CELT, CODEC_ID_G723_1, CODEC_ID_G729,
-    CODEC_ID_8SVX_EXP, CODEC_ID_8SVX_FIB, CODEC_ID_BMV_AUDIO,
-    CODEC_ID_RALF, CODEC_ID_IAC, CODEC_ID_ILBC, CODEC_ID_OPUS,
-    CODEC_ID_COMFORT_NOISE, CODEC_ID_TAK, CODEC_ID_METASOUND,
-    CODEC_ID_PAF_AUDIO, CODEC_ID_ON2AVC, CODEC_ID_DSS_SP,
-    CODEC_ID_CODEC2, CODEC_ID_FFWAVESYNTH = 0x00015800, CODEC_ID_SONIC,
-    CODEC_ID_SONIC_LS, CODEC_ID_EVRC, CODEC_ID_SMV, CODEC_ID_DSD_LSBF,
-    CODEC_ID_DSD_MSBF, CODEC_ID_DSD_LSBF_PLANAR,
-    CODEC_ID_DSD_MSBF_PLANAR, CODEC_ID_4GV, CODEC_ID_INTERPLAY_ACM,
-    CODEC_ID_XMA1, CODEC_ID_XMA2, CODEC_ID_DST, CODEC_ID_ATRAC3AL,
-    CODEC_ID_ATRAC3PAL, CODEC_ID_DOLBY_E, CODEC_ID_APTX,
-    CODEC_ID_APTX_HD, CODEC_ID_SBC, CODEC_ID_ATRAC9, CODEC_ID_HCOM,
-    CODEC_ID_ACELP_KELVIN, CODEC_ID_MPEGH_3D_AUDIO, CODEC_ID_SIREN,
-    CODEC_ID_HCA, CODEC_ID_FASTAUDIO,
-    CODEC_ID_FIRST_SUBTITLE = 0x00017000, CODEC_ID_DVB_SUBTITLE,
-    CODEC_ID_TEXT, CODEC_ID_XSUB, CODEC_ID_SSA, CODEC_ID_MOV_TEXT,
-    CODEC_ID_HDMV_PGS_SUBTITLE, CODEC_ID_DVB_TELETEXT, CODEC_ID_SRT,
-    CODEC_ID_MICRODVD = 0x00017800, CODEC_ID_EIA_608, CODEC_ID_JACOSUB,
-    CODEC_ID_SAMI, CODEC_ID_REALTEXT, CODEC_ID_STL,
-    CODEC_ID_SUBVIEWER1, CODEC_ID_SUBVIEWER, CODEC_ID_SUBRIP,
-    CODEC_ID_WEBVTT, CODEC_ID_MPL2, CODEC_ID_VPLAYER, CODEC_ID_PJS,
-    CODEC_ID_ASS, CODEC_ID_HDMV_TEXT_SUBTITLE, CODEC_ID_TTML,
-    CODEC_ID_ARIB_CAPTION, CODEC_ID_FIRST_UNKNOWN = 0x00018000,
-    CODEC_ID_SCTE_35, CODEC_ID_EPG, CODEC_ID_BINTEXT = 0x00018800,
-    CODEC_ID_XBIN, CODEC_ID_IDF, CODEC_ID_OTF, CODEC_ID_SMPTE_KLV,
-    CODEC_ID_DVD_NAV, CODEC_ID_TIMED_ID3, CODEC_ID_BIN_DATA,
-    CODEC_ID_PROBE = 0x00019000, CODEC_ID_MPEG2TS = 0x00020000,
-    CODEC_ID_MPEG4SYSTEMS = 0x00020001, CODEC_ID_FFMETADATA = 0x00021000,
-    CODEC_ID_WRAPPED_AVFRAME = 0x00021001
+    AV_CODEC_ID_NONE,         ##  video codecs
+    AV_CODEC_ID_MPEG1VIDEO, AV_CODEC_ID_MPEG2VIDEO, ## /< preferred ID for MPEG-1/2 video decoding
+    AV_CODEC_ID_H261, AV_CODEC_ID_H263, AV_CODEC_ID_RV10, AV_CODEC_ID_RV20,
+    AV_CODEC_ID_MJPEG, AV_CODEC_ID_MJPEGB, AV_CODEC_ID_LJPEG, AV_CODEC_ID_SP5X,
+    AV_CODEC_ID_JPEGLS, AV_CODEC_ID_MPEG4, AV_CODEC_ID_RAWVIDEO,
+    AV_CODEC_ID_MSMPEG4V1, AV_CODEC_ID_MSMPEG4V2, AV_CODEC_ID_MSMPEG4V3,
+    AV_CODEC_ID_WMV1, AV_CODEC_ID_WMV2, AV_CODEC_ID_H263P, AV_CODEC_ID_H263I,
+    AV_CODEC_ID_FLV1, AV_CODEC_ID_SVQ1, AV_CODEC_ID_SVQ3, AV_CODEC_ID_DVVIDEO,
+    AV_CODEC_ID_HUFFYUV, AV_CODEC_ID_CYUV, AV_CODEC_ID_H264, AV_CODEC_ID_INDEO3,
+    AV_CODEC_ID_VP3, AV_CODEC_ID_THEORA, AV_CODEC_ID_ASV1, AV_CODEC_ID_ASV2,
+    AV_CODEC_ID_FFV1, AV_CODEC_ID_4XM, AV_CODEC_ID_VCR1, AV_CODEC_ID_CLJR,
+    AV_CODEC_ID_MDEC, AV_CODEC_ID_ROQ, AV_CODEC_ID_INTERPLAY_VIDEO,
+    AV_CODEC_ID_XAN_WC3, AV_CODEC_ID_XAN_WC4, AV_CODEC_ID_RPZA,
+    AV_CODEC_ID_CINEPAK, AV_CODEC_ID_WS_VQA, AV_CODEC_ID_MSRLE,
+    AV_CODEC_ID_MSVIDEO1, AV_CODEC_ID_IDCIN, AV_CODEC_ID_8BPS, AV_CODEC_ID_SMC,
+    AV_CODEC_ID_FLIC, AV_CODEC_ID_TRUEMOTION1, AV_CODEC_ID_VMDVIDEO,
+    AV_CODEC_ID_MSZH, AV_CODEC_ID_ZLIB, AV_CODEC_ID_QTRLE, AV_CODEC_ID_TSCC,
+    AV_CODEC_ID_ULTI, AV_CODEC_ID_QDRAW, AV_CODEC_ID_VIXL, AV_CODEC_ID_QPEG,
+    AV_CODEC_ID_PNG, AV_CODEC_ID_PPM, AV_CODEC_ID_PBM, AV_CODEC_ID_PGM,
+    AV_CODEC_ID_PGMYUV, AV_CODEC_ID_PAM, AV_CODEC_ID_FFVHUFF, AV_CODEC_ID_RV30,
+    AV_CODEC_ID_RV40, AV_CODEC_ID_VC1, AV_CODEC_ID_WMV3, AV_CODEC_ID_LOCO,
+    AV_CODEC_ID_WNV1, AV_CODEC_ID_AASC, AV_CODEC_ID_INDEO2, AV_CODEC_ID_FRAPS,
+    AV_CODEC_ID_TRUEMOTION2, AV_CODEC_ID_BMP, AV_CODEC_ID_CSCD,
+    AV_CODEC_ID_MMVIDEO, AV_CODEC_ID_ZMBV, AV_CODEC_ID_AVS, AV_CODEC_ID_SMACKVIDEO,
+    AV_CODEC_ID_NUV, AV_CODEC_ID_KMVC, AV_CODEC_ID_FLASHSV, AV_CODEC_ID_CAVS,
+    AV_CODEC_ID_JPEG2000, AV_CODEC_ID_VMNC, AV_CODEC_ID_VP5, AV_CODEC_ID_VP6,
+    AV_CODEC_ID_VP6F, AV_CODEC_ID_TARGA, AV_CODEC_ID_DSICINVIDEO,
+    AV_CODEC_ID_TIERTEXSEQVIDEO, AV_CODEC_ID_TIFF, AV_CODEC_ID_GIF,
+    AV_CODEC_ID_DXA, AV_CODEC_ID_DNXHD, AV_CODEC_ID_THP, AV_CODEC_ID_SGI,
+    AV_CODEC_ID_C93, AV_CODEC_ID_BETHSOFTVID, AV_CODEC_ID_PTX, AV_CODEC_ID_TXD,
+    AV_CODEC_ID_VP6A, AV_CODEC_ID_AMV, AV_CODEC_ID_VB, AV_CODEC_ID_PCX,
+    AV_CODEC_ID_SUNRAST, AV_CODEC_ID_INDEO4, AV_CODEC_ID_INDEO5, AV_CODEC_ID_MIMIC,
+    AV_CODEC_ID_RL2, AV_CODEC_ID_ESCAPE124, AV_CODEC_ID_DIRAC, AV_CODEC_ID_BFI,
+    AV_CODEC_ID_CMV, AV_CODEC_ID_MOTIONPIXELS, AV_CODEC_ID_TGV, AV_CODEC_ID_TGQ,
+    AV_CODEC_ID_TQI, AV_CODEC_ID_AURA, AV_CODEC_ID_AURA2, AV_CODEC_ID_V210X,
+    AV_CODEC_ID_TMV, AV_CODEC_ID_V210, AV_CODEC_ID_DPX, AV_CODEC_ID_MAD,
+    AV_CODEC_ID_FRWU, AV_CODEC_ID_FLASHSV2, AV_CODEC_ID_CDGRAPHICS,
+    AV_CODEC_ID_R210, AV_CODEC_ID_ANM, AV_CODEC_ID_BINKVIDEO, AV_CODEC_ID_IFF_ILBM,
+    AV_CODEC_ID_KGV1, AV_CODEC_ID_YOP, AV_CODEC_ID_VP8, AV_CODEC_ID_PICTOR,
+    AV_CODEC_ID_ANSI, AV_CODEC_ID_A64_MULTI, AV_CODEC_ID_A64_MULTI5,
+    AV_CODEC_ID_R10K, AV_CODEC_ID_MXPEG, AV_CODEC_ID_LAGARITH, AV_CODEC_ID_PRORES,
+    AV_CODEC_ID_JV, AV_CODEC_ID_DFA, AV_CODEC_ID_WMV3IMAGE, AV_CODEC_ID_VC1IMAGE,
+    AV_CODEC_ID_UTVIDEO, AV_CODEC_ID_BMV_VIDEO, AV_CODEC_ID_VBLE,
+    AV_CODEC_ID_DXTORY, AV_CODEC_ID_V410, AV_CODEC_ID_XWD, AV_CODEC_ID_CDXL,
+    AV_CODEC_ID_XBM, AV_CODEC_ID_ZEROCODEC, AV_CODEC_ID_MSS1, AV_CODEC_ID_MSA1,
+    AV_CODEC_ID_TSCC2, AV_CODEC_ID_MTS2, AV_CODEC_ID_CLLC, AV_CODEC_ID_MSS2,
+    AV_CODEC_ID_VP9, AV_CODEC_ID_AIC, AV_CODEC_ID_ESCAPE130, AV_CODEC_ID_G2M,
+    AV_CODEC_ID_WEBP, AV_CODEC_ID_HNM4_VIDEO, AV_CODEC_ID_HEVC, AV_CODEC_ID_FIC,
+    AV_CODEC_ID_ALIAS_PIX, AV_CODEC_ID_BRENDER_PIX, AV_CODEC_ID_PAF_VIDEO,
+    AV_CODEC_ID_EXR, AV_CODEC_ID_VP7, AV_CODEC_ID_SANM, AV_CODEC_ID_SGIRLE,
+    AV_CODEC_ID_MVC1, AV_CODEC_ID_MVC2, AV_CODEC_ID_HQX, AV_CODEC_ID_TDSC,
+    AV_CODEC_ID_HQ_HQA, AV_CODEC_ID_HAP, AV_CODEC_ID_DDS, AV_CODEC_ID_DXV,
+    AV_CODEC_ID_SCREENPRESSO, AV_CODEC_ID_RSCC, AV_CODEC_ID_AVS2, AV_CODEC_ID_PGX,
+    AV_CODEC_ID_AVS3, AV_CODEC_ID_Y41P = 0x00008000, AV_CODEC_ID_AVRP,
+    AV_CODEC_ID_012V, AV_CODEC_ID_AVUI, AV_CODEC_ID_AYUV, AV_CODEC_ID_TARGA_Y216,
+    AV_CODEC_ID_V308, AV_CODEC_ID_V408, AV_CODEC_ID_YUV4, AV_CODEC_ID_AVRN,
+    AV_CODEC_ID_CPIA, AV_CODEC_ID_XFACE, AV_CODEC_ID_SNOW, AV_CODEC_ID_SMVJPEG,
+    AV_CODEC_ID_APNG, AV_CODEC_ID_DAALA, AV_CODEC_ID_CFHD,
+    AV_CODEC_ID_TRUEMOTION2RT, AV_CODEC_ID_M101, AV_CODEC_ID_MAGICYUV,
+    AV_CODEC_ID_SHEERVIDEO, AV_CODEC_ID_YLC, AV_CODEC_ID_PSD, AV_CODEC_ID_PIXLET,
+    AV_CODEC_ID_SPEEDHQ, AV_CODEC_ID_FMVC, AV_CODEC_ID_SCPR,
+    AV_CODEC_ID_CLEARVIDEO, AV_CODEC_ID_XPM, AV_CODEC_ID_AV1,
+    AV_CODEC_ID_BITPACKED, AV_CODEC_ID_MSCC, AV_CODEC_ID_SRGC, AV_CODEC_ID_SVG,
+    AV_CODEC_ID_GDV, AV_CODEC_ID_FITS, AV_CODEC_ID_IMM4, AV_CODEC_ID_PROSUMER,
+    AV_CODEC_ID_MWSC, AV_CODEC_ID_WCMV, AV_CODEC_ID_RASC, AV_CODEC_ID_HYMT,
+    AV_CODEC_ID_ARBC, AV_CODEC_ID_AGM, AV_CODEC_ID_LSCR, AV_CODEC_ID_VP4,
+    AV_CODEC_ID_IMM5, AV_CODEC_ID_MVDV, AV_CODEC_ID_MVHA, AV_CODEC_ID_CDTOONS,
+    AV_CODEC_ID_MV30, AV_CODEC_ID_NOTCHLC, AV_CODEC_ID_PFM, AV_CODEC_ID_MOBICLIP,
+    AV_CODEC_ID_PHOTOCD, AV_CODEC_ID_IPU, AV_CODEC_ID_ARGO, AV_CODEC_ID_CRI, ##  various PCM "codecs"
+    AV_CODEC_ID_FIRST_AUDIO = 0x00010000, ## /< A dummy id pointing at the start of audio codecs
+    AV_CODEC_ID_PCM_S16BE, AV_CODEC_ID_PCM_U16LE, AV_CODEC_ID_PCM_U16BE,
+    AV_CODEC_ID_PCM_S8, AV_CODEC_ID_PCM_U8, AV_CODEC_ID_PCM_MULAW,
+    AV_CODEC_ID_PCM_ALAW, AV_CODEC_ID_PCM_S32LE, AV_CODEC_ID_PCM_S32BE,
+    AV_CODEC_ID_PCM_U32LE, AV_CODEC_ID_PCM_U32BE, AV_CODEC_ID_PCM_S24LE,
+    AV_CODEC_ID_PCM_S24BE, AV_CODEC_ID_PCM_U24LE, AV_CODEC_ID_PCM_U24BE,
+    AV_CODEC_ID_PCM_S24DAUD, AV_CODEC_ID_PCM_ZORK, AV_CODEC_ID_PCM_S16LE_PLANAR,
+    AV_CODEC_ID_PCM_DVD, AV_CODEC_ID_PCM_F32BE, AV_CODEC_ID_PCM_F32LE,
+    AV_CODEC_ID_PCM_F64BE, AV_CODEC_ID_PCM_F64LE, AV_CODEC_ID_PCM_BLURAY,
+    AV_CODEC_ID_PCM_LXF, AV_CODEC_ID_S302M, AV_CODEC_ID_PCM_S8_PLANAR,
+    AV_CODEC_ID_PCM_S24LE_PLANAR, AV_CODEC_ID_PCM_S32LE_PLANAR,
+    AV_CODEC_ID_PCM_S16BE_PLANAR, AV_CODEC_ID_PCM_S64LE = 0x00010800,
+    AV_CODEC_ID_PCM_S64BE, AV_CODEC_ID_PCM_F16LE, AV_CODEC_ID_PCM_F24LE, AV_CODEC_ID_PCM_VIDC, ##  various ADPCM codecs
+    AV_CODEC_ID_ADPCM_IMA_QT = 0x00011000, AV_CODEC_ID_ADPCM_IMA_WAV,
+    AV_CODEC_ID_ADPCM_IMA_DK3, AV_CODEC_ID_ADPCM_IMA_DK4,
+    AV_CODEC_ID_ADPCM_IMA_WS, AV_CODEC_ID_ADPCM_IMA_SMJPEG, AV_CODEC_ID_ADPCM_MS,
+    AV_CODEC_ID_ADPCM_4XM, AV_CODEC_ID_ADPCM_XA, AV_CODEC_ID_ADPCM_ADX,
+    AV_CODEC_ID_ADPCM_EA, AV_CODEC_ID_ADPCM_G726, AV_CODEC_ID_ADPCM_CT,
+    AV_CODEC_ID_ADPCM_SWF, AV_CODEC_ID_ADPCM_YAMAHA, AV_CODEC_ID_ADPCM_SBPRO_4,
+    AV_CODEC_ID_ADPCM_SBPRO_3, AV_CODEC_ID_ADPCM_SBPRO_2, AV_CODEC_ID_ADPCM_THP,
+    AV_CODEC_ID_ADPCM_IMA_AMV, AV_CODEC_ID_ADPCM_EA_R1, AV_CODEC_ID_ADPCM_EA_R3,
+    AV_CODEC_ID_ADPCM_EA_R2, AV_CODEC_ID_ADPCM_IMA_EA_SEAD,
+    AV_CODEC_ID_ADPCM_IMA_EA_EACS, AV_CODEC_ID_ADPCM_EA_XAS,
+    AV_CODEC_ID_ADPCM_EA_MAXIS_XA, AV_CODEC_ID_ADPCM_IMA_ISS,
+    AV_CODEC_ID_ADPCM_G722, AV_CODEC_ID_ADPCM_IMA_APC, AV_CODEC_ID_ADPCM_VIMA,
+    AV_CODEC_ID_ADPCM_AFC = 0x00011800, AV_CODEC_ID_ADPCM_IMA_OKI,
+    AV_CODEC_ID_ADPCM_DTK, AV_CODEC_ID_ADPCM_IMA_RAD, AV_CODEC_ID_ADPCM_G726LE,
+    AV_CODEC_ID_ADPCM_THP_LE, AV_CODEC_ID_ADPCM_PSX, AV_CODEC_ID_ADPCM_AICA,
+    AV_CODEC_ID_ADPCM_IMA_DAT4, AV_CODEC_ID_ADPCM_MTAF, AV_CODEC_ID_ADPCM_AGM,
+    AV_CODEC_ID_ADPCM_ARGO, AV_CODEC_ID_ADPCM_IMA_SSI, AV_CODEC_ID_ADPCM_ZORK,
+    AV_CODEC_ID_ADPCM_IMA_APM, AV_CODEC_ID_ADPCM_IMA_ALP,
+    AV_CODEC_ID_ADPCM_IMA_MTF, AV_CODEC_ID_ADPCM_IMA_CUNNING, AV_CODEC_ID_ADPCM_IMA_MOFLEX, ##  AMR
+    AV_CODEC_ID_AMR_NB = 0x00012000, AV_CODEC_ID_AMR_WB, ##  RealAudio codecs
+    AV_CODEC_ID_RA_144 = 0x00013000, AV_CODEC_ID_RA_288, ##  various DPCM codecs
+    AV_CODEC_ID_ROQ_DPCM = 0x00014000, AV_CODEC_ID_INTERPLAY_DPCM,
+    AV_CODEC_ID_XAN_DPCM, AV_CODEC_ID_SOL_DPCM,
+    AV_CODEC_ID_SDX2_DPCM = 0x00014800, AV_CODEC_ID_GREMLIN_DPCM, AV_CODEC_ID_DERF_DPCM, ##  audio codecs
+    AV_CODEC_ID_MP2 = 0x00015000, AV_CODEC_ID_MP3, ## /< preferred ID for decoding MPEG audio layer 1, 2 or 3
+    AV_CODEC_ID_AAC, AV_CODEC_ID_AC3, AV_CODEC_ID_DTS, AV_CODEC_ID_VORBIS,
+    AV_CODEC_ID_DVAUDIO, AV_CODEC_ID_WMAV1, AV_CODEC_ID_WMAV2, AV_CODEC_ID_MACE3,
+    AV_CODEC_ID_MACE6, AV_CODEC_ID_VMDAUDIO, AV_CODEC_ID_FLAC, AV_CODEC_ID_MP3ADU,
+    AV_CODEC_ID_MP3ON4, AV_CODEC_ID_SHORTEN, AV_CODEC_ID_ALAC,
+    AV_CODEC_ID_WESTWOOD_SND1, AV_CODEC_ID_GSM, ## /< as in Berlin toast format
+    AV_CODEC_ID_QDM2, AV_CODEC_ID_COOK, AV_CODEC_ID_TRUESPEECH, AV_CODEC_ID_TTA,
+    AV_CODEC_ID_SMACKAUDIO, AV_CODEC_ID_QCELP, AV_CODEC_ID_WAVPACK,
+    AV_CODEC_ID_DSICINAUDIO, AV_CODEC_ID_IMC, AV_CODEC_ID_MUSEPACK7,
+    AV_CODEC_ID_MLP, AV_CODEC_ID_GSM_MS, ##  as found in WAV
+    AV_CODEC_ID_ATRAC3, AV_CODEC_ID_APE, AV_CODEC_ID_NELLYMOSER,
+    AV_CODEC_ID_MUSEPACK8, AV_CODEC_ID_SPEEX, AV_CODEC_ID_WMAVOICE,
+    AV_CODEC_ID_WMAPRO, AV_CODEC_ID_WMALOSSLESS, AV_CODEC_ID_ATRAC3P,
+    AV_CODEC_ID_EAC3, AV_CODEC_ID_SIPR, AV_CODEC_ID_MP1, AV_CODEC_ID_TWINVQ,
+    AV_CODEC_ID_TRUEHD, AV_CODEC_ID_MP4ALS, AV_CODEC_ID_ATRAC1,
+    AV_CODEC_ID_BINKAUDIO_RDFT, AV_CODEC_ID_BINKAUDIO_DCT, AV_CODEC_ID_AAC_LATM,
+    AV_CODEC_ID_QDMC, AV_CODEC_ID_CELT, AV_CODEC_ID_G723_1, AV_CODEC_ID_G729,
+    AV_CODEC_ID_8SVX_EXP, AV_CODEC_ID_8SVX_FIB, AV_CODEC_ID_BMV_AUDIO,
+    AV_CODEC_ID_RALF, AV_CODEC_ID_IAC, AV_CODEC_ID_ILBC, AV_CODEC_ID_OPUS,
+    AV_CODEC_ID_COMFORT_NOISE, AV_CODEC_ID_TAK, AV_CODEC_ID_METASOUND,
+    AV_CODEC_ID_PAF_AUDIO, AV_CODEC_ID_ON2AVC, AV_CODEC_ID_DSS_SP,
+    AV_CODEC_ID_CODEC2, AV_CODEC_ID_FFWAVESYNTH = 0x00015800, AV_CODEC_ID_SONIC,
+    AV_CODEC_ID_SONIC_LS, AV_CODEC_ID_EVRC, AV_CODEC_ID_SMV, AV_CODEC_ID_DSD_LSBF,
+    AV_CODEC_ID_DSD_MSBF, AV_CODEC_ID_DSD_LSBF_PLANAR,
+    AV_CODEC_ID_DSD_MSBF_PLANAR, AV_CODEC_ID_4GV, AV_CODEC_ID_INTERPLAY_ACM,
+    AV_CODEC_ID_XMA1, AV_CODEC_ID_XMA2, AV_CODEC_ID_DST, AV_CODEC_ID_ATRAC3AL,
+    AV_CODEC_ID_ATRAC3PAL, AV_CODEC_ID_DOLBY_E, AV_CODEC_ID_APTX,
+    AV_CODEC_ID_APTX_HD, AV_CODEC_ID_SBC, AV_CODEC_ID_ATRAC9, AV_CODEC_ID_HCOM,
+    AV_CODEC_ID_ACELP_KELVIN, AV_CODEC_ID_MPEGH_3D_AUDIO, AV_CODEC_ID_SIREN,
+    AV_CODEC_ID_HCA, AV_CODEC_ID_FASTAUDIO, ##  subtitle codecs
+    AV_CODEC_ID_FIRST_SUBTITLE = 0x00017000, ## /< A dummy ID pointing at the start of subtitle codecs.
+    AV_CODEC_ID_DVB_SUBTITLE, AV_CODEC_ID_TEXT, ## /< raw UTF-8 text
+    AV_CODEC_ID_XSUB, AV_CODEC_ID_SSA, AV_CODEC_ID_MOV_TEXT,
+    AV_CODEC_ID_HDMV_PGS_SUBTITLE, AV_CODEC_ID_DVB_TELETEXT, AV_CODEC_ID_SRT,
+    AV_CODEC_ID_MICRODVD = 0x00017800, AV_CODEC_ID_EIA_608, AV_CODEC_ID_JACOSUB,
+    AV_CODEC_ID_SAMI, AV_CODEC_ID_REALTEXT, AV_CODEC_ID_STL,
+    AV_CODEC_ID_SUBVIEWER1, AV_CODEC_ID_SUBVIEWER, AV_CODEC_ID_SUBRIP,
+    AV_CODEC_ID_WEBVTT, AV_CODEC_ID_MPL2, AV_CODEC_ID_VPLAYER, AV_CODEC_ID_PJS,
+    AV_CODEC_ID_ASS, AV_CODEC_ID_HDMV_TEXT_SUBTITLE, AV_CODEC_ID_TTML, AV_CODEC_ID_ARIB_CAPTION, ##  other specific kind of codecs (generally used for attachments)
+    AV_CODEC_ID_FIRST_UNKNOWN = 0x00018000, ## /< A dummy ID pointing at the start of various fake codecs.
+    AV_CODEC_ID_SCTE_35,      ## /< Contain timestamp estimated through PCR of program stream.
+    AV_CODEC_ID_EPG, AV_CODEC_ID_BINTEXT = 0x00018800, AV_CODEC_ID_XBIN,
+    AV_CODEC_ID_IDF, AV_CODEC_ID_OTF, AV_CODEC_ID_SMPTE_KLV, AV_CODEC_ID_DVD_NAV,
+    AV_CODEC_ID_TIMED_ID3, AV_CODEC_ID_BIN_DATA, AV_CODEC_ID_PROBE = 0x00019000, ## /< codec_id is not known (like AV_CODEC_ID_NONE) but lavf should attempt to identify it
+    AV_CODEC_ID_MPEG2TS = 0x00020000, ## *< _FAKE_ codec to indicate a raw MPEG-2 TS
+                                   ##  stream (only used by libavformat)
+    AV_CODEC_ID_MPEG4SYSTEMS = 0x00020001, ## *< _FAKE_ codec to indicate a MPEG-4 Systems
+                                        ##  stream (only used by libavformat)
+    AV_CODEC_ID_FFMETADATA = 0x00021000, ## /< Dummy codec for streams containing only metadata information.
+    AV_CODEC_ID_WRAPPED_AVFRAME = 0x00021001 ## /< Passthrough codec, AVFrames wrapped in AVPacket
 
 const
-  CODEC_ID_PCM_S16LE = CODEC_ID_FIRST_AUDIO
-  CODEC_ID_DVD_SUBTITLE = CODEC_ID_FIRST_SUBTITLE
-  CODEC_ID_TTF = CODEC_ID_FIRST_UNKNOWN
+  AV_CODEC_ID_PCM_S16LE = AV_CODEC_ID_FIRST_AUDIO
+  AV_CODEC_ID_DVD_SUBTITLE = AV_CODEC_ID_FIRST_SUBTITLE
+  AV_CODEC_ID_TTF = AV_CODEC_ID_FIRST_UNKNOWN
+  AV_CODEC_ID_IFF_BYTERUN1* = AV_CODEC_ID_IFF_ILBM
+  AV_CODEC_ID_H265* = AV_CODEC_ID_HEVC
 
   APP_TO_DEV_NONE = ('E'.ord or ('N'.ord shl 8) or ('O'.ord shl 16) or ('N'.ord shl 24)) 
   APP_TO_DEV_WINDOW_SIZE = ('M'.ord or ('O'.ord shl 8) or ('E'.ord shl 16) or ('G'.ord shl 24))
@@ -1051,28 +1063,28 @@ type
     extradataSize*: int
     format*: int
     bitRate*: int64
-    bits_per_coded_sample*: int
-    bits_per_raw_sample*: int
+    bitsPerCodedSample*: int
+    bitsPerRawSample*: int
     profile*: int
     level*: int
     width*: int
     height*: int
-    sample_aspect_ratio*: Rational[int]
-    field_order*: AVFieldOrder
-    color_range*: AVColorRange
-    color_primaries*: AVColorPrimaries
-    color_trc*: AVColorTransferCharacteristic
-    color_space*: AVColorSpace
-    chroma_location*: AVChromaLocation
-    video_delay*: int
-    channel_layout*: uint64
+    sampleAspectRatio*: Rational[int]
+    fieldOrder*: AVFieldOrder
+    colorRange*: AVColorRange
+    colorPrimaries*: AVColorPrimaries
+    colorTrc*: AVColorTransferCharacteristic
+    colorSpace*: AVColorSpace
+    chromaLocation*: AVChromaLocation
+    videoDelay*: int
+    channelLayout*: uint64
     channels*: int
-    sample_rate*: int
-    block_align*: int
-    frame_size*: int
-    initial_padding*: int
-    trailing_padding*: int
-    seek_preroll*: int
+    sampleRate*: int
+    blockAlign*: int
+    frameSize*: int
+    initialPadding*: int
+    trailingPadding*: int
+    seekPreroll*: int
 
 
 
@@ -1172,7 +1184,7 @@ type
     pktProps*: AVPacketList
     pktPropsTail*: AVPacketList 
     byteBuffer*: uint8
-    byteBufferSize*: cuint
+    byteBufferSize*: cint
     frameThreadEncoder*: pointer
     es*: EncodeSimpleContext 
     skipSamples*: cint        
@@ -1224,7 +1236,7 @@ type
     codecType*: AVMediaType
     codec*: AVCodec
     codecId*: AVCodecID
-    codecTag*: cuint
+    codecTag*: cint
     privData*: pointer
     internal*: AVCodecInternal
     opaque*: pointer
@@ -1402,7 +1414,7 @@ type
     chromaIntraMatrix*: uint16
     dumpSeparator*: uint8
     codecWhitelist*: string
-    properties*: cuint
+    properties*: cint
     codedSideData*: AVPacketSideData
     nb_coded_side_data*: int
     hw_frames_ctx*: string
@@ -1443,7 +1455,7 @@ type
     format*: uint16
     startDisplayTime*: uint32
     endDisplayTime*: uint32
-    numRects*: cuint
+    numRects*: cint
     rects*: seq[AVSubtitleRect]
     pts*: int64
 
@@ -1454,7 +1466,7 @@ type
     id*: AVCodecID
     capabilities*: int
     supportedFramerates*: Rational[int]
-    pixFmts*: AVPixelFormat
+    pixFmts*: seq[AVPixelFormat]
     supportedSamplerates*: int
     sampleFmts*: AVSampleFormat
     channelLayouts*: uint64
@@ -1623,7 +1635,7 @@ type
     maxPacketSize*: int
     checksum*: culong
     checksumPtr*: cuchar
-    updateChecksum*: proc (checksum: culong; buf: uint8; size: cuint): culong
+    updateChecksum*: proc (checksum: culong; buf: uint8; size: cint): culong
     error*: int
     readPause*: proc (opaque: pointer; pause: int): int
     readSeek*: proc (opaque: pointer; stream_index: int; timestamp: int64;
@@ -1656,7 +1668,7 @@ type
 
   AVCodecTag* = ref object
     id*: AVCodecID
-    tag*: cuint
+    tag*: cint
 
   CodecMime* = ref object
     str*: array[32, char]
@@ -1714,7 +1726,7 @@ type
     info*: ptr AVStreamInternalInfo
     indexEntries*: ptr AVIndexEntry
     nbIndexEntries*: cint
-    indexEntriesAllocatedSize*: cuint
+    indexEntriesAllocatedSize*: cint
     interleaverChunkSize*: int64
     interleaverChunkDuration*: int64
     requestProbe*: cint
@@ -1777,7 +1789,7 @@ type
     unused5*: array[16 + 1, int64]
     unused2*: pointer
     unused3*: int
-    unused4*: cuint
+    unused4*: cint
     stream_identifier*: int
     program_num*: int
     pmt_version*: int
@@ -1842,28 +1854,28 @@ type
     priv_data*: pointer
     pb*: AVIOContext
     ctx_flags*: int
-    nbStreams*: cuint
+    nbStreams*: int
     streams*: ptr AVStream
     filename*: array[1024, char]
     url*: string
     start_time*: int64
     duration*: int64
     bit_rate*: int64
-    packet_size*: cuint
+    packet_size*: cint
     max_delay*: int
     flags*: int
     probesize*: int64
     max_analyze_duration*: int64
     key*: uint8
     keylen*: int
-    nb_programs*: cuint
+    nb_programs*: cint
     programs*: AVProgram
     video_codec_id*: AVCodecID
     audio_codec_id*: AVCodecID
     subtitle_codec_id*: AVCodecID
-    max_index_size*: cuint
-    max_picture_buffer*: cuint
-    nb_chapters*: cuint
+    max_index_size*: cint
+    max_picture_buffer*: cint
+    nb_chapters*: cint
     chapters*: AVChapter
     metadata*: OrderedTable[string,string]
     start_time_realtime*: int64
@@ -1884,7 +1896,7 @@ type
     avio_flags*: int
     duration_estimation_method*: AVDurationEstimationMethod
     skip_initial_bytes*: int64
-    correct_ts_overflow*: cuint
+    correct_ts_overflow*: cint
     seek2any*: int
     flush_packets*: int
     probe_score*: int
@@ -1953,7 +1965,7 @@ type
     control_message*: proc (s: AVFormatContext; t: int; data: pointer;
                           data_size: uint): int
     write_uncoded_frame*: proc (a1: AVFormatContext; stream_index: int;
-                              frame: AVFrame; flags: cuint): int
+                              frame: AVFrame; flags: cint): int
     # get_device_list*: proc (s: AVFormatContext; device_list: AVDeviceInfoList): int
     # create_device_capabilities*: proc (s: AVFormatContext;caps: AVDeviceCapabilitiesQuery): int
     # free_device_capabilities*: proc (s: AVFormatContext;caps: AVDeviceCapabilitiesQuery): int
@@ -1967,8 +1979,8 @@ type
     id*: int
     flags*: int
     d*: AVDiscard
-    stream_index*: cuint
-    nb_stream_indexes*: cuint
+    stream_index*: cint
+    nb_stream_indexes*: cint
     metadata*: OrderedTable[string,string]
     program_num*: int
     pmt_pid*: int
@@ -2028,8 +2040,8 @@ type
   AVFilter* = ref object
     name*: string
     description*: string
-    # inputs*: AVFilterPad
-    # outputs*: AVFilterPad
+    inputs*: ptr AVFilterPad
+    outputs*: ptr AVFilterPad
     priv_class*: AVClass
     flags*: int
     preinit*: proc (ctx: AVFilterContext): int
@@ -2096,7 +2108,7 @@ type
   AVFilterGraph* = ref object
     avClass*: AVClass
     filters*: seq[AVFilterContext]
-    nbFilters*: cuint
+    nbFilters*: int
     scaleSwsOpts*: string     
     resampleLavrOpts*: string 
     threadType*: cint
@@ -2105,18 +2117,18 @@ type
     opaque*: pointer
     execute*: AvfilterExecuteFunc
     aresampleSwrOpts*: string
-    # sinkLinks*: AVFilterLink
+    sinkLinks*: seq[AVFilterLink]
     sinkLinksCount*: cint
-    disableAutoConvert*: cuint
+    disableAutoConvert*: cint
 
   AVFilterPad* = ref object
     name*: string
     t*: AVMediaType
-    getVideoBuffer*: proc (link: ptr AVFilterLink; w: cint; h: cint): ptr AVFrame
-    getAudioBuffer*: proc (link: ptr AVFilterLink; nbSamples: cint): ptr AVFrame
-    filterFrame*: proc (link: ptr AVFilterLink; frame: ptr AVFrame): cint
-    requestFrame*: proc (link: ptr AVFilterLink): cint
-    configProps*: proc (link: ptr AVFilterLink): cint
+    getVideoBuffer*: proc (link:  AVFilterLink; w: cint; h: cint): ptr AVFrame
+    getAudioBuffer*: proc (link:  AVFilterLink; nbSamples: cint): ptr AVFrame
+    filterFrame*: proc (link:  AVFilterLink; frame: ptr AVFrame): cint
+    requestFrame*: proc (link:  AVFilterLink): cint
+    configProps*: proc (link:  AVFilterLink): cint
     needsWritable*: cint
 
   FFFrameBucket* = ref object
@@ -2136,10 +2148,10 @@ type
 
 
   AVFilterLink* = ref object
-    src*: ptr AVFilterContext   ## /< source filter
-    srcpad*: ptr AVFilterPad    ## /< output pad on the source filter
-    dst*: ptr AVFilterContext   ## /< dest filter
-    dstpad*: ptr AVFilterPad    ## /< input pad on the dest filter
+    src*: AVFilterContext   ## /< source filter
+    srcpad*: AVFilterPad    ## /< output pad on the source filter
+    dst*: AVFilterContext   ## /< dest filter
+    dstpad*: AVFilterPad    ## /< input pad on the dest filter
     t*: AVMediaType       ## /< filter media type
     w*: cint                   ## /< agreed upon image width
     h*: cint                   ## /< agreed upon image height
@@ -2151,22 +2163,22 @@ type
     incfg*: AVFilterFormatsConfig
     outcfg*: AVFilterFormatsConfig
     initState*: AVFilterLinkInitState
-    graph*: ptr AVFilterGraph
+    graph*: AVFilterGraph
     currentPts*: int64
     currentPtsUs*: int64
     ageIndex*: cint
     frameRate*: Rational[int]
-    partialBuf*: ptr AVFrame
+    partialBuf*: AVFrame
     partialBufSize*: cint
     minSamples*: cint
     maxSamples*: cint
     channels*: cint
-    flags*: cuint
+    flags*: cint
     frameCountIn*: int64
     frameCountOut*: int64
     framePool*: pointer
     frameWantedOut*: cint
-    hwFramesCtx*: ptr AVBufferRef
+    hwFramesCtx*: string
     reserved*: array[0x0000F000, char]
     fifo*: FFFrameQueue
     frameBlockedIn*: cint
@@ -2179,7 +2191,7 @@ type
     command*: string          ## /< command
     arg*: string              ## /< optional argument for the command
     flags*: cint
-    next*: ptr AVFilterCommand
+    next*: AVFilterCommand
 
 
   AVFilterContext* = ref object
@@ -2188,10 +2200,10 @@ type
     name*: string
     inputPads*: ptr AVFilterPad
     inputs*: ptr AVFilterLink
-    nbInputs*: cuint
+    nbInputs*: cint
     outputPads*:ptr AVFilterPad
     outputs*: ptr AVFilterLink
-    nbOutputs*: cuint
+    nbOutputs*: cint
     priv*: pointer
     graph*: AVFilterGraph
     threadType*: int
@@ -2203,20 +2215,28 @@ type
     isSisabled*: int
     hwDeviceCtx*: string
     nbThreads*: int
-    ready*: cuint
+    ready*: cint
     extraHwFrames*: int
 
   AVFilterFormats* = ref object
-    nbFormats*: cuint          ## /< number of formats
+    nbFormats*: cint          ## /< number of formats
     formats*: cint          ## /< list of media formats
-    refcount*: cuint           ## /< number of references to this list
+    refcount*: cint           ## /< number of references to this list
     refs*: AVFilterFormats ## /< references to this list
+
+  AVFilterChannelLayouts* = ref object
+    channelLayouts*: ptr uint64 ## /< list of channel layouts
+    nbChannelLayouts*: cint    ## /< number of channel layouts
+    allLayouts*: char          ## /< accept any known channel layout
+    allCounts*: char           ## /< accept any channel layout or count
+    refcount*: cuint           ## /< number of references to this list
+    refs*: ptr AVFilterChannelLayouts ## /< references to this list
 
 
   AVFilterFormatsConfig* = ref object
-    formats*: AVFilterFormats
-    samplerates*: AVFilterFormats
-    # channel_layouts*: AVFilterChannelLayouts
+    formats*: seq[AVFilterFormats]
+    samplerates*: seq[AVFilterFormats]
+    channelLayouts*: seq[AVFilterChannelLayouts]
 
   VideoStateShowMode* = enum
     SHOW_MODE_NONE = -1, SHOW_MODE_VIDEO = 0, SHOW_MODE_WAVES, SHOW_MODE_RDFT,
@@ -2341,8 +2361,8 @@ type
     audioHwBufSize*: int
     audioBuf*: uint8
     audioBuf1*: uint8
-    audioBufSize*: cuint       ##  in bytes
-    audioBuf1Size*: cuint
+    audioBufSize*: cint       ##  in bytes
+    audioBuf1Size*: cint
     audioBufIndex*: int       ##  in bytes
     audioWriteBufSize*: int
     audioVolume*: int
@@ -2413,7 +2433,7 @@ type
     frame*: AVFrame
     w*: cint
     h*: cint
-    initialize*: cuint         ## /< marks if sub2video_update should force an initialization
+    initialize*: cint         ## /< marks if sub2video_update should force an initialization
 
   InputStream* = ref object
     fileIndex*: int
@@ -2479,11 +2499,11 @@ type
     fileIndex*: cint           ##  file index
     index*: cint               ##  stream index in the output file
     sourceIndex*: cint         ##  InputStream index
-    st*: ptr AVStream           ##  stream in the output file
+    st*: AVStream           ##  stream in the output file
     encodingNeeded*: cint      ##  true if encoding needed for this stream
     frameNumber*: cint         ##  input pts and corresponding output pts
                      ##        for A/V sync
-    syncIst*: ptr InputStream   ##  input stream to sync against
+    syncIst*: InputStream   ##  input stream to sync against
     syncOpts*: int64 ##  output frame counter, could be changed to some true timestamp
                     ##  FIXME look at frame_number
                     ##  pts of the first frame encoded for this stream, used for limiting
@@ -2492,10 +2512,10 @@ type
     lastMuxDts*: int64        ##  the timebase of the packets sent to the muxer
     muxTimebase*: Rational[int]
     encTimebase*: Rational[int]
-    bsfCtx*: ptr AVBSFContext
-    encCtx*: ptr AVCodecContext
-    refPar*: ptr AVCodecParameters ##  associated input codec parameters with encoders options applied
-    enc*: ptr AVCodec
+    bsfCtx*: AVBSFContext
+    encCtx*: AVCodecContext
+    refPar*: AVCodecParameters ##  associated input codec parameters with encoders options applied
+    enc*: AVCodec
     maxFrames*: int64
     filteredFrame*: ptr AVFrame
     lastFrame*: ptr AVFrame
@@ -2525,10 +2545,10 @@ type
     avfilter*: string
     filters*: string          ## /< filtergraph associated to the -filter option
     filtersScript*: string    ## /< filtergraph script associated to the -filter_script option
-    encoderOpts*: ptr AVDictionary
-    swsDict*: ptr AVDictionary
-    swrOpts*: ptr AVDictionary
-    resampleOpts*: ptr AVDictionary
+    encoderOpts*: OrderedTableRef[string,string]
+    swsDict*: OrderedTableRef[string,string]
+    swrOpts*: OrderedTableRef[string,string]
+    resampleOpts*: OrderedTableRef[string,string]
     apad*: string
     # finished*: OSTFinished     
     unavailable*: cint         ##  true if the steram is unavailable (possibly temporarily)
@@ -2623,15 +2643,15 @@ type
     class*: AVClass
     timeBase*: Rational[int]      ## /< time_base to set in the output link
     frameRate*: Rational[int]     ## /< frame_rate to set in the output link
-    nbFailedRequests*: cuint   ##  video only
+    nbFailedRequests*: cint   ##  video only
     w*: cint
     h*: cint
-    pixFmt*: AVPixelFormat
+    pixFmt*: cint
     pixelAspect*: Rational[int]
     swsParam*: string
     hwFramesCtx*: string ##  audio only
     sampleRate*: cint
-    sampleFmt*: AVSampleFormat
+    sampleFmt*: cint
     channels*: cint
     channelLayout*: uint64
     channelLayoutStr*: string
@@ -2645,6 +2665,7 @@ type
     sampleAspectRatio*: Rational[int] 
     frameRate*: Rational[int] 
     hwFramesCtx*: string 
+    sample_rate*: int
     channelLayout*: uint64
 
  
@@ -2695,13 +2716,13 @@ type
     condSend*: PthreadCond
     errSend*: cint
     errRecv*: cint
-    elsize*: cuint
+    elsize*: cint
     freeFunc*: proc (msg: pointer)
 
   InputFile* = ref object
-    ctx*: ptr AVFormatContext
+    ctx*: AVFormatContext
     eofReached*: cint          ##  true if eof reached
-    eagain*: cint              ##  true if last read attempt returned EAGAIN
+    EAGAIN*: cint              ##  true if last read attempt returned EAGAIN
     istIndex*: cint            ##  index of first stream in input_streams
     loop*: cint                ##  set number of times input stream should be looped
     duration*: int64          ##  actual duration of the longest stream in a file
@@ -2741,7 +2762,7 @@ var sdpFilename*: string
 var audioDriftThreshold*: cfloat = 0.1
 var dtsDeltaThreshold*: cfloat = 10
 var dtsErrorThreshold*: cfloat = 3600 * 30
-var audioVolume*: cint = 256
+var audioVolume* = 256
 var audioSyncMethod*: cint = 0
 var videoSyncMethod*: cint = VSYNC_AUTO
 var frameDropThreshold*: cfloat = 0
@@ -2774,7 +2795,7 @@ var ignoreUnknownStreams*: cint = 0
 var copyUnknownStreams*: cint = 0
 var runAsDaemon*: cint = 0
 var nbFramesDup*: cint = 0
-var dupWarning*: cuint = 1000
+var dupWarning*: cint = 1000
 var nbFramesDrop*: cint = 0
 var decodeErrorStat*: array[2, int64]
 var wantSdp*: cint = 1
@@ -2924,7 +2945,6 @@ const
 
 const EAGAIN = 11
 const EINVAL = 22
-const averror_Eof = -('E'.ord or ('O'.ord shl 8) or ('F'.ord shl 16) or (' '.ord shl 24))
 const INPUT_BUFFER_PADDING_SIZE = 64
 const CODEC_CAP_PARAM_CHANGE = (1 shl 14)
 const EF_EXPLODE  = (1 shl 3) 
@@ -2937,6 +2957,7 @@ const AV_PIX_FMT_FLAG_PAL* = 1 shl 1
 const AV_PIX_FMT_FLAG_BITSTREAM* = 1 shl 2
 const AV_PIX_FMT_FLAG_HWACCEL = 1 shl 3
 const AV_PIX_FMT_FLAG_PLANAR = 1 shl 4
+const  AV_PIX_FMT_FLAG_RGB* = (1 shl 5)
 const NUM_DATA_POINTERS = 8
 const FF_COMPLIANCE_EXPERIMENTAL = -2
 
@@ -3291,24 +3312,10 @@ proc avPacketGetSideData*(pkt: var AVPacket; t: AVPacketSideDataType;): string =
     return ""
 
 
-# proc avImageFillMaxPixsteps*(maxPixsteps: array[4, cint];
-#                             maxPixstepComps: array[4, cint];
-#                             pixdesc: ptr AVPixFmtDescriptor) =
-#   var i: cint
-# #   memset(maxPixsteps, 0, 4 * sizeof((maxPixsteps[0])))
-# #   if maxPixstepComps:
-#     # memset(maxPixstepComps, 0, 4 * sizeof((maxPixstepComps[0])))
-#   i = 0
-#   while i < 4:
-#     var comp: ptr AVComponentDescriptor = (pixdesc.comp[i])
-#     if comp.step > maxPixsteps[comp.plane]:
-#       maxPixsteps[comp.plane] = comp.step
-#       if maxPixstepComps:
-#         maxPixstepComps[comp.plane] = i
-#     inc(i)
 
 
-proc imageGetLinesize*(width: auto; plane: int; maxStep: cint; maxStepComp: int; desc: AVPixFmtDescriptor): cint {.inline.} =
+
+proc imageGetLinesize*(width: auto; plane: int; maxStep: int; maxStepComp: int; desc: AVPixFmtDescriptor): cint {.inline.} =
   var
     s: cint
     shiftedW: cint
@@ -3316,45 +3323,47 @@ proc imageGetLinesize*(width: auto; plane: int; maxStep: cint; maxStepComp: int;
   shiftedW = cint ((width + (1 shl s) - 1)) shr s
   if shiftedW != 0 and maxStep > int.high div shiftedW:
     return -(EINVAL)
-  result = maxStep * shiftedW
+  result = maxStep.cint * shiftedW
   if (desc.flags and AV_PIX_FMT_FLAG_BITSTREAM) != 0:
     result = (result + 7) shr 3
   return result
 
 proc avPixFmtDescGet(pixFmt:int): AVPixFmtDescriptor = avPixFmtDescriptors[pix_fmt]
 
-# proc avImageGetLinesize*(pixFmt: AVPixelFormat; width: cint; plane: cint): cint =
-#   var desc: ptr AVPixFmtDescriptor = avPixFmtDescGet(pixFmt)
-#   var maxStep: array[4, cint]
-#   ##  max pixel step for each plane
-#   var maxStepComp: array[4, cint]
-#   ##  the component for each plane which has the max pixel step
-#   if not desc or desc.flags and AV_PIX_FMT_FLAG_HWACCEL:
-#     return -(EINVAL)
-#   avImageFillMaxPixsteps(maxStep, maxStepComp, desc)
-#   return imageGetLinesize(width, plane, maxStep[plane], maxStepComp[plane], desc)
+proc avImageFillMaxPixsteps*(maxPixsteps: var array[4, int];
+                            maxPixstepComps: var array[4, int];
+                            pixdesc: AVPixFmtDescriptor) =
+  for i in 0..<4:
+    var comp = pixdesc.comp[i]
+    if comp.step > maxPixsteps[comp.plane]:
+      maxPixsteps[comp.plane] = comp.step
+      maxPixstepComps[comp.plane] = i
+
+proc avImageGetLinesize*(pixFmt: cint; width: cint; plane: cint): cint =
+  var desc = avPixFmtDescGet(pixFmt.ord)
+  var maxStep: array[4, int]
+  var maxStepComp: array[4, int]
+  if desc == nil or (desc.flags and AV_PIX_FMT_FLAG_HWACCEL) != 0:
+    return -(EINVAL)
+  avImageFillMaxPixsteps(maxStep, maxStepComp, desc)
+  return imageGetLinesize(width, plane, maxStep[plane], maxStepComp[plane], desc)
 
 
-# proc avImageCheckSize2*(w: cuint; h: cuint; maxPixels: int64; pixFmt: AVPixelFormat;
-#                        logOffset: cint; logCtx: pointer): cint =
-#   ##  ImgUtils imgutils = {
-#   ##      .class      = &imgutils_class,
-#   ##      .log_offset = log_offset,
-#   ##      .log_ctx    = log_ctx,
-#   ##  };
-#   var stride: int64 = avImageGetLinesize(pixFmt, w, 0)
-#   if stride <= 0:
-#     stride = 8 * w
-#   inc(stride, 128 * 8)
-#   if cast[cint](w) <= 0 or cast[cint](h) <= 0 or stride >= int.high or stride * (uint64)(h + 128) >= int.high:
-#     echo("Picture size %ux%u is invalid\n", w, h)
-#     return -(EINVAL)
-#   if maxPixels < int64.high:
-#     if w * cast[int64](h) > maxPixels:
-#       echo("Picture size %ux%u exceeds specified max pixel count %lld, see the documentation if you wish to increase it\n", w, h, maxPixels)
-#       return -EINVAL
-#   return 0
-# import compiler/trees
+proc avImageCheckSize2*(w: cint; h: cint; maxPixels: int64; pixFmt: cint; logOffset: cint; logCtx: pointer): cint =
+
+  var stride: int64 = avImageGetLinesize(pixFmt, w, 0)
+  if stride <= 0:
+    stride = 8 * w
+  inc(stride, 128 * 8)
+  if w <= 0 or h <= 0 or stride >= int.high or stride * (h + 128) >= int.high:
+    echo("Picture size %ux%u is invalid\n", w, h)
+    return -(EINVAL)
+  if maxPixels < int64.high:
+    if w * cast[int64](h) > maxPixels:
+      echo("Picture size %ux%u exceeds specified max pixel count %lld, see the documentation if you wish to increase it\n", w, h, maxPixels)
+      return -EINVAL
+  return 0
+import compiler/trees
 
 # template CEIL_RSHIFT(a,b:untyped):untyped = 
 #     if not isConstExpr(b): 
@@ -3424,9 +3433,9 @@ proc applyParamChange*(avctx: var AVCodecContext; avpkt: var AVPacket): cint =
 proc ffDecodeGetPacket*(avctx: var AVCodecContext; pkt: var AVPacket): cint =
   var avci:  AVCodecInternal = avctx.internal
   if avci.draining != 0:
-    return averror_Eof
+    return AVERROR_EOF.ord
   result = avBsfReceivePacket(avci.bsf, pkt)
-  if result == averror_Eof:
+  if result == AVERROR_EOF:
     avci.draining = 1
   if result < 0:
     return result
@@ -3437,8 +3446,6 @@ proc ffDecodeGetPacket*(avctx: var AVCodecContext; pkt: var AVPacket): cint =
   return 0
 #   avPacketUnref(pkt)
   return result
-
-
 
 
 
@@ -3504,14 +3511,14 @@ const
 
 
 proc atomicStore*[T](obj: ptr T; desired: T) {.inline.} =
-  discard pthreadMutexLock(addr(atomicLock))
+  discard pthreadMutexLock(atomicLock.addr)
   obj[] = desired
-  discard pthreadMutexUnlock(addr(atomicLock))
+  discard pthreadMutexUnlock(atomicLock.addr)
 
 proc atomicLoad*(obj: ptr int): int {.inline.} =
-  discard pthreadMutexLock(addr(atomicLock))
+  discard pthreadMutexLock(atomicLock.addr)
   result = obj[]
-  discard pthreadMutexUnlock(addr(atomicLock))
+  discard pthreadMutexUnlock(atomicLock.addr)
 
 
 proc avImageFillMaxPixsteps*(maxPixsteps: var array[4, cint];
@@ -3922,40 +3929,40 @@ proc avcodecAlignDimensions2*(s: var AVCodecContext; width: var auto; height: va
     wAlign = 32
     hAlign = 16 * 2
   of AV_PIX_FMT_YUV410P:
-    if s.codecId == CODEC_ID_SVQ1:
+    if s.codecId == AV_CODEC_ID_SVQ1:
       wAlign = 64
       hAlign = 64
   of AV_PIX_FMT_RGB555LE:
-    if s.codecId == CODEC_ID_RPZA:
+    if s.codecId == AV_CODEC_ID_RPZA:
       wAlign = 4
       hAlign = 4
-    if s.codecId == CODEC_ID_INTERPLAY_VIDEO:
+    if s.codecId == AV_CODEC_ID_INTERPLAY_VIDEO:
       wAlign = 8
       hAlign = 8
   of AV_PIX_FMT_PAL8, AV_PIX_FMT_BGR8, AV_PIX_FMT_RGB8:
-    if s.codecId == CODEC_ID_SMC or s.codecId == CODEC_ID_CINEPAK:
+    if s.codecId == AV_CODEC_ID_SMC or s.codecId == AV_CODEC_ID_CINEPAK:
       wAlign = 4
       hAlign = 4
-    if s.codecId == CODEC_ID_JV or s.codecId == CODEC_ID_INTERPLAY_VIDEO:
+    if s.codecId == AV_CODEC_ID_JV or s.codecId == AV_CODEC_ID_INTERPLAY_VIDEO:
       wAlign = 8
       hAlign = 8
   of AV_PIX_FMT_BGR24:
-    if (s.codecId == CODEC_ID_MSZH) or (s.codecId == CODEC_ID_ZLIB):
+    if (s.codecId == AV_CODEC_ID_MSZH) or (s.codecId == AV_CODEC_ID_ZLIB):
       wAlign = 4
       hAlign = 4
   of AV_PIX_FMT_RGB24:
-    if s.codecId == CODEC_ID_CINEPAK:
+    if s.codecId == AV_CODEC_ID_CINEPAK:
       wAlign = 4
       hAlign = 4
   else:
     discard
-  if s.codecId == CODEC_ID_IFF_ILBM:
+  if s.codecId == AV_CODEC_ID_IFF_ILBM:
     wAlign = max(wAlign, 8)
   width = cint FFALIGN(width, wAlign)
   height = cint FFALIGN(height, hAlign)
-  if s.codecId == CODEC_ID_H264 or s.lowres != 0 or s.codecId == CODEC_ID_VP5 or
-      s.codecId == CODEC_ID_VP6 or s.codecId == CODEC_ID_VP6F or
-      s.codecId == CODEC_ID_VP6A:
+  if s.codecId == AV_CODEC_ID_H264 or s.lowres != 0 or s.codecId == AV_CODEC_ID_VP5 or
+      s.codecId == AV_CODEC_ID_VP6 or s.codecId == AV_CODEC_ID_VP6F or
+      s.codecId == AV_CODEC_ID_VP6A:
 
     inc(height, 2)
     width = max(width, 32)
@@ -4039,7 +4046,7 @@ proc updateFramePool*(avctx: var AVCodecContext; frame: AVFrame): cint =
   # avBufferUnref(addr(avctx.internal.pool))
   avctx.internal.pool = poolBuf
   result = 0
-  # avBufferUnref(addr(poolBuf))
+  # avBufferUnref(poolBuf.addr)
 
 proc avGetPixFmtName*(pixFmt: int): string =
   if pixFmt < AV_PIX_FMT_NB.int: avPixFmtDescriptors[pixFmt].name else: ""
@@ -4240,18 +4247,18 @@ proc addMetadataFromSideData*(avpkt: var AVPacket; frame: AVFrame): cint =
 const PKT_FLAG_DISCARD  = 0x0004
 const FRAME_FLAG_DISCARD =  (1 shl 2)
 
-proc avRescaleRnd*(a: int64; b: int64; c: int64; rounding: auto): int64 =
+proc avRescaleRnd*(a: int64; b: int64; c: int64; rounding: int): int64 =
   var rnd = rounding
   var r: int64 = 0
-  if c <= 0 or b < 0 or not ((rnd and (not ROUND_PASS_MINMAX.ord)) <= 5 and (rnd and (not ROUND_PASS_MINMAX.ord)) != 4):
+  if c <= 0 or b < 0 or not ((rnd and (not AV_ROUND_PASS_MINMAX.ord)) <= 5 and (rnd and (not AV_ROUND_PASS_MINMAX.ord)) != 4):
     return int64.low
-  if (rnd and ROUND_PASS_MINMAX.ord) != 0:
+  if (rnd and AV_ROUND_PASS_MINMAX.ord) != 0:
     if a == int64.low or a == int64.high:
       return a
-    rnd -= ROUND_PASS_MINMAX.ord
+    rnd -= AV_ROUND_PASS_MINMAX.ord
   if a < 0:
     return -(avRescaleRnd(-max(a, -int64.high), b, c, rnd xor ((rnd shr 1) and 1)))
-  if rnd == ROUND_NEAR_INF.ord:
+  if rnd == AV_ROUND_NEAR_INF.ord:
     r = c div 2
   elif (rnd and 1) != 0:
     r = c - 1
@@ -4297,9 +4304,9 @@ proc avImageCheckSar*(w: auto; h: auto; sar: Rational[int]): cint =
   if sar.num == 0 or sar.num == sar.den:
     return 0
   if sar.num < sar.den:
-    scaledDim = avRescaleRnd(w.int64, sar.num, sar.den, ROUND_ZERO.ord)
+    scaledDim = avRescaleRnd(w.int64, sar.num, sar.den, AV_ROUND_ZERO.ord)
   else:
-    scaledDim = avRescaleRnd(h, sar.den, sar.num, ROUND_ZERO.ord)
+    scaledDim = avRescaleRnd(h, sar.den, sar.num, AV_ROUND_ZERO.ord)
   if scaledDim > 0:
     return 0
   return -(EINVAL)
@@ -4597,7 +4604,7 @@ proc ffThreadDecodeFrame*(avctx: var AVCodecContext; picture: var AVFrame;gotPic
   var threads = cast[ptr seq[PerThreadContext]](fctx.threads)
   p = threads[fctx.nextDecoding]
   err = submitPacket(p, avctx, avpkt)
-  if fctx.nextDecoding > (avctx.threadCount - 1 - int(avctx.codecId.ord == CODEC_ID_FFV1.ord)):
+  if fctx.nextDecoding > (avctx.threadCount - 1 - int(avctx.codecId.ord == AV_CODEC_ID_FFV1.ord)):
     fctx.delaying = 0
   if fctx.delaying != 0:
     gotPicturePtr = 0
@@ -4662,7 +4669,7 @@ proc avRescaleQRnd*(a: int64; bq: Rational[int]; cq: Rational[int]; rnd: AVRound
   return avRescaleRnd(a, b, c, rnd.ord)
 
 proc avRescaleQ*(a: int64; bq: Rational[int]; cq: Rational[int]): int64 =
-  return avRescaleQRnd(a, bq, cq, ROUND_NEAR_INF)
+  return avRescaleQRnd(a, bq, cq, AV_ROUND_NEAR_INF)
 
 proc avSamplesCopy*(dst: var string; src: string; dstOffset: auto;
                    srcOffset: auto; nbSamples: auto; nbChannels: auto;
@@ -4696,12 +4703,12 @@ proc decodeSimpleInternal*(avctx: var AVCodecContext; frame: var AVFrame; discar
   if pkt.data[] == 0 and avci.draining == 0:
     # avPacketUnref(pkt)
     result = ffDecodeGetPacket(avctx, pkt)
-    if result < 0 and result != averror_Eof:
+    if result < 0 and result != AVERROR_EOF:
       return result
   if avci.drainingDone != 0:
-    return averror_Eof
+    return AVERROR_EOF.ord
   if pkt.data[] == 0 and (avctx.codec.capabilities and CODEC_CAP_DELAY) == 0 and (avctx.activeThreadType and FF_THREAD_FRAME) == 0:
-    return averror_Eof
+    return AVERROR_EOF.ord
   gotFrame = 0
   if HAVE_THREADS != 0 and (avctx.activeThreadType and FF_THREAD_FRAME) != 0:
     result = ffThreadDecodeFrame(avctx, frame, gotFrame, pkt)
@@ -4858,7 +4865,7 @@ proc decodeReceiveFrameInternal*(avctx: var AVCodecContext; frame: var AVFrame):
     #   avPacketUnref(avci.lastPktProps)
   else:
     result = decodeSimpleReceiveFrame(avctx, frame)
-  if result == averror_Eof:
+  if result == AVERROR_EOF:
     avci.drainingDone = 1
   if result == 0:
     if frame.privateRef != "":
@@ -5033,7 +5040,7 @@ var videoCodecName*: string
 var rdftspeed*: cdouble = 0.02
 var cursorLastShown*: int64
 var cursorHidden*: cint = 0
-var vfiltersList*: string 
+var vfiltersList*: seq[string]
 var nbVfilters*: cint = 0
 var afilters*: string 
 var autorotate*: cint = 1
@@ -5166,9 +5173,9 @@ template TIME_BASE_Q():untyped = Rational[int](num: 1, den: 1000000)
 type
   AVBPrint* = ref object
     str*: string
-    len*: cuint
-    size*: cuint
-    sizeMax*: cuint
+    len*: cint
+    size*: cint
+    sizeMax*: cint
     reservedInternalBuffer*: array[1, char]
 
 
@@ -5252,7 +5259,7 @@ proc avcodecDecodeSubtitle2*(avctx: AVCodecContext; sub: var AVSubtitle;gotSubPt
     if avpkt.data != pktRecoded.data:
       pktRecoded.sideData.setLen 0
       pktRecoded.sideDataElems = 0
-      # avPacketUnref(addr(pktRecoded))
+      # avPacketUnref(pktRecoded.addr)
     if gotSubPtr != 0:
       inc(avctx.frameNumber)
   return result
@@ -5279,7 +5286,7 @@ proc avcodecSendPacket*(avctx:var AVCodecContext; avpkt: AVPacket): auto =
   if not avcodecIsOpen(avctx) or not avCodecIsDecoder(avctx.codec):
     return -(EINVAL)
   if avctx.internal.draining != 0:
-    return averror_Eof
+    return AVERROR_EOF
   if avpkt != nil and avpkt.size == 0 and avpkt.data != nil:
     return -(EINVAL)
   if avpkt != nil and (avpkt.data != nil or avpkt.sideDataElems != 0):
@@ -5289,7 +5296,7 @@ proc avcodecSendPacket*(avctx:var AVCodecContext; avpkt: AVPacket): auto =
     return result
   if avci.bufferFrame.buf == "":
     result = decodeReceiveFrameInternal(avctx, avci.bufferFrame)
-    if result < 0 and result != -(EAGAIN) and result != averror_Eof:
+    if result < 0 and result != -(EAGAIN) and result != AVERROR_EOF:
       return result
   return 0
 
@@ -5321,7 +5328,7 @@ proc decoderDecodeFrame*(d: var Decoder; frame: var AVFrame; sub:var AVSubtitle)
                         d.nextPts = frame.pts + frame.nbSamples
                         d.nextPtsTb = tb
             else:discard
-            if result == averror_Eof:
+            if result == AVERROR_EOF:
                 d.finished = d.pktSerial
                 avcodecFlushBuffers(d.avctx)
                 return 0
@@ -5370,7 +5377,7 @@ proc decoderDecodeFrame*(d: var Decoder; frame: var AVFrame; sub:var AVSubtitle)
                         d.packetPending = 1
                         d.pkt = pkt
                         # avPacketMoveRef(d.pkt, pkt)
-                    result = if gotFrame != 0: 0 else: (if pkt != nil: -(EAGAIN) else: averror_Eof)
+                    result = if gotFrame != 0: 0 else: (if pkt != nil: -(EAGAIN) else: AVERROR_EOF)
             else:
                 if avcodecSendPacket(d.avctx, pkt) == -(EAGAIN):
                     echo("Receive_frame and send_packet both returned EAGAIN, which is an API violation.\n")
@@ -5496,17 +5503,7 @@ proc avDivQ( b,c: var Rational[int]):Rational[int] =
   result = avMulQ(b, result)
 
 
-proc avGuessFrameRate*(format: ptr AVFormatContext; st: AVStream;frame: AVFrame): Rational[int] =
-  var fr = st.rFrameRate
-  var codecFr = st.internal.avctx.framerate
-  var avgFr = st.avgFrameRate
-  if avgFr.num > 0 and avgFr.den > 0 and fr.num > 0 and fr.den > 0 and avQ2d(avgFr) < 70 and
-      avQ2d(fr) > 210:
-    fr = avgFr
-  if st.internal.avctx.ticksPerFrame > 1:
-    if codecFr.num > 0 and codecFr.den > 0 and (fr.num == 0 or avQ2d(codecFr) < avQ2d(fr) * 0.7 and abs(1.0 - avQ2d(avDivQ(avgFr, fr))) > 0.1):
-      fr = codecFr
-  return fr
+
 
 proc avDefaultItemName*(p: pointer): string = cast[ptr AVClass](p).className
 
@@ -5815,8 +5812,8 @@ proc avDictGet*(m: AVDictionary; key: string; prev: ptr AVDictionaryEntry;flags:
       return d
   return nil
   # var
-  #   i: cuint
-  #   j: cuint
+  #   i: cint
+  #   j: cint
   # if prev != nil:
   #   i = prev - m.elems.len + 1
   # else:
@@ -5908,7 +5905,7 @@ proc avOptGetKeyValue*(ropts: var string; keyValSep: string; pairsSep: string;
 #     yield last
 #     last.inc
 
-const OPT_SEARCH_CHILDREN =  (1 shl 0) 
+const AV_OPT_SEARCH_CHILDREN =  (1 shl 0) 
 const OPT_SEARCH_FAKE_OBJ  = (1 shl 1)
 
 iterator avOptChildClassIterate*(parent: ptr AVClass; iter: var AVClass): AVClass =
@@ -5927,7 +5924,7 @@ iterator avOptChildNext*(obj: pointer; prev: pointer): pointer =
 proc avOptFind2*(obj: pointer; name: string; unit: string; optFlags: cint; searchFlags: cint; targetObj:pointer): AVOption =
   var o: AVOption 
   var c = cast[ptr AVClass](obj)
-  if (searchFlags and OPT_SEARCH_CHILDREN) != 0:
+  if (searchFlags and AV_OPT_SEARCH_CHILDREN) != 0:
     if (searchFlags and OPT_SEARCH_FAKE_OBJ) != 0:
       var iter: AVClass
       
@@ -6404,7 +6401,7 @@ proc avExprParse*(exp: var AVExpr; ss: string; constNames: seq[string];
   var s = cast[ptr char](ss.string)
   var w = $ @ss.filterIt(not it.Rune.isWhiteSpace)
 
-  p.class = addr(evalClass)
+  p.class = evalClass.addr
   p.stackIndex = 100
   p.s = w
   p.constNames = constNames
@@ -6746,7 +6743,7 @@ proc setStringNumber*(obj: pointer; targetObj: pointer; o: AVOption; v: string;d
     var ci: cint = 0
     var constValues: array[64, cdouble]
     var constNames = newSeq[string] 64
-    var searchFlags:cint = if (o.flags and AV_OPT_FLAG_CHILD_CONSTS) != 0: OPT_SEARCH_CHILDREN else: 0
+    var searchFlags:cint = if (o.flags and AV_OPT_FLAG_CHILD_CONSTS) != 0: AV_OPT_SEARCH_CHILDREN else: 0
     var oNamed = avOptFind(targetObj, if i != 0: buf else: v, o.unit, 0, searchFlags)
     if oNamed != nil and oNamed.t == AV_OPT_TYPE_CONST:
       d = cdouble defaultNumval(oNamed)
@@ -7306,7 +7303,7 @@ proc setStringDict*(obj: pointer; o: AVOption; val: string; dst: var ptr uint8):
 
 # proc avGettime*(): int64 =
 #     var tv: Timeval
-#     gettimeofday(addr(tv), nil)
+#     gettimeofday(tv.addr, nil)
 #     return cast[int64](tv.tvSec * 1000000) + tv.tvUsec
 
 #     return -1
@@ -7437,7 +7434,7 @@ proc avParseTime*(timeval: var int64; timestr: string; duration: cint): cint =
   #     return 0
     
   #   for i in 0..<len(dateFmt):
-  #     q = parse(p, dateFmt[i], addr(dt))
+  #     q = parse(p, dateFmt[i], dt.addr)
   #     if q != "":
   #       break
   #   if q == "":
@@ -7450,7 +7447,7 @@ proc avParseTime*(timeval: var int64; timestr: string; duration: cint): cint =
   #     while isSpaceAscii(p[]):
   #       inc(p)
   #   for i in 0..<len(timeFmt):
-  #     q = avSmallStrptime(p, timeFmt[i], addr(dt))
+  #     q = avSmallStrptime(p, timeFmt[i], dt.addr)
   #     if q != "":
   #       break
   #     inc(i)
@@ -7459,10 +7456,10 @@ proc avParseTime*(timeval: var int64; timestr: string; duration: cint): cint =
   #   if p[0] == '-':
   #     negative = 1
   #     inc(p)
-  #   q = avSmallStrptime(p, "%J:%M:%S", addr(dt))
+  #   q = avSmallStrptime(p, "%J:%M:%S", dt.addr)
   #   if q == nil:
   #     ##  parse timestr as MM:SS
-  #     q = avSmallStrptime(p, "%M:%S", addr(dt))
+  #     q = avSmallStrptime(p, "%M:%S", dt.addr)
   #     dt.tmHour = 0
   #   if  q == nil:
   #     var o: string
@@ -7513,7 +7510,7 @@ proc avParseTime*(timeval: var int64; timestr: string; duration: cint): cint =
   #     p = q
   #     i = 0
   #     while i < len(tzFmt):
-  #       q = avSmallStrptime(p, tzFmt[i], addr(tz))
+  #       q = avSmallStrptime(p, tzFmt[i], tz.addr)
   #       if q != "":
   #         break
   #       inc(i)
@@ -7522,20 +7519,20 @@ proc avParseTime*(timeval: var int64; timestr: string; duration: cint): cint =
   #     tzoffset = sign * (tz.tmHour * 60 + tz.tmMin) * 60
   #     isUtc = 1
   #   if today != 0:
-  #     var dt2: Tm = if isUtc != 0: gmtimeR(addr(now), addr(tmbuf))[] else: localtimeR(addr(now), addr(tmbuf))[]
+  #     var dt2: Tm = if isUtc != 0: gmtimeR(now.addr, tmbuf.addr)[] else: localtimeR(now.addr, tmbuf.addr)[]
   #     dt2.tmHour = dt.tmHour
   #     dt2.tmMin = dt.tmMin
   #     dt2.tmSec = dt.tmSec
   #     dt = dt2
   #   dt.tmIsdst = if isUtc != 0: 0 else: -1
-  #   t = if isUtc: avTimegm(addr(dt)) else: mktime(addr(dt))
+  #   t = if isUtc: avTimegm(dt.addr) else: mktime(dt.addr)
   #   inc(t, tzoffset)
   # if q[]:
   #   return -(EINVAL)
-  # if int64Max div suffix < t:
+  # if int64.high div suffix < t:
   #   return -(ERANGE)
   # t = t * suffix
-  # if int64Max - microseconds < t:
+  # if int64.high - microseconds < t:
   #   return -(ERANGE)
   # inc(t, microseconds)
   # timeval[] = if negative: -t else: t
@@ -7575,7 +7572,7 @@ proc avGetChannelLayout*(name: string): int64 =
   return layout
 
 
-proc avOptSet*(obj: pointer; name: string; val: string; searchFlags: cint): int =
+proc avOptSet*(obj: pointer; name: string; val: string; searchFlags: cint): int {.discardable.} =
   var
     dst: pointer
     targetObj: pointer
@@ -7710,9 +7707,9 @@ proc processOptions*(ctx: var AVFilterContext; options: OrderedTableRef[string,s
         return result
     else:
       options[key] = value
-      result = cint avOptSet(ctx.priv, key, value, OPT_SEARCH_CHILDREN)
+      result = cint avOptSet(ctx.priv, key, value, AV_OPT_SEARCH_CHILDREN)
       if result < 0:
-        var find = avOptFind(ctx.priv, key, "", 0, OPT_SEARCH_CHILDREN or OPT_SEARCH_FAKE_OBJ)
+        var find = avOptFind(ctx.priv, key, "", 0, AV_OPT_SEARCH_CHILDREN or OPT_SEARCH_FAKE_OBJ)
         if find == nil :
           if result == AVERROR_OPTION_NOT_FOUND:
             echo("Option \'%s\' not found\n", key)
@@ -7778,10 +7775,10 @@ proc avfilterLink*(src: var AVFilterContext; srcpad: int; dst: var AVFilterConte
     return -(EINVAL)
   dst.inputs[dstpad] = link
   src.outputs[srcpad] = link
-  link.src = src.addr
-  link.dst = dst.addr
-  link.srcpad = addr(src.outputPads[srcpad])
-  link.dstpad = addr(dst.inputPads[dstpad])
+  link.src = src
+  link.dst = dst
+  link.srcpad = src.outputPads[srcpad]
+  link.dstpad = dst.inputPads[dstpad]
   link.t = src.outputPads[srcpad].t
   link.format = -1
   ffFramequeueInit(addr(link.fifo), addr(src.graph.internal.frameQueues))
@@ -8160,14 +8157,18 @@ proc hwDeviceSetupForFilter*(fg: var FilterGraph): cint =
       fg.graph.filters[i].hwDeviceCtx = dev.deviceRef
   return 0
 
-proc avfilterPadGetType*(pads: ptr AVFilterPad; padIdx: cint): AVMediaType =
-  return pads[padIdx].t
+proc avfilterPadGetType*(pads: ptr AVFilterPad; padIdx: cint): AVMediaType = pads[padIdx].t
 
 
 proc avInvQ*(q: Rational[int]):Rational[int] {.inline.} = initRational(q.den, q.num)
 
-proc sub2videoPrepare*(ist: ptr InputStream; ifilter: ptr InputFilter): cint =
-  var avf: ptr AVFormatContext = inputFiles[ist.fileIndex].ctx
+
+const
+  AV_PIX_FMT_RGB32* = AV_PIX_FMT_BGRA
+
+
+proc sub2videoPrepare*(ist: var InputStream; ifilter: var InputFilter): cint =
+  var avf = inputFiles[ist.fileIndex].ctx
   var
     i: cint
     w: cint
@@ -8191,7 +8192,7 @@ proc sub2videoPrepare*(ist: ptr InputStream; ifilter: ptr InputFilter): cint =
   ifilter.width = if ist.decCtx.width != 0: cint ist.decCtx.width else: ist.sub2video.w
   ifilter.height = if ist.decCtx.height != 0: cint ist.decCtx.height else: ist.sub2video.h
 
-  ifilter.format = AV_PIX_FMT_RGB32
+  ifilter.format = cint AV_PIX_FMT_RGB32
   ist.sub2video.frame = AVFrame()
   ist.sub2video.lastPts = int64.low
   ist.sub2video.endPts = int64.low
@@ -8199,9 +8200,112 @@ proc sub2videoPrepare*(ist: ptr InputStream; ifilter: ptr InputFilter): cint =
   ist.sub2video.initialize = 1
   return 0
 
+proc avBuffersrcParametersSet*(ctx: AVFilterContext; param:  AVBufferSrcParameters): cint =
+  var s = cast[ptr BufferSourceContext](ctx.priv)
+  if param.timeBase.num > 0 and param.timeBase.den > 0:
+    s.timeBase = param.timeBase
+  case ctx.filter.outputs[0].t
+  of AVMEDIA_TYPE_VIDEO:
+    if param.format != AV_PIX_FMT_NONE.ord:
+      s.pixFmt = param.format
+    if param.width > 0:
+      s.w = param.width
+    if param.height > 0:
+      s.h = param.height
+    if param.sampleAspectRatio.num > 0 and param.sampleAspectRatio.den > 0:
+      s.pixelAspect = param.sampleAspectRatio
+    if param.frameRate.num > 0 and param.frameRate.den > 0:
+      s.frameRate = param.frameRate
+    if param.hwFramesCtx != "":
+      s.hwFramesCtx = param.hwFramesCtx
+  of AVMEDIA_TYPE_AUDIO:
+    if param.format != AV_SAMPLE_FMT_NONE.ord:
+      s.sampleFmt = param.format
+    if param.sampleRate > 0:
+      s.sampleRate = cint param.sampleRate
+    if param.channelLayout != 0: 
+      s.channelLayout = param.channelLayout
+  else:
+    return AVERROR_BUG.ord
+  return 0
 
-proc configureInputVideoFilter*(fg: ptr FilterGraph; ifilter: ptr InputFilter; `in`: ptr AVFilterInOut): cint =
-  var lastFilter: ptr AVFilterContext
+proc insertFilter*(lastFilter: var AVFilterContext; padIdx: var cint; filterName: string; args: string): cint =
+  var graph = lastFilter.graph
+  var ctx: AVFilterContext
+  var result: cint
+  result = avfilterGraphCreateFilter(ctx, avfilterGetByName(filterName), filterName, args, nil, graph)
+  if result < 0:
+    return result
+  result = avfilterLink(lastFilter, padIdx, ctx, 0)
+  if result < 0:
+    return result
+  lastFilter = ctx
+  padIdx = 0
+  return 0
+
+
+proc setNumber*(obj: pointer; name: string; num: cdouble; den: cint; intnum: int64; searchFlags: cint): cint =
+  var
+    dst: pointer
+    targetObj: pointer
+  var o = avOptFind2(obj, name, "", 0, searchFlags, targetObj.addr)
+  if o == nil or targetObj == nil:
+    return AVERROR_OPTION_NOT_FOUND.ord
+  if (o.flags and AV_OPT_FLAG_READONLY) != 0:
+    return -(EINVAL)
+  dst = (cast[ptr uint8](targetObj)) + o.offset
+  result = writeNumber(obj, o, dst, num, den, intnum)
+
+proc avOptSetInt*(obj: pointer; name: string; val: int64; searchFlags: cint): cint = setNumber(obj, name, 1, 1, val, searchFlags)
+
+
+proc insertTrim*(startTime: int64; duration: int64;
+                lastFilter: var AVFilterContext; padIdx: var cint;
+                filterName: string): cint =
+  var graph: AVFilterGraph = lastFilter.graph
+  var ctx: AVFilterContext
+  var trim: AVFilter
+  var t: AVMediaType = avfilterPadGetType(lastFilter.outputPads, padIdx)
+  var name: string = if (t == AVMEDIA_TYPE_VIDEO): "trim" else: "atrim"
+  var result: cint = 0
+  if duration == int64.high and startTime == 0:
+    return 0
+  trim = avfilterGetByName(name)
+  if trim == nil:
+    echo("%s filter not present, cannot limit recording time.\n", name)
+    return AVERROR_FILTER_NOT_FOUND.ord
+  ctx = avfilterGraphAllocFilter(graph, trim, filterName)
+  if duration != int64.high:
+    result = avOptSetInt(ctx.addr, "durationi", duration, AV_OPT_FLAG_READONLY)
+  if result >= 0 and startTime != 0:
+    result = avOptSetInt(ctx.addr, "starti", startTime, AV_OPT_FLAG_READONLY)
+  if result < 0:
+    echo("Error configuring the %s filter", name)
+    return result
+  result = avfilterInitStr(ctx, "")
+  if result < 0:
+    return result
+  result = avfilterLink(lastFilter, padIdx, ctx, 0)
+  if result < 0:
+    return result
+  lastFilter = ctx
+  padIdx = 0
+  return 0
+
+proc avGuessFrameRate*(format: AVFormatContext; st: AVStream;frame: AVFrame): Rational[int] =
+  var fr = st.rFrameRate
+  var codecFr = st.internal.avctx.framerate
+  var avgFr = st.avgFrameRate
+  if avgFr.num > 0 and avgFr.den > 0 and fr.num > 0 and fr.den > 0 and avQ2d(avgFr) < 70 and
+      avQ2d(fr) > 210:
+    fr = avgFr
+  if st.internal.avctx.ticksPerFrame > 1:
+    if codecFr.num > 0 and codecFr.den > 0 and (fr.num == 0 or avQ2d(codecFr) < avQ2d(fr) * 0.7 and abs(1.0 - avQ2d(avDivQ(avgFr, fr))) > 0.1):
+      fr = codecFr
+  return fr
+
+proc configureInputVideoFilter*(fg: FilterGraph; ifilter: var InputFilter; i: AVFilterInOut): cint =
+  var lastFilter: AVFilterContext
   var bufferFilt: AVFilter = avfilterGetByName("buffer")
   var ist: InputStream = ifilter.ist
   var f: InputFile = inputFiles[ist.fileIndex]
@@ -8210,13 +8314,11 @@ proc configureInputVideoFilter*(fg: ptr FilterGraph; ifilter: ptr InputFilter; `
   var sar: Rational[int]
   var args: string
   var name = newString 255
-  var
-    result: cint
-    padIdx: cint = 0
+  var  padIdx: cint = 0
   var tsoffset: int64 = 0
   var par = AVBufferSrcParameters(format:AV_PIX_FMT_NONE.ord)
   if ist.decCtx.codecType == AVMEDIA_TYPE_AUDIO:
-    echo("Cannot connect video filter to audio input\n")
+    echo("Cannot connect video filter to audio input")
     result = -(EINVAL)
     return
   if fr.num == 0:
@@ -8232,7 +8334,7 @@ proc configureInputVideoFilter*(fg: ptr FilterGraph; ifilter: ptr InputFilter; `
   if fr.num != 0  and fr.den != 0:
     args =  fmt":frame_rate={fr.num}/{fr.den}"
   name = fmt"graph {fg.index} input from stream {ist.fileIndex}:{ist.st.index}"
-  result = avfilterGraphCreateFilter(ifilter.filter, bufferFilt, name, args.str, nil, fg.graph)
+  result = avfilterGraphCreateFilter(ifilter.filter, bufferFilt, name, args, nil, fg.graph)
   if result < 0:
     return
   par.hwFramesCtx = ifilter.hwFramesCtx
@@ -8243,24 +8345,24 @@ proc configureInputVideoFilter*(fg: ptr FilterGraph; ifilter: ptr InputFilter; `
   if ist.autorotate != 0:
     var theta: cdouble = getRotation(ist.st)
     if abs(theta - 90) < 1.0:
-      result = insertFilter(addr(lastFilter), addr(padIdx), "transpose", "clock")
+      result = insertFilter(lastFilter, padIdx, "transpose", "clock")
     elif abs(theta - 180) < 1.0:
-      result = insertFilter(addr(lastFilter), addr(padIdx), "hflip", nil)
+      result = insertFilter(lastFilter, padIdx, "hflip", "")
       if result < 0:
         return result
-      result = insertFilter(addr(lastFilter), addr(padIdx), "vflip", nil)
+      result = insertFilter(lastFilter, padIdx, "vflip", "")
     elif abs(theta - 270) < 1.0:
-      result = insertFilter(addr(lastFilter), addr(padIdx), "transpose", "cclock")
+      result = insertFilter(lastFilter, padIdx, "transpose", "cclock")
     elif abs(theta) > 1.0:
-      var rotateBuf: array[64, char]
-      snprintf(rotateBuf, sizeof((rotateBuf)), "%f*PI/180", theta)
-      result = insertFilter(addr(lastFilter), addr(padIdx), "rotate", rotateBuf)
+      var rotateBuf = newString 64
+      rotateBuf = fmt"{theta}*PI/180" 
+      result = insertFilter(lastFilter, padIdx, "rotate", rotateBuf)
     if result < 0:
       return result
-  if doDeinterlace:
-    var yadif: ptr AVFilterContext
-    snprintf(name, sizeof((name)), "deinterlace_in_%d_%d", ist.fileIndex, ist.st.index)
-    result = avfilterGraphCreateFilter(addr(yadif), avfilterGetByName("yadif"), name, "", nil, fg.graph)
+  if doDeinterlace != 0:
+    var yadif: AVFilterContext
+    name = fmt"deinterlace_in_{ist.fileIndex}_{ist.st.index}"
+    result = avfilterGraphCreateFilter(yadif, avfilterGetByName("yadif"), name, "", nil, fg.graph)
     if result < 0:
       return result
     result = avfilterLink(lastFilter, 0, yadif, 0)
@@ -8268,27 +8370,89 @@ proc configureInputVideoFilter*(fg: ptr FilterGraph; ifilter: ptr InputFilter; `
       return result
     lastFilter = yadif
   name = fmt"trim_in_{ist.fileIndex}_{ist.st.index}" 
-  if copyTs:
-    tsoffset = if f.startTime == av_Nopts_Value: 0 else: f.startTime
-    if not startAtZero and f.ctx.startTime != av_Nopts_Value:
+  if copyTs != 0:
+    tsoffset = if f.startTime == 0: 0'i64 else: f.startTime
+    if startAtZero == 0 and f.ctx.startTime != 0:
       inc(tsoffset, f.ctx.startTime)
-  result = insertTrim(if ((f.startTime == av_Nopts_Value) or not f.accurateSeek): av_Nopts_Value else: tsoffset,f.recordingTime, addr(lastFilter), addr(padIdx), name)
+  result = insertTrim(if ((f.startTime == 0) or f.accurateSeek == 0): 0'i64 else: tsoffset, f.recordingTime, lastFilter, padIdx, name)
   if result < 0:
     return result
-  result = avfilterLink(lastFilter, 0, `in`.filterCtx, `in`.padIdx)
+  result = avfilterLink(lastFilter, 0, i.filterCtx, i.padIdx)
   if result < 0:
     return result
   return 0
   return result
 
+proc avGetSampleFmtName*(sampleFmt: int): string = sampleFmtInfos[sampleFmt].name
 
-proc configureInputAudioFilter*(fg: ptr FilterGraph; ifilter: ptr InputFilter; `in`: ptr AVFilterInOut): cint =
-  var lastFilter: ptr AVFilterContext
-  var abufferFilt: ptr AVFilter = avfilterGetByName("abuffer")
-  var ist: ptr InputStream = ifilter.ist
-  var f: ptr InputFile = inputFiles[ist.fileIndex]
-  var args: AVBPrint
-  var name: array[255, char]
+proc avRescaleRnd*(a: int64; b: int64; c: int64; rnd: var int): int64 =
+  var r: int64 = 0
+  if c <= 0 or b < 0 or not ((rnd and not AV_ROUND_PASS_MINMAX.ord) <= 5 and (rnd and not AV_ROUND_PASS_MINMAX.ord) != 4):
+    return int64.low
+  if (rnd and AV_ROUND_PASS_MINMAX.ord) != 0:
+    if a == int64.low or a == int64.high:
+      return a
+    rnd -= AV_ROUND_PASS_MINMAX.ord
+  if a < 0:
+    return -avRescaleRnd(-max(a, -int64.high), b, c, rnd xor ((rnd shr 1) and 1))
+  if rnd == AV_ROUND_NEAR_INF.ord:
+    r = c div 2
+  elif (rnd and 1) != 0:
+    r = c - 1
+  if b <= int.high and c <= int.high:
+    if a <= int.high:
+      return (a * b + r) div c
+    else:
+      var ad: int64 = a div c
+      var a2: int64 = (a mod c * b + r) div c
+      if ad >= int32.high and b != 0 and ad > (int64.high - a2) div b:
+        return int64.low
+      return ad * b + a2
+  else:
+      var a0: int64 = a and 0xFFFFFFFF
+      var a1: int64 = a shr 32
+      var b0: int64 = b and 0xFFFFFFFF
+      var b1: int64 = b shr 32
+      var t1: int64 = a0 * b1 + a1 * b0
+      var t1a: int64 = t1 shl 32
+      var i: cint
+      a0 = a0 * b0 + t1a
+      a1 = a1 * b1 + (t1 shr 32) + int(a0 < t1a)
+      inc(a0, r)
+      inc(a1, a0 < r)
+      i = 63
+      while i >= 0:
+        inc(a1, a1 + ((a0 shr i) and 1))
+        inc(t1, t1)
+        if c <= a1:
+          dec(a1, c)
+          inc(t1)
+        dec(i)
+      if t1 > int64.high:
+        return int64.low
+      return t1
+
+
+proc avRescale*(a: int64; b: int64; c: int64): int64 =
+  return avRescaleRnd(a, b, c, AV_ROUND_NEAR_INF.ord)
+
+
+# proc avStrlcatf*(dst: string; size: csize_t; fmt: string): csize_t {.varargs.} =
+#   var len = strlen(dst)
+#   var vl: VaList
+#   vaStart(vl, fmt)
+#   inc(len, vsnprintf(dst + len, if size > len: size - len else: 0, fmt, vl))
+#   vaEnd(vl)
+#   return len
+
+
+proc configureInputAudioFilter*(fg: FilterGraph; ifilter: var InputFilter; i: AVFilterInOut): cint =
+  var lastFilter: AVFilterContext
+  var abufferFilt: AVFilter = avfilterGetByName("abuffer")
+  var ist = ifilter.ist
+  var f = inputFiles[ist.fileIndex]
+  var args: string
+  var name = newString 255
   var
     result: cint
     padIdx: cint = 0
@@ -8298,57 +8462,54 @@ proc configureInputAudioFilter*(fg: ptr FilterGraph; ifilter: ptr InputFilter; `
     return -(EINVAL)
   args = fmt"time_base={1}/{ifilter.sampleRate}:sample_rate={ifilter.sampleRate}:sample_fmt={avGetSampleFmtName(ifilter.format)}"
   if ifilter.channelLayout != 0:
-    args = fmt":channel_layout=0x{ifilter.channelLayout}"
+    args = fmt":channel_layout=0x{ifilter.channelLayout.toHex}"
   else:
     args = fmt":channels={ifilter.channels}" 
   name = fmt"graph_{fg.index}_in_{ist.fileIndex}_{ist.st.index}"
-  result = avfilterGraphCreateFilter(addr(ifilter.filter), abufferFilt, name, args.str, nil, fg.graph)
+  result = avfilterGraphCreateFilter(ifilter.filter, abufferFilt, name, args, nil, fg.graph)
   if result < 0:
     return result
   lastFilter = ifilter.filter
-  template auto_Insert_Filter_Input(optName, filterName, arg: untyped): void =
+  proc auto_Insert_Filter_Input(optName, filterName, arg: string):cint {.discardable.} =
     while true:
-      var filtCtx: ptr AVFilterContext
+      var filtCtx: AVFilterContext
       echo(optName, " is forwarded to lavfi similarly to -af ",filterName, "=%s.\n", arg)
-      snprintf(name, sizeof((name)), "graph_%d_%s_in_%d_%d", fg.index, filterName,ist.fileIndex, ist.st.index)
-      result = avfilterGraphCreateFilter(addr(filtCtx), avfilterGetByName(filterName),name, arg, nil, fg.graph)
+      name = fmt"graph_{fg.index}_{filterName}_in_{ist.fileIndex}_{ist.st.index}"
+      result = avfilterGraphCreateFilter(filtCtx, avfilterGetByName(filterName),name, arg, nil, fg.graph)
       if result < 0:
         return result
       result = avfilterLink(lastFilter, 0, filtCtx, 0)
       if result < 0:
         return result
       lastFilter = filtCtx
-      if not 0:
-        break
+      break
 
   if audioSyncMethod > 0:
-    var args: array[256, char] = [0]
-    avStrlcatf(args, sizeof((args)), "async=%d", audioSyncMethod)
+    var args = fmt"async={audioSyncMethod}"
     if audioDriftThreshold != 0.1:
-      avStrlcatf(args, sizeof((args)), ":min_hard_comp=%f", audioDriftThreshold)
-    if not fg.reconfiguration:
-      avStrlcatf(args, sizeof((args)), ":first_pts=0")
+      args &= fmt":min_hard_comp={audioDriftThreshold}"
+    if fg.reconfiguration == 0:
+      args &= ":first_pts=0"
     auto_Insert_Filter_Input("-async", "aresample", args)
   if audioVolume != 256:
-    var args: array[256, char]
     echo("-vol has been deprecated. Use the volume audio filter instead.\n")
-    snprintf(args, sizeof((args)), "%f", audioVolume div 256.0)
+    var args = fmt"{audioVolume div 256}"
     auto_Insert_Filter_Input("-vol", "volume", args)
-  snprintf(name, sizeof((name)), "trim for input stream %d:%d", ist.fileIndex, ist.st.index)
-  if copyTs:
-    tsoffset = if f.startTime == av_Nopts_Value: 0 else: f.startTime
-    if not startAtZero and f.ctx.startTime != av_Nopts_Value:
+  name = "trim for input stream {ist.fileIndex}:{ist.st.index}"
+  if copyTs != 0:
+    tsoffset = if f.startTime == 0: 0'i64 else: f.startTime
+    if startAtZero == 0 and f.ctx.startTime != 0:
       inc(tsoffset, f.ctx.startTime)
-  result = insertTrim(if ((f.startTime == av_Nopts_Value) or not f.accurateSeek): 0 else: tsoffset, f.recordingTime, addr(lastFilter), addr(padIdx), name)
+  result = insertTrim(if (f.startTime == 0 or f.accurateSeek == 0): 0'i64 else: tsoffset, f.recordingTime, lastFilter, padIdx, name)
   if result < 0:
     return result
-  result = avfilterLink(lastFilter, 0, `in`.filterCtx, `in`.padIdx)
+  result = avfilterLink(lastFilter, 0, i.filterCtx, i.padIdx)
   if result < 0:
     return result
   return 0
 
 
-proc configureInputFilter*(fg: ptr FilterGraph; ifilter: ptr InputFilter; i: ptr AVFilterInOut): cint =
+proc configureInputFilter*(fg: var FilterGraph; ifilter: var InputFilter; i: var AVFilterInOut): cint =
   if ifilter.ist.dec == nil:
     echo("No decoder for stream #%d:%d, filtering impossible\n",ifilter.ist.fileIndex, ifilter.ist.st.index)
     return AVERROR_DECODER_NOT_FOUND.ord
@@ -8360,7 +8521,608 @@ proc configureInputFilter*(fg: ptr FilterGraph; ifilter: ptr InputFilter; i: ptr
   else:
     discard
 
-proc configureOutputFilter*(fg: ptr FilterGraph; ofilter: ptr OutputFilter; o: ptr AVFilterInOut): cint =
+proc avfilterGraphSetAutoConvert*(graph: var AVFilterGraph; flags: cint) =
+  graph.disableAutoConvert = flags
+
+const
+  AVFILTER_AUTO_CONVERT_ALL* = 0 ## *< all automatic conversions enabled
+  AVFILTER_AUTO_CONVERT_NONE* = -1 ## *< all automatic conversions disabled
+
+
+
+proc avGetPaddedBitsPerPixel*(pixdesc: AVPixFmtDescriptor): int =
+  var  bits = 0
+  var log2Pixels = pixdesc.log2ChromaW + pixdesc.log2ChromaH
+  var steps: array[4, cint]
+  for c in 0..<pixdesc.nbComponents.int:
+    var comp = pixdesc.comp[c]
+    var s = if c == 1 or c == 2: 0 else: log2Pixels.int
+    steps[comp.plane] = cint comp.step shl s
+  for c in 0..<4:
+    inc(bits, steps[c])
+  if (pixdesc.flags and AV_PIX_FMT_FLAG_BITSTREAM) == 0:
+    bits = bits * 8
+  return bits shr log2Pixels
+
+proc getPixFmtDepth*(min: var int; max: var int; pixFmt: AVPixelFormat): cint =
+  var desc = avPixFmtDescGet(pixFmt.ord)
+  var i: cint
+  if desc == nil or  desc.nbComponents == 0:
+    max = 0
+    min = 0
+    return -(EINVAL)
+  min = int.high
+  max = -int.high
+  for i in 0..<desc.nbComponents:
+    min = min(desc.comp[i].depth, min)
+    max = max(desc.comp[i].depth, max)
+  return 0
+
+const
+  FF_COLOR_NA* = -1
+  FF_COLOR_RGB* = 0
+  FF_COLOR_GRAY* = 1
+  FF_COLOR_YUV* = 2
+  FF_COLOR_YUV_JPEG* = 3
+  FF_COLOR_XYZ* = 4
+
+
+
+proc getColorType*(desc: AVPixFmtDescriptor): cint =
+  if (desc.flags and AV_PIX_FMT_FLAG_PAL) != 0:
+    return FF_COLOR_RGB
+  if desc.nbComponents == 1 or desc.nbComponents == 2:
+    return FF_COLOR_GRAY
+  if desc.name.startsWith "yuvj":
+    return FF_COLOR_YUV_JPEG
+  if desc.name.startsWith "xyz":
+    return FF_COLOR_XYZ
+  if (desc.flags and AV_PIX_FMT_FLAG_RGB) != 0:
+    return FF_COLOR_RGB
+  if desc.nbComponents == 0:
+    return FF_COLOR_NA
+  return FF_COLOR_YUV
+
+
+const
+  FF_LOSS_RESOLUTION* = 0x00000001
+  FF_LOSS_DEPTH* = 0x00000002
+  FF_LOSS_COLORSPACE* = 0x00000004
+  FF_LOSS_ALPHA* = 0x00000008
+  FF_LOSS_COLORQUANT* = 0x00000010
+  FF_LOSS_CHROMA* = 0x00000020
+
+const
+  AV_PIX_FMT_FLAG_ALPHA* = (1 shl 7)
+  AV_PIX_FMT_FLAG_BAYER* = (1 shl 8)
+  AV_PIX_FMT_FLAG_FLOAT* = (1 shl 9)
+
+
+template pixdescHasAlpha*(pixdesc: AVPixFmtDescriptor): bool =
+  bool (pixdesc).flags and AV_PIX_FMT_FLAG_ALPHA.ord
+
+
+proc getPixFmtScore*(dstPixFmt: AVPixelFormat; srcPixFmt: AVPixelFormat; lossp: var cint; consider: int): cint =
+  var srcDesc = avPixFmtDescGet(srcPixFmt.ord)
+  var dstDesc = avPixFmtDescGet(dstPixFmt.ord)
+  var
+    srcColor: cint
+    dstColor: cint
+  var
+    srcMinDepth: int
+    srcMaxDepth: int
+    dstMinDepth: int
+    dstMaxDepth: int
+  var
+    result: cint
+    i: cint
+    nbComponents: int
+  var score = cint.high - 1
+  if srcDesc == nil or dstDesc == nil:
+    return -4
+  if (srcDesc.flags and AV_PIX_FMT_FLAG_HWACCEL) != 0 or (dstDesc.flags and AV_PIX_FMT_FLAG_HWACCEL) != 0:
+    if dstPixFmt == srcPixFmt:
+      return -1
+    else:
+      return -2
+  var loss:cint = 0
+  lossp = 0
+  if dstPixFmt == srcPixFmt:
+    return cint.high
+  result = getPixFmtDepth(srcMinDepth, srcMaxDepth, srcPixFmt)
+  if result < 0:
+    return -3
+  result = getPixFmtDepth(dstMinDepth, dstMaxDepth, dstPixFmt)
+  if result < 0:
+    return -3
+  srcColor = getColorType(srcDesc)
+  dstColor = getColorType(dstDesc)
+  if dstPixFmt == AV_PIX_FMT_PAL8:
+    nbComponents = min(srcDesc.nbComponents, 4)
+  else:
+    nbComponents = min(srcDesc.nbComponents, dstDesc.nbComponents)
+  i = 0
+  while i < nbComponents:
+    var depthMinus1 = if (dstPixFmt == AV_PIX_FMT_PAL8): 7 div nbComponents else: (dstDesc.comp[i].depth - 1)
+    if srcDesc.comp[i].depth - 1 > depthMinus1 and (consider and FF_LOSS_DEPTH) != 0:
+      loss = loss or FF_LOSS_DEPTH
+      dec(score, 65536 shr depthMinus1)
+    inc(i)
+  if (consider and FF_LOSS_RESOLUTION) != 0:
+    if dstDesc.log2ChromaW > srcDesc.log2ChromaW:
+      loss = loss or FF_LOSS_RESOLUTION
+      dec(score, 256 shl dstDesc.log2ChromaW)
+    if dstDesc.log2ChromaH > srcDesc.log2ChromaH:
+      loss = loss or FF_LOSS_RESOLUTION
+      dec(score, 256 shl dstDesc.log2ChromaH)
+    if dstDesc.log2ChromaW == 1 and srcDesc.log2ChromaW == 0 and
+        dstDesc.log2ChromaH == 1 and srcDesc.log2ChromaH == 0:
+      inc(score, 512)
+  if (consider and FF_LOSS_COLORSPACE) != 0:
+    case dstColor
+    of FF_COLOR_RGB:
+      if srcColor != FF_COLOR_RGB and srcColor != FF_COLOR_GRAY:
+        loss = loss or FF_LOSS_COLORSPACE
+    of FF_COLOR_GRAY:
+      if srcColor != FF_COLOR_GRAY:
+        loss = loss or FF_LOSS_COLORSPACE
+    of FF_COLOR_YUV:
+      if srcColor != FF_COLOR_YUV:
+        loss = loss or FF_LOSS_COLORSPACE
+    of FF_COLOR_YUV_Jpeg:
+      if srcColor != FF_COLOR_YUV_Jpeg and srcColor != FF_COLOR_YUV and
+          srcColor != FF_COLOR_GRAY:
+        loss = loss or FF_LOSS_COLORSPACE
+    else:                     ##  fail safe test
+      if srcColor != dstColor:
+        loss = loss or FF_LOSS_COLORSPACE
+  if (loss and FF_LOSS_COLORSPACE) != 0:
+    dec(score, (nbComponents * 65536) shr
+        min(dstDesc.comp[0].depth - 1, srcDesc.comp[0].depth - 1))
+  if dstColor == FF_COLOR_GRAY and srcColor != FF_COLOR_GRAY and (consider and FF_LOSS_CHROMA) != 0:
+    loss = loss or FF_LOSS_CHROMA
+    dec(score, 2 * 65536)
+  if not pixdescHasAlpha(dstDesc) and (pixdescHasAlpha(srcDesc) and (consider and FF_LOSS_ALPHA) != 0):
+    loss = loss or FF_LOSS_ALPHA
+    dec(score, 65536)
+  if dstPixFmt == AV_PIX_FMT_PAL8 and (consider and FF_LOSS_COLORQUANT) != 0 and (srcPixFmt != AV_PIX_FMT_PAL8 and (srcColor != FF_COLOR_GRAY or (pixdescHasAlpha(srcDesc) and (consider and FF_LOSS_ALPHA) != 0))):
+    loss = loss or FF_LOSS_COLORQUANT
+    dec(score, 65536)
+  lossp = loss
+  return score
+
+proc avGetPixFmtLoss*(dstPixFmt: AVPixelFormat; srcPixFmt: AVPixelFormat; hasAlpha: cint): cint =
+  var loss: cint
+  result = cint getPixFmtScore(dstPixFmt, srcPixFmt, loss, if hasAlpha != 0: not 0 else: not FF_LOSS_ALPHA)
+  if result < 0:
+    return result
+  return loss
+
+proc avFindBestPixFmtOf2*(dstPixFmt1: AVPixelFormat; dstPixFmt2: AVPixelFormat;
+                         srcPixFmt: AVPixelFormat; hasAlpha: cint; lossPtr: ptr cint): AVPixelFormat =
+  var dstPixFmt: AVPixelFormat
+  var
+    loss1: cint
+    loss2: cint
+    lossMask: cint
+  var desc1 = avPixFmtDescGet(dstPixFmt1.ord)
+  var desc2 = avPixFmtDescGet(dstPixFmt2.ord)
+  var
+    score1: cint
+    score2: cint
+  if desc1 == nil:
+    dstPixFmt = dstPixFmt2
+  elif desc2 == nil:
+    dstPixFmt = dstPixFmt1
+  else:
+    lossMask = if lossPtr != nil: not lossPtr[] else: not 0
+    ##  use loss mask if provided
+    if hasAlpha == 0:
+      lossMask = lossMask and not FF_LOSS_ALPHA
+    score1 = getPixFmtScore(dstPixFmt1, srcPixFmt, loss1, lossMask)
+    score2 = getPixFmtScore(dstPixFmt2, srcPixFmt, loss2, lossMask)
+    if score1 == score2:
+      if avGetPaddedBitsPerPixel(desc2) != avGetPaddedBitsPerPixel(desc1):
+        dstPixFmt = if avGetPaddedBitsPerPixel(desc2) <
+            avGetPaddedBitsPerPixel(desc1): dstPixFmt2 else: dstPixFmt1
+      else:
+        dstPixFmt = if desc2.nbComponents < desc1.nbComponents: dstPixFmt2 else: dstPixFmt1
+    else:
+      dstPixFmt = if score1 < score2: dstPixFmt2 else: dstPixFmt1
+  if lossPtr != nil:
+    lossPtr[] = avGetPixFmtLoss(dstPixFmt, srcPixFmt, hasAlpha)
+  return dstPixFmt
+
+proc avcodecFindBestPixFmtOf2*(dstPixFmt1: AVPixelFormat;
+                              dstPixFmt2: AVPixelFormat; srcPixFmt: AVPixelFormat;
+                              hasAlpha: cint; lossPtr: ptr cint): AVPixelFormat =
+  return avFindBestPixFmtOf2(dstPixFmt1, dstPixFmt2, srcPixFmt, hasAlpha, lossPtr)
+
+
+
+
+
+proc getComplianceUnofficialPixFmts*(codecId: AVCodecID; defaultFormats: seq[AVPixelFormat]): seq[AVPixelFormat] =
+  var mjpegFormats: seq[AVPixelFormat] = @[AV_PIX_FMT_YUVJ420P,AV_PIX_FMT_YUVJ422P, AV_PIX_FMT_YUVJ444P, AV_PIX_FMT_YUV420P,AV_PIX_FMT_YUV422P, AV_PIX_FMT_YUV444P, AV_PIX_FMT_NONE]
+  var ljpegFormats: seq[AVPixelFormat] = @[AV_PIX_FMT_BGR24,AV_PIX_FMT_BGRA, AV_PIX_FMT_BGR0, AV_PIX_FMT_YUVJ420P, AV_PIX_FMT_YUVJ444P,AV_PIX_FMT_YUVJ422P, AV_PIX_FMT_YUV420P, AV_PIX_FMT_YUV444P,AV_PIX_FMT_YUV422P, AV_PIX_FMT_NONE]
+  if codecId == AV_CODEC_ID_MJPEG:
+    return mjpegFormats
+  elif codecId == AV_CODEC_ID_LJPEG:
+    return ljpegFormats
+  else:
+    return defaultFormats
+
+const
+  FF_COMPLIANCE_VERY_STRICT* = 2
+  FF_COMPLIANCE_STRICT* = 1
+  FF_COMPLIANCE_NORMAL* = 0
+  FF_COMPLIANCE_UNOFFICIAL* = -1
+
+
+proc choosePixelFmt*(st: AVStream; encCtx: AVCodecContext; codec: AVCodec; target: AVPixelFormat): AVPixelFormat =
+  if codec.pixFmts.len != 0:
+    var pixFmts = codec.pixFmts
+    var desc = avPixFmtDescGet(target.ord)
+    ## FIXME: This should check for AV_PIX_FMT_FLAG_ALPHA after PAL8 pixel format without alpha is implemented
+    var hasAlpha = if desc != nil: cint desc.nbComponents mod 2 == 0 else: 0
+    var best: AVPixelFormat = AV_PIX_FMT_NONE
+    if encCtx.strictStdCompliance <= FF_COMPLIANCE_UNOFFICIAL:
+      pixFmts = getComplianceUnofficialPixFmts(encCtx.codecId, pixFmts)
+    for p in pixFmts:
+      best = avcodecFindBestPixFmtOf2(best, p, target, hasAlpha, nil)
+      if p == target:
+        if target != AV_PIX_FMT_NONE:
+          return p
+        else:
+          return best
+
+
+proc choosePixFmts*(ofilter: OutputFilter): string =
+  var ost = ofilter.ost
+  var strictDict = ost.encoderOpts["strict"]
+  if strictDict != "":
+    discard avOptSet(ost.encCtx.addr, "strict", strictDict, 0)
+  if ost.keepPixFmt != 0:
+    avfilterGraphSetAutoConvert(ofilter.graph.graph, AVFILTER_AUTO_CONVERT_NONE)
+    if ost.encCtx.pixFmt == AV_PIX_FMT_NONE:
+      return ""
+    return avGetPixFmtName(ost.encCtx.pixFmt.ord)
+  if ost.encCtx.pixFmt != AV_PIX_FMT_NONE:
+    return avGetPixFmtName choosePixelFmt(ost.st, ost.encCtx, ost.enc,ost.encCtx.pixFmt).ord
+  elif ost.enc != nil and ost.enc.pixFmts.len != 0:
+    var pixFmts = ost.enc.pixFmts
+    if ost.encCtx.strictStdCompliance <= FF_COMPLIANCE_UNOFFICIAL:
+      pixFmts = getComplianceUnofficialPixFmts(ost.encCtx.codecId, pixFmts)
+    for p in pixFmts:
+      result &= fmt"{avGetPixFmtName(p.ord)}|"
+    return result
+  else:
+    return ""
+
+
+proc configureOutputVideoFilter*(fg: FilterGraph; ofilter: OutputFilter; o: AVFilterInOut): cint =
+  var pixFmts: string
+  var ost = ofilter.ost
+  var outputFile = outputFiles[ost.fileIndex]
+  var lastFilter = o.filterCtx
+  var padIdx: cint = o.padIdx
+  var result: cint
+  var name = fmt"out_{ost.fileIndex}_{ost.index}"
+  result = avfilterGraphCreateFilter(ofilter.filter, avfilterGetByName("buffersink"), name, "", nil, fg.graph)
+  if result < 0:
+    return result
+  if (ofilter.width != 0 or ofilter.height != 0 ) and ofilter.ost.autoscale != 0:
+    var filter: AVFilterContext
+    var e: AVDictionaryEntry 
+    var args = fmt"{ofilter.width}:{ofilter.height}"
+    for k,v in ost.swsDict:
+      args &= fmt":{k}={v}"
+    name = fmt"scaler_out_{ost.fileIndex}_{ost.index}"
+    result = avfilterGraphCreateFilter(filter, avfilterGetByName("scale"),name, args, nil, fg.graph)
+    if result < 0:
+      return result
+    result = avfilterLink(lastFilter, padIdx, filter, 0)
+    if result < 0:
+      return result
+    lastFilter = filter
+    padIdx = 0
+  pixFmts = choosePixFmts(ofilter)
+  if pixFmts.len != 0:
+    var filter: AVFilterContext
+    name = fmt"format_out_{ost.fileIndex}_{ost.index}"
+    result = avfilterGraphCreateFilter(filter, avfilterGetByName("format"), "format", pixFmts, nil, fg.graph)
+    if result < 0:
+      return result
+    result = avfilterLink(lastFilter, padIdx, filter, 0)
+    if result < 0:
+      return result
+    lastFilter = filter
+    padIdx = 0
+  if (ost.frameRate.num and 0) != 0:
+    var fps: AVFilterContext
+    var args = fmt"fps={ost.frameRate.num}/{ost.frameRate.den}"
+    name = fmt"fps_out_{ost.fileIndex}_{ost.index}"
+    result = avfilterGraphCreateFilter(fps, avfilterGetByName("fps"), name, args, nil, fg.graph)
+    if result < 0:
+      return result
+    result = avfilterLink(lastFilter, padIdx, fps, 0)
+    if result < 0:
+      return result
+    lastFilter = fps
+    padIdx = 0
+  name = fmt"trim_out_{ost.fileIndex}_{ost.index}"
+  result = insertTrim(outputFile.startTime, outputFile.recordingTime, lastFilter, padIdx, name)
+  if result < 0:
+    return result
+  result = avfilterLink(lastFilter, padIdx, ofilter.filter, 0)
+  if result < 0:
+    return result
+  return 0
+
+proc chooseSampleFmts*(ofilter: OutputFilter): string =
+  if ofilter.format != AV_SAMPLE_FMT_NONE.ord:
+    result = avGetSampleFmtName(ofilter.format)
+    return 
+  elif ofilter.formats != nil:
+    var p = ofilter.formats
+    while p[] != AV_SAMPLE_FMT_NONE.ord:
+      var name = avGetSampleFmtName(p[])
+      result &= fmt"{name}|"
+      inc(p)
+    return result
+
+proc chooseSampleRates*(ofilter: OutputFilter): string =
+  if ofilter.sampleRate != 0:
+    result = $ofilter.sampleRate
+    return 
+  elif ofilter.sampleRates != nil:
+    var p: ptr cint
+    p = ofilter.sampleRates
+    while p[] != 0:
+      var name = $p[]
+      result &= fmt"{name}|"
+      inc(p)
+    return result
+
+proc chooseChannelLayouts*(ofilter: OutputFilter): string =
+  if ofilter.channelLayout != 0:
+    result = fmt"{ofilter.channelLayout:#X}"
+  elif ofilter.channelLayouts != nil:
+    var p: ptr uint64
+    p = ofilter.channelLayouts
+    while p[] != 0:
+      var name = fmt"{p[]:#X}"
+      result &= fmt"{name}|"
+      inc(p)
+    return result
+
+
+
+proc configureOutputAudioFilter*(fg: FilterGraph; ofilter: OutputFilter; o: AVFilterInOut): cint =
+  var ost = ofilter.ost
+  var outputFile = outputFiles[ost.fileIndex]
+  var codec = ost.encCtx
+  var lastFilter = o.filterCtx
+  var padIdx: cint = o.padIdx
+  var
+    sampleFmts: string
+    sampleRates: string
+    channelLayouts: string
+  var name = fmt"out_{ost.fileIndex}_{ost.index}"
+  result = avfilterGraphCreateFilter(ofilter.filter, avfilterGetByName("abuffersink"), name, "", nil, fg.graph)
+  if result < 0:
+    return result
+  result = avOptSetInt(ofilter.filter.addr, "all_channel_counts", 1, AV_OPT_SEARCH_CHILDREN)
+  if result < 0:
+    return result
+  template auto_Insert_Filter(optName, filterName, arg: untyped): void =
+    while true:
+      var filtCtx: AVFilterContext
+      echo(" is forwarded to lavfi similarly to -af ",filterName, "=%s.\n", arg)
+      result = avfilterGraphCreateFilter(filtCtx, avfilterGetByName(filterName), filterName, arg, nil, fg.graph)
+      if result < 0:
+        return result
+      result = avfilterLink(lastFilter, padIdx, filtCtx, 0)
+      if result < 0:
+        return result
+      lastFilter = filtCtx
+      padIdx = 0
+      break
+
+  if ost.audioChannelsMapped != 0:
+    var i: cint
+    var panBuf = fmt"{avGetDefaultChannelLayout(ost.audioChannelsMapped):#X}"
+    for i in 0..<ost.audioChannelsMapped:
+      if ost.audioChannelsMap[i] != -1:
+        panBuf &= fmt"|c{i}=c{ost.audioChannelsMap[i]}"
+    auto_Insert_Filter("-map_channel", "pan", panBuf)
+  if codec.channels != 0 and codec.channelLayout == 0:
+    codec.channelLayout = uint64 avGetDefaultChannelLayout(codec.channels)
+  sampleFmts = chooseSampleFmts(ofilter)
+  sampleRates = chooseSampleRates(ofilter)
+  channelLayouts = chooseChannelLayouts(ofilter)
+  if sampleFmts != "" or sampleRates != "" or channelLayouts != "":
+    var format: AVFilterContext
+    var args = "0"
+    if sampleFmts != "":
+      args &= fmt"sample_fmts={sampleFmts}:"
+    if sampleRates != "":
+      args &= fmt"sample_rates={sampleRates}:"
+    if channelLayouts != "":
+      args &= fmt"channel_layouts={channelLayouts}:"
+    var name = fmt"format_out_{ost.fileIndex}_{ost.index}"
+    result = avfilterGraphCreateFilter(format, avfilterGetByName("aformat"), name, args, nil, fg.graph)
+    if result < 0:
+      return result
+    result = avfilterLink(lastFilter, padIdx, format, 0)
+    if result < 0:
+      return result
+    lastFilter = format
+    padIdx = 0
+  if audioVolume != 256 :
+    var args = $(audioVolume div 256)
+    auto_Insert_Filter("-vol", "volume", args)
+  if ost.apad != "" and outputFile.shortest != 0:
+    var args: string
+    for i in 0..<outputFile.ctx.nbStreams:
+      if outputFile.ctx.streams[i].codecpar.codecType == AVMEDIA_TYPE_VIDEO:
+        if i < outputFile.ctx.nbStreams:
+          args = $ost.apad
+          auto_Insert_Filter("-apad", "apad", args)
+        break
+    
+  name = fmt"trim for output stream {ost.fileIndex}:{ost.index}"
+  result = insertTrim(outputFile.startTime, outputFile.recordingTime, lastFilter, padIdx, name)
+  if result < 0:
+    return result
+  result = avfilterLink(lastFilter, padIdx, ofilter.filter, 0)
+  if result < 0:
+    return result
+  return 0
+
+proc graphCheckValidity*(graph: AVFilterGraph; logCtx: pointer): cint =
+  var filt: AVFilterContext
+  var
+    i: cint
+    j: cint
+  i = 0
+  for i in 0..<graph.nbFilters:
+    var pad: ptr AVFilterPad
+    filt = graph.filters[i]
+    
+    for j in 0..<filt.nbInputs:
+      if filt.inputs[j] == nil or  filt.inputs[j].src == nil:
+        pad = addr(filt.inputPads[j])
+        echo("Input pad \"%s\" with type %s of the filter instance \"%s\" of %s not connected to any source\n", pad.name, avGetMediaTypeString(pad.t), filt.name,filt.filter.name)
+        return -(EINVAL)
+    for j in 0..<filt.nbOutputs:
+      if filt.outputs[j] == nil or filt.outputs[j].dst == nil:
+        pad = addr(filt.outputPads[j])
+        echo("Output pad \"%s\" with type %s of the filter instance \"%s\" of %s not connected to any destination\n",pad.name, avGetMediaTypeString(pad.t), filt.name,filt.filter.name)
+        return -(EINVAL)
+  return 0
+
+const AV_TIME_BASE_Q = initRational(1, 1000000)
+const FF_FILTER_FLAG_HWFRAME_AWARE = 1 shl 0
+proc avfilterConfigLinks*(filter: AVFilterContext): cint =
+  var result: cint
+  for i in 0..<filter.nbInputs:
+    var link: AVFilterLink = filter.inputs[i]
+    if link == nil:
+      continue
+    if link.src == nil or  link.dst == nil:
+      echo("Not all input and output are properly linked (%d).\n", i)
+      return -(EINVAL)
+    var inlink = if link.src.nbInputs != 0: link.src.inputs[0] else: nil
+    link.currentPtsUs = 0
+    link.currentPts = 0
+    case link.initState
+    of AVLINK_INIT:
+      continue
+    of AVLINK_STARTINIT:
+      echo( "circular filter chain detected\n")
+      return 0
+    of AVLINK_UNINIT:
+      link.initState = AVLINK_STARTINIT
+      result = avfilterConfigLinks(link.src)
+      if result < 0:
+        return result
+      if link.srcpad.configProps == nil:
+        if link.src.nbInputs != 1:
+          echo( "Source filters and filters with more than one input must set config_props() callbacks on all outputs\n")
+          return -(EINVAL)
+      result = link.srcpad.configProps(link)
+      if result < 0:
+        echo("Failed to configure output pad on %s", link.src.name)
+        return result
+      case link.t
+      of AVMEDIA_TYPE_VIDEO:
+        if link.timeBase.num == 0 and link.timeBase.den == 0:
+          link.timeBase = if inlink != nil: inlink.timeBase else: AV_TIME_BASE_Q
+        if link.sampleAspectRatio.num == 0 and link.sampleAspectRatio.den == 0:
+          link.sample_aspect_ratio = if inlink != nil: inlink.sample_aspect_ratio else: initRational(1,1)
+        if inlink != nil:
+          if link.frameRate.num == 0 and link.frameRate.den == 0:
+            link.frameRate = inlink.frameRate
+          if link.w == 0:
+            link.w = inlink.w
+          if link.h == 0:
+            link.h = inlink.h
+        elif link.w == 0 or link.h == 0:
+          echo( "Video source filters must set their output link\'s width and height\n")
+          return -(EINVAL)
+      of AVMEDIA_TYPE_AUDIO:
+        if inlink != nil:
+          if link.timeBase.num == 0 and link.timeBase.den == 0:
+            link.timeBase = inlink.timeBase
+        if link.timeBase.num == 0 and link.timeBase.den == 0:
+          link.time_base = initRational(1, link.sample_rate)
+      else:
+        discard
+      if link.src.nbInputs != 0 and link.src.inputs[0].hwFramesCtx != "" and (link.src.filter.flagsInternal and FF_FILTER_FLAG_HWFRAME_AWARE) == 0:
+        link.hwFramesCtx = link.src.inputs[0].hwFramesCtx
+      if link.dstpad.configProps != nil:
+        result = link.dstpad.configProps(link)
+        if result < 0:
+          echo( "Failed to configure input pad on %s\n",link.dst.name)
+          return result
+      link.initState = AVLINK_INIT
+  return 0
+
+
+proc graphConfigLinks*(graph: AVFilterGraph; logCtx: AVClass): cint =
+  var filt: AVFilterContext
+  for i in 0..<graph.nbFilters:
+    filt = graph.filters[i]
+    if filt.nbOutputs == 0:
+      result = avfilterConfigLinks(filt)
+      if result != 0:
+        return result
+  return 0
+
+proc graphCheckLinks*(graph: AVFilterGraph; logCtx: AVClass): cint =
+  var f: AVFilterContext
+  var l: AVFilterLink
+  for i in 0..<graph.nbFilters:
+    f = graph.filters[i]
+    for j in 0..<f.nbOutputs:
+      l = f.outputs[j]
+      if l.t == AVMEDIA_TYPE_VIDEO:
+        result = avImageCheckSize2(l.w, l.h, int64.high, l.format, 0, f.addr)
+        if result < 0:
+          return result
+  return 0
+
+proc graphConfigPointers*(graph: AVFilterGraph; logCtx: AVClass): cint =
+  var
+    sinkLinksCount: cint = 0
+    n: cint = 0
+  var f: AVFilterContext
+  for i in 0..<graph.nbFilters:
+    f = graph.filters[i]
+    for j in 0..<f.nbInputs:
+      f.inputs[j].graph = graph
+      f.inputs[j].ageIndex = -1
+    for j in 0..<f.nbOutputs:
+      f.outputs[j].graph = graph
+      f.outputs[j].ageIndex = -1
+    if f.nbOutputs == 0:
+      if f.nbInputs > int.high - sinkLinksCount:
+        return -(EINVAL)
+      inc(sinkLinksCount, f.nbInputs)
+  var sinks = newSeq[AVFilterLink](sinkLinksCount)
+  for i in 0..<graph.nbFilters:
+    f = graph.filters[i]
+    if f.nbOutputs == 0:
+      for j in 0..<f.nbInputs:
+        sinks[n] = f.inputs[j]
+        f.inputs[j].ageIndex = n ; n.inc
+  graph.sinkLinks = sinks
+  graph.sinkLinksCount = sinkLinksCount
+  return 0
+
+
+proc configureOutputFilter*(fg: FilterGraph; ofilter: OutputFilter; o:  AVFilterInOut): cint =
   if ofilter.ost == nil:
     echo("Filter %s has an unconnected output\n", ofilter.name)
     quit(1)
@@ -8372,24 +9134,948 @@ proc configureOutputFilter*(fg: ptr FilterGraph; ofilter: ptr OutputFilter; o: p
   else:
     discard
 
-proc avfilterGraphSetAutoConvert*(graph: ptr AVFilterGraph; flags: cuint) =
+proc avfilterGraphSetAutoConvert*(graph: AVFilterGraph; flags: cint) =
   graph.disableAutoConvert = flags
 
-proc avfilterGraphConfig*(graphctx: ptr AVFilterGraph; logCtx: pointer): cint =
+proc formatsDeclared*(f: AVFilterContext): cint =
+  for i in 0..<f.nbInputs:
+    if f.inputs[i].outcfg.formats.len == 0:
+      return 0
+    if f.inputs[i].t == AVMEDIA_TYPE_AUDIO and not (f.inputs[i].outcfg.samplerates.len == 0 and f.inputs[i].outcfg.channelLayouts.len == 0):
+      return 0
+  for i in 0..<f.nbOutputs:
+    if f.outputs[i].incfg.formats.len == 0:
+      return 0
+    if f.outputs[i].t == AVMEDIA_TYPE_AUDIO and not (f.outputs[i].incfg.samplerates.len == 0 and f.outputs[i].incfg.channelLayouts.len == 0):
+      return 0
+  return 1
+
+proc ffSetCommonFormats*(ctx: AVFilterContext; formats: AVFilterFormats): cint =
+  var
+    count: cint = 0
+  for i in 0..<ctx.nbInputs:
+    if ctx.inputs[i] and not ctx.inputs[i].outcfg.formats:
+      var result: cint = ffFormatsRef(formats, addr(ctx.inputs[i].outcfg.formats))
+      if result < 0:
+        return result
+      inc(count)
+  for i in 0..<ctx.nbOutputs:
+    if ctx.outputs[i] and not ctx.outputs[i].incfg.formats:
+      var result: cint = ffFormatsRef(formats, addr(ctx.outputs[i].incfg.formats))
+      if result < 0:
+        return result
+      inc(count)
+  if  count == 0:
+    ffFormatsUnref(addr(formats))
+  return 0
+
+proc filterQueryFormats*(ctx: ptr AVFilterContext): cint =
+  var
+    result: cint
+    i: cint
+  var formats: AVFilterFormats
+  var chlayouts: AVFilterChannelLayouts
+  var samplerates:  AVFilterFormats
+  var t: AVMediaType = 
+      if ctx.inputs and ctx.inputs[0]: 
+        ctx.inputs[0].t 
+        else: 
+          if ctx.outputs and ctx.outputs[0]: 
+            ctx.outputs[0].t 
+          else: AVMEDIA_TYPE_VIDEO
+  result = ctx.filter.queryFormats(ctx)
+  if result < 0:
+    if result != -(EAGAIN):
+      echo(ctx, av_Log_Error, "Query format failed for \'%s\': %s\n", ctx.name, avErr2str(result))
+    return result
+  result = filterCheckFormats(ctx)
+  if result < 0:
+    return result
+  for i in 0..<ctx.nbInputs:
+    sanitizeChannelLayouts(ctx, ctx.inputs[i].outcfg.channelLayouts)
+  for i in 0..<ctx.nbOutputs:
+    sanitizeChannelLayouts(ctx, ctx.outputs[i].incfg.channelLayouts)
+  formats = ffAllFormats(t)
+  result = ffSetCommonFormats(ctx, formats)
+  if result < 0:
+    return result
+  if t == AVMEDIA_TYPE_AUDIO:
+    samplerates = ffAllSamplerates()
+    result = ffSetCommonSamplerates(ctx, samplerates)
+    if result < 0:
+      return result
+    chlayouts = ffAllChannelLayouts()
+    result = ffSetCommonChannelLayouts(ctx, chlayouts)
+    if result < 0:
+      return result
+  return 0
+
+
+
+proc ffDefaultQueryFormats*(ctx: ptr AVFilterContext): cint =
+  var t: AVMediaType = if ctx.nbInputs != 0: 
+      ctx.inputs[0].t 
+    else: 
+      if ctx.nbOutputs != 0: 
+        ctx.outputs[0].t 
+      else: 
+        AVMEDIA_TYPE_VIDEO
+  result = ffSetCommonFormats(ctx, ffAllFormats(t))
+  if result < 0:
+    return result
+  if t == AVMEDIA_TYPE_AUDIO:
+    result = ffSetCommonChannelLayouts(ctx, ffAllChannelCounts())
+    if result < 0:
+      return result
+    result = ffSetCommonSamplerates(ctx, ffAllSamplerates())
+    if result < 0:
+      return result
+  return 0
+
+proc mergeFormatsInternal*(a: AVFilterFormats; b: AVFilterFormats; t: AVMediaType; check: cint): cint =
+  var
+    i: cint
+    j: cint
+  var
+    alpha1: cint = 0
+    alpha2: cint = 0
+  var
+    chroma1: cint = 0
+    chroma2: cint = 0
+  if a == b:
+    return 1
+  if t == AVMEDIA_TYPE_VIDEO:
+    i = 0
+    while i < a.nbFormats:
+      j = 0
+      while j < b.nbFormats:
+        var adesc = avPixFmtDescGet(a.formats[i])
+        var bdesc = avPixFmtDescGet(b.formats[j])
+        alpha2 = alpha2 or adesc.flags and bdesc.flags and av_Pix_Fmt_Flag_Alpha
+        chroma2 = chroma2 or adesc.nbComponents > 1 and bdesc.nbComponents > 1
+        if a.formats[i] == b.formats[j]:
+          alpha1 = alpha1 or adesc.flags and av_Pix_Fmt_Flag_Alpha
+          chroma1 = chroma1 or adesc.nbComponents > 1
+        inc(j)
+      inc(i)
+  if alpha2 > alpha1 or chroma2 > chroma1:
+    return 0
+  while true:
+    var
+      i: cint
+      j: cint
+      k: cint = 0
+      skip: cint = 0
+    if 0:
+      if not a.nbFormats or not b.nbFormats:
+        if check:
+          return 1
+        if not a.nbFormats:
+          ##  FFSWAP(AVFilterFormats *, a, b);
+        skip = 1
+    if not skip:
+      i = 0
+      while i < a.nbFormats:
+        j = 0
+        while j < b.nbFormats:
+          if a.formats[i] == b.formats[j]:
+            if check:
+              return 1
+            a.formats[inc(k)] = a.formats[i]
+            break
+          inc(j)
+        inc(i)
+      if not k:
+        return 0
+      avAssert2(not check)
+      a.nbFormats = k
+    while true:
+      var tmp: ptr ptr ptr AVFilterFormats
+      var i: cint
+      if not (tmp = avReallocArray(a.refs, a.refcount + b.refcount, sizeof((tmp[])))):
+        return -(enomem)
+      a.refs = tmp
+      i = 0
+      while i < b.refcount:
+        a.refs[a.refcount] = b.refs[i]
+        a.refs[inc(a.refcount)][] = a
+        inc(i)
+      avFreep(addr(b.refs))
+      avFreep(addr(b.formats))
+      avFreep(addr(b))
+      if not 0:
+        break
+    if not 0:
+      break
+  return 1
+
+proc ffCanMergeFormats*(a: ptr AVFilterFormats; b: ptr AVFilterFormats;
+                       t: AVMediaType): cint =
+  return mergeFormatsInternal(cast[ptr AVFilterFormats](a),
+                             cast[ptr AVFilterFormats](b), t, 1)
+
+proc mergeSampleratesInternal*(a: ptr AVFilterFormats; b: ptr AVFilterFormats;
+                              check: cint): cint =
+  if a == b:
+    return 1
+  while true:
+    var
+      i: cint
+      j: cint
+      k: cint = 0
+      skip: cint = 0
+    if 1:
+      if not a.nbFormats or not b.nbFormats:
+        if check:
+          return 1
+        if not a.nbFormats:
+          ##  FFSWAP(AVFilterFormats *, a, b);
+        skip = 1
+    if not skip:
+      i = 0
+      while i < a.nbFormats:
+        j = 0
+        while j < b.nbFormats:
+          if a.formats[i] == b.formats[j]:
+            if check:
+              return 1
+            a.formats[inc(k)] = a.formats[i]
+            break
+          inc(j)
+        inc(i)
+      if not k:
+        return 0
+      avAssert2(not check)
+      a.nbFormats = k
+    while true:
+      var tmp: ptr ptr ptr AVFilterFormats
+      var i: cint
+      if not (tmp = avReallocArray(a.refs, a.refcount + b.refcount, sizeof((tmp[])))):
+        return -(enomem)
+      a.refs = tmp
+      i = 0
+      while i < b.refcount:
+        a.refs[a.refcount] = b.refs[i]
+        a.refs[inc(a.refcount)][] = a
+        inc(i)
+      avFreep(addr(b.refs))
+      avFreep(addr(b.formats))
+      avFreep(addr(b))
+      if not 0:
+        break
+    if not 0:
+      break
+  return 1
+
+proc ffCanMergeSamplerates*(a: ptr AVFilterFormats; b: ptr AVFilterFormats): cint =
+  return mergeSampleratesInternal(cast[ptr AVFilterFormats](a),
+                                 cast[ptr AVFilterFormats](b), 1)
+
+proc ffMergeChannelLayouts*(a: ptr AVFilterChannelLayouts;
+                           b: ptr AVFilterChannelLayouts): cint =
+  var channelLayouts: ptr uint64T
+  var aAll: cuint = a.allLayouts + a.allCounts
+  var bAll: cuint = b.allLayouts + b.allCounts
+  var
+    retMax: cint
+    retNb: cint = 0
+    i: cint
+    j: cint
+    round: cint
+  avAssert2(a.refcount and b.refcount)
+  if a == b:
+    return 1
+  if aAll < bAll:
+    ##  FFSWAP(AVFilterChannelLayouts *, a, b);
+    ffswap(unsigned, aAll, bAll)
+  if aAll:
+    if aAll == 1 and not bAll:
+      i = j = 0
+      while i < b.nbChannelLayouts:
+        if known(b.channelLayouts[i]):
+          b.channelLayouts[inc(j)] = b.channelLayouts[i]
+        inc(i)
+      if not j:
+        return 0
+      b.nbChannelLayouts = j
+    while true:
+      var tmp: ptr ptr ptr AVFilterChannelLayouts
+      var i: cint
+      if not (tmp = avReallocArray(b.refs, b.refcount + a.refcount, sizeof((tmp[])))):
+        return -(enomem)
+      b.refs = tmp
+      i = 0
+      while i < a.refcount:
+        b.refs[b.refcount] = a.refs[i]
+        b.refs[inc(b.refcount)][] = b
+        inc(i)
+      avFreep(addr(a.refs))
+      avFreep(addr(a.channelLayouts))
+      avFreep(addr(a))
+      if not 0:
+        break
+    return 1
+  retMax = a.nbChannelLayouts + b.nbChannelLayouts
+  if not (channelLayouts = avMallocArray(retMax, sizeof((channelLayouts[])))):
+    return -(enomem)
+  i = 0
+  while i < a.nbChannelLayouts:
+    if not known(a.channelLayouts[i]):
+      continue
+    j = 0
+    while j < b.nbChannelLayouts:
+      if a.channelLayouts[i] == b.channelLayouts[j]:
+        channelLayouts[inc(retNb)] = a.channelLayouts[i]
+        a.channelLayouts[i] = b.channelLayouts[j] = 0
+        break
+      inc(j)
+    inc(i)
+  round = 0
+  while round < 2:
+    i = 0
+    while i < a.nbChannelLayouts:
+      var
+        fmt: uint64T = a.channelLayouts[i]
+        bfmt: uint64T
+      if not fmt or not known(fmt):
+        continue
+      bfmt = ff_Count2layout(avGetChannelLayoutNbChannels(fmt))
+      j = 0
+      while j < b.nbChannelLayouts:
+        if b.channelLayouts[j] == bfmt:
+          channelLayouts[inc(retNb)] = a.channelLayouts[i]
+        inc(j)
+      inc(i)
+    ##  FFSWAP(AVFilterChannelLayouts *, a, b);
+    inc(round)
+  i = 0
+  while i < a.nbChannelLayouts:
+    if known(a.channelLayouts[i]):
+      continue
+    j = 0
+    while j < b.nbChannelLayouts:
+      if a.channelLayouts[i] == b.channelLayouts[j]:
+        channelLayouts[inc(retNb)] = a.channelLayouts[i]
+      inc(j)
+    inc(i)
+  if not retNb:
+    avFree(channelLayouts)
+    return 0
+  if a.refcount > b.refcount:
+    while true:
+      var tmp: ptr ptr ptr AVFilterChannelLayouts
+      var i: cint
+      if not (tmp = avReallocArray(b.refs, b.refcount + a.refcount, sizeof((tmp[])))):
+        avFree(channelLayouts)
+        return -(enomem)
+      b.refs = tmp
+      i = 0
+      while i < a.refcount:
+        b.refs[b.refcount] = a.refs[i]
+        b.refs[inc(b.refcount)][] = b
+        inc(i)
+      avFreep(addr(a.refs))
+      avFreep(addr(a.channelLayouts))
+      avFreep(addr(a))
+      if not 0:
+        break
+  avFreep(addr(b.channelLayouts))
+  b.channelLayouts = channelLayouts
+  b.nbChannelLayouts = retNb
+  return 1
+
+proc ffMergeSamplerates*(a: ptr AVFilterFormats; b: ptr AVFilterFormats): cint =
+  avAssert2(a.refcount and b.refcount)
+  return mergeSampleratesInternal(a, b, 0)
+
+proc ffMergeFormats*(a: ptr AVFilterFormats; b: ptr AVFilterFormats;
+                    t: AVMediaType): cint =
+  avAssert2(a.refcount and b.refcount)
+  return mergeFormatsInternal(a, b, t, 0)
+
+
+proc queryFormats*(graph: ptr AVFilterGraph; logCtx: ptr AVClass): cint =
+  var
+    i: cint
+    j: cint
+    result: cint
+  var
+    scalerCount: cint = 0
+    resamplerCount: cint = 0
+  var countQueried: cint = 0
+  var countMerged: cint = 0
+  var countAlreadyMerged: cint = 0
+  var countDelayed: cint = 0
+  i = 0
+  while i < graph.nbFilters:
+    var f = graph.filters[i]
+    if formatsDeclared(f) != 0:
+      continue
+    if f.filter.queryFormats:
+      result = filterQueryFormats(f)
+    else:
+      result = ffDefaultQueryFormats(f)
+    if result < 0 and result != -(EAGAIN):
+      return result
+    inc(countQueried, result >= 0)
+    inc(i)
+  i = 0
+  while i < graph.nbFilters:
+    var filter: ptr AVFilterContext = graph.filters[i]
+    j = 0
+    while j < filter.nbInputs:
+      var link: ptr AVFilterLink = filter.inputs[j]
+      var convertNeeded: cint = 0
+      if not link:
+        continue
+      if link.incfg.formats != link.outcfg.formats and link.incfg.formats and
+          link.outcfg.formats:
+        if not ffCanMergeFormats(link.incfg.formats, link.outcfg.formats,
+                               link.t):
+          convertNeeded = 1
+      if link.t == AVMEDIA_TYPE_AUDIO:
+        if link.incfg.samplerates != link.outcfg.samplerates and
+            link.incfg.samplerates and link.outcfg.samplerates:
+          if not ffCanMergeSamplerates(link.incfg.samplerates,
+                                     link.outcfg.samplerates):
+            convertNeeded = 1
+      if link.t == AVMEDIA_TYPE_AUDIO:
+        if not (link.incfg.channelLayouts and link.outcfg.channelLayouts):
+          inc(countDelayed)
+        elif link.incfg.channelLayouts == link.outcfg.channelLayouts:
+          inc(countAlreadyMerged)
+        elif not convertNeeded:
+          inc(countMerged)
+          if ((result = ffMergeChannelLayouts(link.incfg.channelLayouts,
+                                        link.outcfg.channelLayouts)) <= 0):
+            if result < 0:
+              return result
+            convertNeeded = 1
+        if not (link.incfg.samplerates and link.outcfg.samplerates):
+          inc(countDelayed)
+        elif link.incfg.samplerates == link.outcfg.samplerates:
+          inc(countAlreadyMerged)
+        elif not convertNeeded:
+          inc(countMerged)
+          if ((result = ffMergeSamplerates(link.incfg.samplerates,
+                                     link.outcfg.samplerates)) <= 0):
+            if result < 0:
+              return result
+            convertNeeded = 1
+      if not (link.incfg.formats and link.outcfg.formats):
+        inc(countDelayed)
+      elif link.incfg.formats == link.outcfg.formats:
+        inc(countAlreadyMerged)
+      elif not convertNeeded:
+        inc(countMerged)
+        if ((result = ffMergeFormats(link.incfg.formats, link.outcfg.formats,
+                               link.t)) <= 0):
+          if result < 0:
+            return result
+          convertNeeded = 1
+      if convertNeeded:
+        var convert: ptr AVFilterContext
+        var filter: ptr AVFilter
+        var
+          inlink: ptr AVFilterLink
+          outlink: ptr AVFilterLink
+        var instName: array[30, char]
+        if graph.disableAutoConvert:
+          echo(logCtx, av_Log_Error, "The filters \'%s\' and \'%s\' do not have a common format and automatic conversion is disabled.\n",
+                link.src.name, link.dst.name)
+          return -(einval)
+        case link.t
+        of AVMEDIA_TYPE_VIDEO:
+          if not (filter = avfilterGetByName("scale")):
+            echo(logCtx, av_Log_Error, "\'scale\' filter not present, cannot convert pixel formats.\n")
+            return -(einval)
+          snprintf(instName, sizeof((instName)), "auto_scaler_%d", inc(scalerCount))
+          if (result = avfilterGraphCreateFilter(addr(convert), filter, instName,
+              graph.scaleSwsOpts, nil, graph)) < 0:
+            return result
+        of AVMEDIA_TYPE_AUDIO:
+          if not (filter = avfilterGetByName("aresample")):
+            echo(logCtx, av_Log_Error, "\'aresample\' filter not present, cannot convert audio formats.\n")
+            return -(einval)
+          snprintf(instName, sizeof((instName)), "auto_resampler_%d",
+                   inc(resamplerCount))
+          if (result = avfilterGraphCreateFilter(addr(convert), filter, instName,
+              graph.aresampleSwrOpts, nil, graph)) < 0:
+            return result
+        else:
+          return -(einval)
+        if (result = avfilterInsertFilter(link, convert, 0, 0)) < 0:
+          return result
+        if (result = filterQueryFormats(convert)) < 0:
+          return result
+        inlink = convert.inputs[0]
+        outlink = convert.outputs[0]
+
+        if outlink.t == AVMEDIA_TYPE_AUDIO:
+          avAssert0(inlink.incfg.samplerates.refcount > 0)
+          avAssert0(inlink.outcfg.samplerates.refcount > 0)
+          avAssert0(outlink.incfg.samplerates.refcount > 0)
+          avAssert0(outlink.outcfg.samplerates.refcount > 0)
+          avAssert0(inlink.incfg.channelLayouts.refcount > 0)
+          avAssert0(inlink.outcfg.channelLayouts.refcount > 0)
+          avAssert0(outlink.incfg.channelLayouts.refcount > 0)
+          avAssert0(outlink.outcfg.channelLayouts.refcount > 0)
+        if ((result = ffMergeFormats(inlink.incfg.formats, inlink.outcfg.formats,
+                               inlink.t)) <= 0) or
+            ((result = ffMergeFormats(outlink.incfg.formats, outlink.outcfg.formats,
+                                 outlink.t)) <= 0) or
+            inlink.t == AVMEDIA_TYPE_AUDIO and
+            (((result = ffMergeSamplerates(inlink.incfg.samplerates,
+                                      inlink.outcfg.samplerates)) <= 0) or
+            ((result = ffMergeChannelLayouts(inlink.incfg.channelLayouts,
+                                        inlink.outcfg.channelLayouts)) <= 0)) or
+            outlink.t == AVMEDIA_TYPE_AUDIO and
+            (((result = ffMergeSamplerates(outlink.incfg.samplerates,
+                                      outlink.outcfg.samplerates)) <= 0) or
+            ((result = ffMergeChannelLayouts(outlink.incfg.channelLayouts,
+                                        outlink.outcfg.channelLayouts)) <= 0)):
+          if result < 0:
+            return result
+          echo(logCtx, av_Log_Error, "Impossible to convert between the formats supported by the filter \'%s\' and the filter \'%s\'\n",
+                link.src.name, link.dst.name)
+          return -(enosys)
+      inc(j)
+    inc(i)
+  echo(graph, av_Log_Debug,
+        "query_formats: %d queried, %d merged, %d already done, %d delayed\n",
+        countQueried, countMerged, countAlreadyMerged, countDelayed)
+  if countDelayed:
+    var bp: AVBPrint
+    if countQueried or countMerged:
+      return -(EAGAIN)
+    avBprintInit(addr(bp), 0, av_Bprint_Size_Automatic)
+    i = 0
+    while i < graph.nbFilters:
+      if not formatsDeclared(graph.filters[i]):
+        avBprintf(addr(bp), "%s%s", if bp.len: ", " else: "", graph.filters[i].name)
+      inc(i)
+    echo(graph, av_Log_Error, "The following filters could not choose their formats: %s\nConsider inserting the (a)format filter near their input or output.\n",
+          bp.str)
+    return -(eio)
+  return 0
+
+proc reduceFormatsOnFilter*(filter: ptr AVFilterContext): cint =
+  var
+    i: cint
+    j: cint
+    k: cint
+    result: cint = 0
+  while true:
+    i = 0
+    while i < filter.nbInputs:
+      var link: ptr AVFilterLink = filter.inputs[i]
+      var fmt: cint
+      if not link.outcfg.formats or link.outcfg.formats.nbFormats != 1:
+        continue
+      fmt = link.outcfg.formats.formats[0]
+      j = 0
+      while j < filter.nbOutputs:
+        var outLink: ptr AVFilterLink = filter.outputs[j]
+        var fmts: ptr AVFilterFormats
+        if link.t != outLink.t or outLink.incfg.formats.nbFormats == 1:
+          continue
+        fmts = outLink.incfg.formats
+        if not outLink.incfg.formats.nbFormats:
+          if (result = ffAddFormat(addr(outLink.incfg.formats), fmt)) < 0:
+            return result
+          result = 1
+          break
+        k = 0
+        while k < outLink.incfg.formats.nbFormats:
+          if fmts.formats[k] == fmt:
+            fmts.formats[0] = fmt
+            fmts.nbFormats = 1
+            result = 1
+            break
+          inc(k)
+        inc(j)
+      inc(i)
+    if not 0:
+      break
+  while true:
+    i = 0
+    while i < filter.nbInputs:
+      var link: ptr AVFilterLink = filter.inputs[i]
+      var fmt: cint
+      if not link.outcfg.samplerates or link.outcfg.samplerates.nbFormats != 1:
+        continue
+      fmt = link.outcfg.samplerates.formats[0]
+      j = 0
+      while j < filter.nbOutputs:
+        var outLink: ptr AVFilterLink = filter.outputs[j]
+        var fmts: ptr AVFilterFormats
+        if link.t != outLink.t or
+            outLink.incfg.samplerates.nbFormats == 1:
+          continue
+        fmts = outLink.incfg.samplerates
+        if not outLink.incfg.samplerates.nbFormats:
+          if (result = ffAddFormat(addr(outLink.incfg.samplerates), fmt)) < 0:
+            return result
+          result = 1
+          break
+        k = 0
+        while k < outLink.incfg.samplerates.nbFormats:
+          if fmts.formats[k] == fmt:
+            fmts.formats[0] = fmt
+            fmts.nbFormats = 1
+            result = 1
+            break
+          inc(k)
+        inc(j)
+      inc(i)
+    if not 0:
+      break
+  i = 0
+  while i < filter.nbInputs:
+    var inlink: ptr AVFilterLink = filter.inputs[i]
+    var fmt: uint64T
+    if not inlink.outcfg.channelLayouts or
+        inlink.outcfg.channelLayouts.nbChannelLayouts != 1:
+      continue
+    fmt = inlink.outcfg.channelLayouts.channelLayouts[0]
+    j = 0
+    while j < filter.nbOutputs:
+      var outlink: ptr AVFilterLink = filter.outputs[j]
+      var fmts: ptr AVFilterChannelLayouts
+      fmts = outlink.incfg.channelLayouts
+      if inlink.t != outlink.t or fmts.nbChannelLayouts == 1:
+        continue
+      if fmts.allLayouts and (not ff_Layout2count(fmt) or fmts.allCounts):
+        fmts.allLayouts = fmts.allCounts = 0
+        if ffAddChannelLayout(addr(outlink.incfg.channelLayouts), fmt) < 0:
+          result = 1
+        break
+      k = 0
+      while k < outlink.incfg.channelLayouts.nbChannelLayouts:
+        if fmts.channelLayouts[k] == fmt:
+          fmts.channelLayouts[0] = fmt
+          fmts.nbChannelLayouts = 1
+          result = 1
+          break
+        inc(k)
+      inc(j)
+    inc(i)
+  return result
+
+proc reduceFormats*(graph: ptr AVFilterGraph): cint =
+  var
+    i: cint
+    reduced: cint
+    result: cint
+  while true:
+    reduced = 0
+    i = 0
+    while i < graph.nbFilters:
+      if (result = reduceFormatsOnFilter(graph.filters[i])) < 0:
+        return result
+      reduced = reduced or result
+      inc(i)
+    if not reduced:
+      break
+  return 0
+
+proc swapSampleratesOnFilter*(filter: ptr AVFilterContext) =
+  var link: ptr AVFilterLink = nil
+  var sampleRate: cint
+  var
+    i: cint
+    j: cint
+  i = 0
+  while i < filter.nbInputs:
+    link = filter.inputs[i]
+    if link.t == AVMEDIA_TYPE_AUDIO and
+        link.outcfg.samplerates.nbFormats == 1:
+      break
+    inc(i)
+  if i == filter.nbInputs:
+    return
+  sampleRate = link.outcfg.samplerates.formats[0]
+  i = 0
+  while i < filter.nbOutputs:
+    var outlink: ptr AVFilterLink = filter.outputs[i]
+    var
+      bestIdx: cint
+      bestDiff: cint = int_Max
+    if outlink.t != AVMEDIA_TYPE_AUDIO or
+        outlink.incfg.samplerates.nbFormats < 2:
+      continue
+    j = 0
+    while j < outlink.incfg.samplerates.nbFormats:
+      var diff: cint = abs(sampleRate - outlink.incfg.samplerates.formats[j])
+      avAssert0(diff < int_Max)
+      ##  This would lead to the use of uninitialized best_diff but is only possible with invalid sample rates
+      if diff < bestDiff:
+        bestDiff = diff
+        bestIdx = j
+      inc(j)
+    ffswap(int, outlink.incfg.samplerates.formats[0],
+           outlink.incfg.samplerates.formats[bestIdx])
+    inc(i)
+
+proc swapSamplerates*(graph: ptr AVFilterGraph) =
+  var i: cint
+  i = 0
+  while i < graph.nbFilters:
+    swapSampleratesOnFilter(graph.filters[i])
+    inc(i)
+
+const
+  CH_CENTER_PAIR* = (av_Ch_Front_Left_Of_Center or av_Ch_Front_Right_Of_Center)
+  CH_FRONT_PAIR* = (av_Ch_Front_Left or av_Ch_Front_Right)
+  CH_STEREO_PAIR* = (av_Ch_Stereo_Left or av_Ch_Stereo_Right)
+  CH_WIDE_PAIR* = (av_Ch_Wide_Left or av_Ch_Wide_Right)
+  CH_SIDE_PAIR* = (av_Ch_Side_Left or av_Ch_Side_Right)
+  CH_DIRECT_PAIR* = (av_Ch_Surround_Direct_Left or av_Ch_Surround_Direct_Right)
+  CH_BACK_PAIR* = (av_Ch_Back_Left or av_Ch_Back_Right)
+
+##  allowable substitutions for channel pairs when comparing layouts,
+##  ordered by priority for both values
+
+var chSubst*: UncheckedArray[array[2, uint64T]] = [[ch_Front_Pair, ch_Center_Pair],
+    [ch_Front_Pair, ch_Wide_Pair], [ch_Front_Pair, av_Ch_Front_Center],
+    [ch_Center_Pair, ch_Front_Pair], [ch_Center_Pair, ch_Wide_Pair],
+    [ch_Center_Pair, av_Ch_Front_Center], [ch_Wide_Pair, ch_Front_Pair],
+    [ch_Wide_Pair, ch_Center_Pair], [ch_Wide_Pair, av_Ch_Front_Center],
+    [av_Ch_Front_Center, ch_Front_Pair], [av_Ch_Front_Center, ch_Center_Pair],
+    [av_Ch_Front_Center, ch_Wide_Pair], [ch_Side_Pair, ch_Direct_Pair],
+    [ch_Side_Pair, ch_Back_Pair], [ch_Side_Pair, av_Ch_Back_Center],
+    [ch_Back_Pair, ch_Direct_Pair], [ch_Back_Pair, ch_Side_Pair],
+    [ch_Back_Pair, av_Ch_Back_Center], [av_Ch_Back_Center, ch_Back_Pair],
+    [av_Ch_Back_Center, ch_Direct_Pair], [av_Ch_Back_Center, ch_Side_Pair]]
+
+proc swapChannelLayoutsOnFilter*(filter: ptr AVFilterContext) =
+  var link: ptr AVFilterLink = nil
+  var
+    i: cint
+    j: cint
+    k: cint
+  i = 0
+  while i < filter.nbInputs:
+    link = filter.inputs[i]
+    if link.t == AVMEDIA_TYPE_AUDIO and
+        link.outcfg.channelLayouts.nbChannelLayouts == 1:
+      break
+    inc(i)
+  if i == filter.nbInputs:
+    return
+  i = 0
+  while i < filter.nbOutputs:
+    var outlink: ptr AVFilterLink = filter.outputs[i]
+    var
+      bestIdx: cint = -1
+      bestScore: cint = int_Min
+      bestCountDiff: cint = int_Max
+    if outlink.t != AVMEDIA_TYPE_AUDIO or
+        outlink.incfg.channelLayouts.nbChannelLayouts < 2:
+      continue
+    j = 0
+    while j < outlink.incfg.channelLayouts.nbChannelLayouts:
+      var inChlayout: uint64T = link.outcfg.channelLayouts.channelLayouts[0]
+      var outChlayout: uint64T = outlink.incfg.channelLayouts.channelLayouts[j]
+      var inChannels: cint = avGetChannelLayoutNbChannels(inChlayout)
+      var outChannels: cint = avGetChannelLayoutNbChannels(outChlayout)
+      var countDiff: cint = outChannels - inChannels
+      var
+        matchedChannels: cint
+        extraChannels: cint
+      var score: cint = 100000
+      if ff_Layout2count(inChlayout) or ff_Layout2count(outChlayout):
+        ##  Compute score in case the input or output layout encodes
+        ##                    a channel count; in this case the score is not altered by
+        ##                    the computation afterwards, as in_chlayout and
+        ##                    out_chlayout have both been set to 0
+        if ff_Layout2count(inChlayout):
+          inChannels = ff_Layout2count(inChlayout)
+        if ff_Layout2count(outChlayout):
+          outChannels = ff_Layout2count(outChlayout)
+        dec(score, 10000 + ffabs(outChannels - inChannels) +
+            (if inChannels > outChannels: 10000 else: 0))
+        inChlayout = outChlayout = 0
+        ##  Let the remaining computation run, even if the score
+        ##                    value is not altered
+      k = 0
+      while k < ff_Array_Elems(chSubst):
+        var cmp0: uint64T = chSubst[k][0]
+        var cmp1: uint64T = chSubst[k][1]
+        if (inChlayout and cmp0) and (not (outChlayout and cmp0)) and
+            (outChlayout and cmp1) and (not (inChlayout and cmp1)):
+          inChlayout = inChlayout and not cmp0
+          outChlayout = outChlayout and not cmp1
+          ##  add score for channel match, minus a deduction for
+          ##                        having to do the substitution
+          inc(score, 10 * avGetChannelLayoutNbChannels(cmp1) - 2)
+        inc(k)
+      ##  no penalty for LFE channel mismatch
+      if (inChlayout and av_Ch_Low_Frequency) and
+          (outChlayout and av_Ch_Low_Frequency):
+        inc(score, 10)
+      inChlayout = inChlayout and not av_Ch_Low_Frequency
+      outChlayout = outChlayout and not av_Ch_Low_Frequency
+      matchedChannels = avGetChannelLayoutNbChannels(inChlayout and outChlayout)
+      extraChannels = avGetChannelLayoutNbChannels(
+          outChlayout and (not inChlayout))
+      inc(score, 10 * matchedChannels - 5 * extraChannels)
+      if score > bestScore or (countDiff < bestCountDiff and score == bestScore):
+        bestScore = score
+        bestIdx = j
+        bestCountDiff = countDiff
+      inc(j)
+    avAssert0(bestIdx >= 0)
+    ffswap(uint64T, outlink.incfg.channelLayouts.channelLayouts[0],
+           outlink.incfg.channelLayouts.channelLayouts[bestIdx])
+    inc(i)
+
+proc swapChannelLayouts*(graph: ptr AVFilterGraph) =
+  var i: cint
+  i = 0
+  while i < graph.nbFilters:
+    swapChannelLayoutsOnFilter(graph.filters[i])
+    inc(i)
+
+proc swapSampleFmtsOnFilter*(filter: ptr AVFilterContext) =
+  var link: ptr AVFilterLink = nil
+  var
+    format: cint
+    bps: cint
+  var
+    i: cint
+    j: cint
+  i = 0
+  while i < filter.nbInputs:
+    link = filter.inputs[i]
+    if link.t == AVMEDIA_TYPE_AUDIO and link.outcfg.formats.nbFormats == 1:
+      break
+    inc(i)
+  if i == filter.nbInputs:
+    return
+  format = link.outcfg.formats.formats[0]
+  bps = avGetBytesPerSample(format)
+  i = 0
+  while i < filter.nbOutputs:
+    var outlink: ptr AVFilterLink = filter.outputs[i]
+    var
+      bestIdx: cint = -1
+      bestScore: cint = int_Min
+    if outlink.t != AVMEDIA_TYPE_AUDIO or outlink.incfg.formats.nbFormats < 2:
+      continue
+    j = 0
+    while j < outlink.incfg.formats.nbFormats:
+      var outFormat: cint = outlink.incfg.formats.formats[j]
+      var outBps: cint = avGetBytesPerSample(outFormat)
+      var score: cint
+      if avGetPackedSampleFmt(outFormat) == format or
+          avGetPlanarSampleFmt(outFormat) == format:
+        bestIdx = j
+        break
+      if bps == 4 and outBps == 8:
+        bestIdx = j
+        break
+      score = -abs(outBps - bps)
+      if outBps >= bps:
+        inc(score, int_Max div 2)
+      if score > bestScore:
+        bestScore = score
+        bestIdx = j
+      inc(j)
+    avAssert0(bestIdx >= 0)
+    ffswap(int, outlink.incfg.formats.formats[0],
+           outlink.incfg.formats.formats[bestIdx])
+    inc(i)
+
+
+proc pickFormats*(graph: ptr AVFilterGraph): cint =
+  var
+    i: cint
+    j: cint
+    result: cint
+  var change: cint
+  while true:
+    change = 0
+    i = 0
+    while i < graph.nbFilters:
+      var filter: ptr AVFilterContext = graph.filters[i]
+      if filter.nbInputs:
+        j = 0
+        while j < filter.nbInputs:
+          if filter.inputs[j].incfg.formats and
+              filter.inputs[j].incfg.formats.nbFormats == 1:
+            if (result = pickFormat(filter.inputs[j], nil)) < 0:
+              return result
+            change = 1
+          inc(j)
+      if filter.nbOutputs:
+        j = 0
+        while j < filter.nbOutputs:
+          if filter.outputs[j].incfg.formats and
+              filter.outputs[j].incfg.formats.nbFormats == 1:
+            if (result = pickFormat(filter.outputs[j], nil)) < 0:
+              return result
+            change = 1
+          inc(j)
+      if filter.nbInputs and filter.nbOutputs and filter.inputs[0].format >= 0:
+        j = 0
+        while j < filter.nbOutputs:
+          if filter.outputs[j].format < 0:
+            if (result = pickFormat(filter.outputs[j], filter.inputs[0])) < 0:
+              return result
+            change = 1
+          inc(j)
+      inc(i)
+    if not change:
+      break
+  i = 0
+  while i < graph.nbFilters:
+    var filter: ptr AVFilterContext = graph.filters[i]
+    j = 0
+    while j < filter.nbInputs:
+      if (result = pickFormat(filter.inputs[j], nil)) < 0:
+        return result
+      inc(j)
+    j = 0
+    while j < filter.nbOutputs:
+      if (result = pickFormat(filter.outputs[j], nil)) < 0:
+        return result
+      inc(j)
+    inc(i)
+  return 0
+
+
+proc graphConfigFormats*(graph: ptr AVFilterGraph; logCtx: ptr AVClass): cint =
+  result = queryFormats(graph, logCtx)
+  while result == -(EAGAIN):
+    echo("query_formats not finished\n")
+  if result < 0:
+    return result
+  if (result = reduceFormats(graph)) < 0:
+    return result
+  swapSampleFmts(graph)
+  swapSamplerates(graph)
+  swapChannelLayouts(graph)
+  if (result = pickFormats(graph)) < 0:
+    return result
+  return 0
+
+
+proc avfilterGraphConfig*(graphctx: AVFilterGraph; logCtx: pointer): cint =
   result = graphCheckValidity(graphctx, logCtx)
-  if result:
+  if result != 0:
     return result
   result = graphConfigFormats(graphctx, logCtx)
-  if result:
+  if result != 0:
     return result
   result = graphConfigLinks(graphctx, logCtx)
-  if result:
+  if result != 0:
     return result
   result = graphCheckLinks(graphctx, logCtx)
-  if result:
+  if result != 0:
     return result
   result = graphConfigPointers(graphctx, logCtx)
-  if result:
+  if result != 0:
     return result
   return 0
 
@@ -8413,7 +10099,7 @@ proc avBuffersinkSetFrameSize*(ctx: AVFilterContext; frameSize: cint) =
 
 proc avFifoSize*(f: ptr AVFifoBuffer): auto = f.wndx - f.rndx
 
-proc avFifoGenericRead*(f: ptr AVFifoBuffer; dest: pointer; bufSize: cint;
+proc avFifoGenericRead*(f: AVFifoBuffer; dest: pointer; bufSize: cint;
                        fn: proc (a1: pointer; a2: pointer; a3: cint)): cint =
   while true:
     var len: cint = min(f.e - f.rptr, bufSize)
@@ -8421,7 +10107,7 @@ proc avFifoGenericRead*(f: ptr AVFifoBuffer; dest: pointer; bufSize: cint;
       fn(dest, f.rptr, len)
     else:
       copyMem(dest, f.rptr, len)
-      dest = cast[ptr uint8T](dest) + len
+      dest = cast[ptr uint8](dest) + len
     avFifoDrain(f, len)
     dec(bufSize, len)
     if not (bufSize > 0):
@@ -8440,13 +10126,52 @@ proc ffAvfilterLinkSetInStatus*(link: ptr AVFilterLink; status: cint; pts: int64
   filterUnblock(link.dst)
   ffFilterSetReady(link.dst, 200)
 
-proc avBuffersrcClose*(ctx: ptr AVFilterContext; pts: int64; flags: cuint): cint =
+type
+  ConcatIn*  = ref object
+    pts*: int64
+    nbFrames*: int64
+    eof*: cint
+
+  ConcatContext* = ref object
+    class*: ptr AVClass
+    nbStreams*: array[2, cint] ## *< number of out streams of each type
+    nbSegments*: cint
+    curIdx*: cint             ## *< index of the first input of current segment
+    deltaTs*: int64           ## *< timestamp to add to produce output timestamps
+    nbInActive*: cint         ## *< number of active inputs in current segment
+    unsafe*: cint
+    i*: ptr ConcatIn
+
+
+proc avRescale*(a: auto; b: auto; c: auto): auto =
+  return avRescaleRnd(a, b, c, AV_ROUND_NEAR_INF)
+
+
+proc pushFrame*(ctx: AVFilterContext; inNo: int; buf: var AVFrame): cint =
+  var cat = cast[ptr ConcatContext](ctx.priv)
+  var outNo = inNo mod ctx.nbOutputs.int
+  var inlink: AVFilterLink = ctx.inputs[inNo]
+  var outlink: AVFilterLink = ctx.outputs[outNo]
+  var i: ConcatIn = cat.i[inNo]
+  buf.pts = avRescaleQ(buf.pts, inlink.timeBase, outlink.timeBase)
+  i.pts = buf.pts
+  inc(i.nbFrames)
+  ##  add duration to input PTS
+  if inlink.sampleRate != 0:
+    inc(i.pts, avRescaleQ(buf.nbSamples, avMakeQ(1, inlink.sampleRate), outlink.timeBase))
+  elif i.nbFrames >= 2:       ##  use mean duration
+    i.pts = avRescale(i.pts, i.nbFrames, i.nbFrames - 1)
+  inc(buf.pts, cat.deltaTs)
+  return ffFilterFrame(outlink, buf)
+
+
+proc avBuffersrcClose*(ctx: ptr AVFilterContext; pts: int64; flags: cint): cint =
   var s = cast[ptr BufferSourceContext](ctx.priv)
   s.eof = 1
-  ffAvfilterLinkSetInStatus(ctx.outputs[0], averror_Eof, pts)
-  return if (flags and av_Buffersrc_Flag_Push): pushFrame(ctx.graph) else: 0
+  ffAvfilterLinkSetInStatus(ctx.outputs[0], AVERROR_EOF, pts)
+  return if (flags and av_Buffersrc_Flag_Push) != 0: pushFrame(ctx.graph) else: 0
 
-proc avBuffersrcAddFrameInternal*(ctx: ptr AVFilterContext; frame: ptr AVFrame; flags: cint): cint =
+proc avBuffersrcAddFrameInternal*(ctx: AVFilterContext; frame: AVFrame; flags: cint): cint =
   var s = cast[ptr BufferSourceContext](ctx.priv)
   var copy: ptr AVFrame
   var
@@ -8454,7 +10179,7 @@ proc avBuffersrcAddFrameInternal*(ctx: ptr AVFilterContext; frame: ptr AVFrame; 
     result: cint
   s.nbFailedRequests = 0
   if frame == nil:
-    return avBuffersrcClose(ctx, av_Nopts_Value, flags)
+    return avBuffersrcClose(ctx, 0, flags)
   if s.eof == 0:
     return -(EINVAL)
   refcounted = not not frame.buf[0]
@@ -8515,8 +10240,8 @@ proc sub2videoUpdate*(ist: ptr InputStream; heartbeatPts: int64; sub: ptr AVSubt
   if frame == nil:
     return
   if sub != nil:
-    pts = avRescaleQ(sub.pts + sub.startDisplayTime * 1000, av_Time_Base_Q, ist.st.timeBase)
-    endPts = avRescaleQ(sub.pts + sub.endDisplayTime * 1000, av_Time_Base_Q, ist.st.timeBase)
+    pts = avRescaleQ(sub.pts + sub.startDisplayTime * 1000, AV_TIME_BASE_Q, ist.st.timeBase)
+    endPts = avRescaleQ(sub.pts + sub.endDisplayTime * 1000, AV_TIME_BASE_Q, ist.st.timeBase)
     numRects = sub.numRects
   else:
     pts = if ist.sub2video.initialize != 0: heartbeatPts else: ist.sub2video.endPts
@@ -8578,7 +10303,7 @@ proc configureFiltergraph*(fg: var FilterGraph): cint =
       avOptSet(fg.graph, "threads", e.value, 0)
   else:
     fg.graph.nbThreads = filterComplexNbthreads
-  result = avfilterGraphParse2(fg.graph, graphDesc, addr(inputs), addr(outputs))
+  result = avfilterGraphParse2(fg.graph, graphDesc, inputs.addr, outputs.addr)
   if result < 0:
     return
   result = hwDeviceSetupForFilter(fg)
@@ -8617,7 +10342,7 @@ proc configureFiltergraph*(fg: var FilterGraph): cint =
     cur = cur.next
     inc(i)
   if autoConversionFilters == 0:
-    avfilterGraphSetAutoConvert(fg.graph, avfilter_Auto_Convert_None)
+    avfilterGraphSetAutoConvert(fg.graph, AVFILTER_AUTO_CONVERT_NONE)
   result = avfilterGraphConfig(fg.graph, nil)
   if result < 0:
     return
@@ -8644,7 +10369,7 @@ proc configureFiltergraph*(fg: var FilterGraph): cint =
   while i < fg.nbInputs:
     while avFifoSize(fg.inputs[i].frameQueue):
       var tmp: ptr AVFrame
-      avFifoGenericRead(fg.inputs[i].frameQueue, addr(tmp), sizeof((tmp)), nil)
+      avFifoGenericRead(fg.inputs[i].frameQueue, tmp.addr, sizeof((tmp)), nil)
       result = avBuffersrcAddFrame(fg.inputs[i].filter, tmp)
       if result < 0:
         return
@@ -8662,8 +10387,8 @@ proc configureFiltergraph*(fg: var FilterGraph): cint =
     if ist.sub2video.subQueue and ist.sub2video.frame:
       while avFifoSize(ist.sub2video.subQueue):
         var tmp: AVSubtitle
-        avFifoGenericRead(ist.sub2video.subQueue, addr(tmp), sizeof((tmp)), nil)
-        sub2videoUpdate(ist, int64Min, addr(tmp))
+        avFifoGenericRead(ist.sub2video.subQueue, tmp.addr, sizeof((tmp)), nil)
+        sub2videoUpdate(ist, int64.low, tmp.addr)
     inc(i)
   return 0
   cleanupFiltergraph(fg)
@@ -8707,7 +10432,7 @@ proc configureVideoFilters*(graph: var AVFilterGraph; vs: VideoState;vfilters: s
   result = avfilterGraphCreateFilter(filtOut, avfilterGetByName("buffersink"),"ffplay_buffersink", args, nil, graph)
   if result < 0:
     return
-  result = cint avOptSetIntList(filtOut.addr, "pix_fmts", pixFmts[0].addr, AV_PIX_FMT_NONE,OPT_SEARCH_CHILDREN)
+  result = cint avOptSetIntList(filtOut.addr, "pix_fmts", pixFmts[0].addr, AV_PIX_FMT_NONE, AV_OPT_SEARCH_CHILDREN)
   if result < 0:
     return
   lastFilter = filtOut
@@ -8759,10 +10484,9 @@ proc videoThread*(arg: VideoState): cint =
             lastSerial, frame.width, frame.height,
             avGetPixFmtName(frame.format),
             vs.viddec.pktSerial)
-      # avfilterGraphFree(graph)
       graph = avfilterGraphAlloc()
       graph.nbThreads = filterNbthreads
-      result = configureVideoFilters(graph, vs, if vfiltersList != nil: vfiltersList[vs.vfilterIdx] else: nil, frame)
+      result = configureVideoFilters(graph, vs, if vfiltersList.len != 0: vfiltersList[vs.vfilterIdx] else: "", frame)
       if result < 0:
         var event: Event
         event.kind = FF_QUIT_EVENT
@@ -8784,7 +10508,7 @@ proc videoThread*(arg: VideoState): cint =
       vs.frameLastReturnedTime = (getTime() + 42.hours).toUnix.float / 1000000.0
       result = avBuffersinkGetFrameFlags(filtOut, frame, 0)
       if result < 0:
-        if result == averror_Eof:
+        if result == AVERROR_EOF:
           vs.viddec.finished = vs.viddec.pktSerial
         result = 0
         break
@@ -8792,7 +10516,7 @@ proc videoThread*(arg: VideoState): cint =
       if abs(vs.frameLastFilterDelay) > NOSYNC_THRESHOLD / 10.0:
         vs.frameLastFilterDelay = 0
       tb = avBuffersinkGetTimeBase(filtOut)
-      duration = if frame_rate.num != 0 and frame_rate.den != 0: avQ2d(Rational[int](num:frame_rate.den, den:frame_rate.num)) else: 0
+      duration = if frameRate.num != 0 and frameRate.den != 0: avQ2d(Rational[int](num:frameRate.den, den:frameRate.num)) else: 0
       var pts = if (frame.pts == 0): NaN else: frame.pts.float * avQ2d(tb)
       result = queuePicture(vs, frame, pts, duration, frame.pktPos, vs.viddec.pktSerial)
       if vs.videoq.serial != vs.viddec.pktSerial:
