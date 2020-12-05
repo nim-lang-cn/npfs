@@ -42,32 +42,31 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <iconv.h>
-#include "ev.h"
 #include <sys/types.h>
 #include <getopt.h>
 #include <fcntl.h>
 
-#include <chrono>
-#include <cstdlib>
-#include <cassert>
-#include <netdb.h>
-#include <vector>
-#include <unordered_map>
-#include <map>
-#include <string>
-#include <deque>
-#include <string_view>
-#include <array>
-#include <memory>
-#include <random>
-#include <functional>
-#include <iostream>
-#include <functional>
-#include <fstream>
-#include <cstring>
-#include <algorithm>
-#include <limits>
-#include <arpa/inet.h>
+// #include <chrono>
+// #include <cstdlib>
+// #include <cassert>
+// #include <netdb.h>
+// #include <vector>
+// #include <unordered_map>
+// #include <map>
+// #include <string>
+// #include <deque>
+// #include <string_view>
+// #include <array>
+// #include <memory>
+// #include <random>
+// #include <functional>
+// #include <iostream>
+// #include <functional>
+// #include <fstream>
+// #include <cstring>
+// #include <algorithm>
+// #include <limits>
+// #include <arpa/inet.h>
 #if CONFIG_ZLIB
 #include <zlib.h>
 #endif
@@ -4279,7 +4278,21 @@ typedef enum
     ShapeModeReverseBinarizeAlpha,
     ShapeModeColorKey
 } WindowShapeMode;
-
+typedef enum
+{
+    SDL_PIXELTYPE_UNKNOWN,
+    SDL_PIXELTYPE_INDEX1,
+    SDL_PIXELTYPE_INDEX4,
+    SDL_PIXELTYPE_INDEX8,
+    SDL_PIXELTYPE_PACKED8,
+    SDL_PIXELTYPE_PACKED16,
+    SDL_PIXELTYPE_PACKED32,
+    SDL_PIXELTYPE_ARRAYU8,
+    SDL_PIXELTYPE_ARRAYU16,
+    SDL_PIXELTYPE_ARRAYU32,
+    SDL_PIXELTYPE_ARRAYF16,
+    SDL_PIXELTYPE_ARRAYF32
+} SDL_PixelType;
 
 typedef enum
 {
@@ -4324,21 +4337,6 @@ typedef enum
     SDL_PACKEDLAYOUT_2101010,
     SDL_PACKEDLAYOUT_1010102
 } SDL_PackedLayout;
-typedef enum
-{
-    SDL_PIXELTYPE_UNKNOWN,
-    SDL_PIXELTYPE_INDEX1,
-    SDL_PIXELTYPE_INDEX4,
-    SDL_PIXELTYPE_INDEX8,
-    SDL_PIXELTYPE_PACKED8,
-    SDL_PIXELTYPE_PACKED16,
-    SDL_PIXELTYPE_PACKED32,
-    SDL_PIXELTYPE_ARRAYU8,
-    SDL_PIXELTYPE_ARRAYU16,
-    SDL_PIXELTYPE_ARRAYU32,
-    SDL_PIXELTYPE_ARRAYF16,
-    SDL_PIXELTYPE_ARRAYF32
-} SDL_PixelType;
 typedef enum
 {
     SDL_PIXELFORMAT_UNKNOWN,
@@ -9108,7 +9106,7 @@ static void *  worker(void *v){
 end:
     av_free(pkt);
     pthread_mutex_lock(&c->buffer_mutex);
-    avcodec_close(avctx);
+    // avcodec_close(avctx);
     pthread_mutex_unlock(&c->buffer_mutex);
     av_freep(&avctx);
     return NULL;
@@ -14233,7 +14231,7 @@ static void do_exit(VideoState *is)
         SDL_DestroyRenderer(renderer);
     if (window)
         SDL_DestroyWindow(window);
-    uninit_opts();
+    // uninit_opts();
     av_freep(&vfilters_list);
     avformat_network_deinit();
     if (show_status)
@@ -15749,7 +15747,8 @@ ff_const59 AVInputFormat *av_probe_input_format3(ff_const59 AVProbeData *pd, int
         } else
             nodat = ID3_GREATER_PROBE;
     }
-    while ((fmt1 = av_demuxer_iterate(&i))) {
+    // while ((fmt1 = av_demuxer_iterate(&i))) {
+    while (fmt1) {
         if (!is_opened == !(fmt1->flags & AVFMT_NOFILE) && strcmp(fmt1->name, "image2"))
             continue;
         score = 0;
@@ -18508,7 +18507,8 @@ static const AVClass *format_child_class_iterate(void **iter)
     if (state == CHILD_CLASS_ITER_MUX) {
         const AVOutputFormat *ofmt;
 
-        while ((ofmt = av_muxer_iterate(&val))) {
+        // while ((ofmt = av_muxer_iterate(&val))) {
+        while ((ofmt )) {
             ret = ofmt->priv_class;
             if (ret)
                 goto finish;
@@ -18521,7 +18521,8 @@ static const AVClass *format_child_class_iterate(void **iter)
     if (state == CHILD_CLASS_ITER_DEMUX) {
         const AVInputFormat *ifmt;
 
-        while ((ifmt = av_demuxer_iterate(&val))) {
+        // while ((ifmt = av_demuxer_iterate(&val))) {
+        while (ifmt ) {
             ret = ifmt->priv_class;
             if (ret)
                 goto finish;
@@ -18597,6 +18598,15 @@ AVFormatContext *avformat_alloc_context(void)
 }
 AVDictionary **setup_find_stream_info_opts(AVFormatContext *s,
                                            AVDictionary *codec_opts);
+void print_error(const char *filename, int err)
+{
+    char errbuf[128];
+    const char *errbuf_ptr = errbuf;
+
+    if (av_strerror(err, errbuf, sizeof(errbuf)) < 0)
+        errbuf_ptr = strerror(AVUNERROR(err));
+    av_log(NULL, AV_LOG_ERROR, "%s: %s\n", filename, errbuf_ptr);
+}
 static int read_thread(void *arg)
 {
     VideoState *is = arg;
@@ -19326,7 +19336,7 @@ static void event_loop(VideoState *cur_stream)
         }
     }
 }
-
+int opt_default(void *optctx, const char *opt, const char *arg);
 static int opt_frame_size(void *optctx, const char *opt, const char *arg)
 {
     av_log(NULL, 24, "Option -s is deprecated, use -video_size.\n");
@@ -19379,6 +19389,16 @@ static int opt_sync(void *optctx, const char *opt, const char *arg)
         exit(1);
     }
     return 0;
+}
+
+static void (*program_exit)(int ret);
+
+void exit_program(int ret)
+{
+    if (program_exit)
+        program_exit(ret);
+
+    exit(ret);
 }
 
 int64_t parse_time_or_die(const char *context, const char *timestr,
@@ -19806,7 +19826,7 @@ AVDictionary *filter_codec_opts(AVDictionary *opts, enum AVCodecID codec_id,
                 break;
             case 0:
                 continue;
-            default:
+            // default:
                 exit_program(1);
             }
 
@@ -19826,15 +19846,7 @@ AVDictionary *filter_codec_opts(AVDictionary *opts, enum AVCodecID codec_id,
     }
     return ret;
 }
-void print_error(const char *filename, int err)
-{
-    char errbuf[128];
-    const char *errbuf_ptr = errbuf;
 
-    if (av_strerror(err, errbuf, sizeof(errbuf)) < 0)
-        errbuf_ptr = strerror(AVUNERROR(err));
-    av_log(NULL, AV_LOG_ERROR, "%s: %s\n", filename, errbuf_ptr);
-}
 
 AVDictionary **setup_find_stream_info_opts(AVFormatContext *s,
                                            AVDictionary *codec_opts)
@@ -19989,15 +20001,8 @@ double parse_number_or_die(const char *context, const char *numstr, int type,
     return 0;
 }
 
-static void (*program_exit)(int ret);
 
-void exit_program(int ret)
-{
-    if (program_exit)
-        program_exit(ret);
 
-    exit(ret);
-}
 void init_dynload(void)
 {
 #if HAVE_SETDLLDIRECTORY && defined(_WIN32)
@@ -20407,7 +20412,7 @@ static const OptionDef helpoptions[] = {
     { NULL, },
 };
 
-#include "common.cpp"
+// #include "common.cpp"
 
 int main(int argc, char **argv)
 {
