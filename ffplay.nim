@@ -1007,7 +1007,7 @@ type
     AV_CODEC_ID_SCTE_35,      ## /< Contain timestamp estimated through PCR of program stream.
     AV_CODEC_ID_EPG, AV_CODEC_ID_BINTEXT = 0x00018800, AV_CODEC_ID_XBIN,
     AV_CODEC_ID_IDF, AV_CODEC_ID_OTF, AV_CODEC_ID_SMPTE_KLV, AV_CODEC_ID_DVD_NAV,
-    AV_CODEC_ID_TIMED_ID3, AV_CODEC_ID_BIN_DATA, AV_CODEC_ID_PROBE = 0x00019000, ## /< codec_id is not known (like AV_CODEC_ID_NONE) but lavf should attempt to identify it
+    AV_CODEC_ID_TIMED_ID3, AV_CODEC_ID_BIN_DATA, AV_CODEC_ID_PROBE = 0x00019000, ## /< codec_id is not KNOWN (like AV_CODEC_ID_NONE) but lavf should attempt to identify it
     AV_CODEC_ID_MPEG2TS = 0x00020000, ## *< _FAKE_ codec to indicate a raw MPEG-2 TS
                                    ##  stream (only used by libavformat)
     AV_CODEC_ID_MPEG4SYSTEMS = 0x00020001, ## *< _FAKE_ codec to indicate a MPEG-4 Systems
@@ -2220,17 +2220,17 @@ type
 
   AVFilterFormats* = ref object
     nbFormats*: cint          ## /< number of formats
-    formats*: cint          ## /< list of media formats
+    formats*: ptr cint          ## /< list of media formats
     refcount*: cint           ## /< number of references to this list
-    refs*: AVFilterFormats ## /< references to this list
+    refs*: seq[AVFilterFormats] ## /< references to this list
 
   AVFilterChannelLayouts* = ref object
     channelLayouts*: ptr uint64 ## /< list of channel layouts
     nbChannelLayouts*: cint    ## /< number of channel layouts
-    allLayouts*: char          ## /< accept any known channel layout
+    allLayouts*: char          ## /< accept any KNOWN channel layout
     allCounts*: char           ## /< accept any channel layout or count
-    refcount*: cuint           ## /< number of references to this list
-    refs*: ptr AVFilterChannelLayouts ## /< references to this list
+    refcount*: cint           ## /< number of references to this list
+    refs*: seq[AVFilterChannelLayouts]
 
 
   AVFilterFormatsConfig* = ref object
@@ -8373,7 +8373,7 @@ proc configureInputVideoFilter*(fg: FilterGraph; ifilter: var InputFilter; i: AV
   if copyTs != 0:
     tsoffset = if f.startTime == 0: 0'i64 else: f.startTime
     if startAtZero == 0 and f.ctx.startTime != 0:
-      inc(tsoffset, f.ctx.startTime)
+      tsoffset += f.ctx.startTime
   result = insertTrim(if ((f.startTime == 0) or f.accurateSeek == 0): 0'i64 else: tsoffset, f.recordingTime, lastFilter, padIdx, name)
   if result < 0:
     return result
@@ -8418,14 +8418,14 @@ proc avRescaleRnd*(a: int64; b: int64; c: int64; rnd: var int): int64 =
       var i: cint
       a0 = a0 * b0 + t1a
       a1 = a1 * b1 + (t1 shr 32) + int(a0 < t1a)
-      inc(a0, r)
-      inc(a1, a0 < r)
+      a0 += r
+      a1 += cint a0 < r
       i = 63
       while i >= 0:
-        inc(a1, a1 + ((a0 shr i) and 1))
-        inc(t1, t1)
+        a1 += a1 + ((a0 shr i) and 1)
+        t1 += t1
         if c <= a1:
-          dec(a1, c)
+          a1 -= c
           inc(t1)
         dec(i)
       if t1 > int64.high:
@@ -8499,7 +8499,7 @@ proc configureInputAudioFilter*(fg: FilterGraph; ifilter: var InputFilter; i: AV
   if copyTs != 0:
     tsoffset = if f.startTime == 0: 0'i64 else: f.startTime
     if startAtZero == 0 and f.ctx.startTime != 0:
-      inc(tsoffset, f.ctx.startTime)
+      tsoffset += f.ctx.startTime
   result = insertTrim(if (f.startTime == 0 or f.accurateSeek == 0): 0'i64 else: tsoffset, f.recordingTime, lastFilter, padIdx, name)
   if result < 0:
     return result
@@ -8527,7 +8527,6 @@ proc avfilterGraphSetAutoConvert*(graph: var AVFilterGraph; flags: cint) =
 const
   AVFILTER_AUTO_CONVERT_ALL* = 0 ## *< all automatic conversions enabled
   AVFILTER_AUTO_CONVERT_NONE* = -1 ## *< all automatic conversions disabled
-
 
 
 proc avGetPaddedBitsPerPixel*(pixdesc: AVPixFmtDescriptor): int =
@@ -9150,26 +9149,31 @@ proc formatsDeclared*(f: AVFilterContext): cint =
       return 0
   return 1
 
-proc ffSetCommonFormats*(ctx: AVFilterContext; formats: AVFilterFormats): cint =
+proc ffFormatsRef*(f:var AVFilterFormats; r: var AVFilterFormats): cint =
+  f.refs.add r
+  inc(f.refcount)
+  r = f
+  return 0
+
+
+proc ffSetCommonFormats*(ctx: var AVFilterContext; formats: var AVFilterFormats): cint =
   var
     count: cint = 0
   for i in 0..<ctx.nbInputs:
-    if ctx.inputs[i] and not ctx.inputs[i].outcfg.formats:
-      var result: cint = ffFormatsRef(formats, addr(ctx.inputs[i].outcfg.formats))
-      if result < 0:
-        return result
+    if ctx.inputs[i] != nil and ctx.inputs[i].outcfg.formats.len == 0:
+      ctx.inputs[i].outcfg.formats.add formats
       inc(count)
   for i in 0..<ctx.nbOutputs:
-    if ctx.outputs[i] and not ctx.outputs[i].incfg.formats:
-      var result: cint = ffFormatsRef(formats, addr(ctx.outputs[i].incfg.formats))
-      if result < 0:
-        return result
+    if ctx.outputs[i] != nil and ctx.outputs[i].incfg.formats.len == 0:
+      ctx.outputs[i].incfg.formats.add formats
       inc(count)
   if  count == 0:
-    ffFormatsUnref(addr(formats))
+    formats = nil
   return 0
 
-proc filterQueryFormats*(ctx: ptr AVFilterContext): cint =
+proc queryFormats*(graph: AVFilterGraph; logCtx: AVClass): cint
+
+proc filterQueryFormats*(ctx: AVFilterContext): cint =
   var
     result: cint
     i: cint
@@ -9177,16 +9181,16 @@ proc filterQueryFormats*(ctx: ptr AVFilterContext): cint =
   var chlayouts: AVFilterChannelLayouts
   var samplerates:  AVFilterFormats
   var t: AVMediaType = 
-      if ctx.inputs and ctx.inputs[0]: 
+      if ctx.inputs != nil and ctx.inputs[0] != nil: 
         ctx.inputs[0].t 
         else: 
-          if ctx.outputs and ctx.outputs[0]: 
+          if ctx.outputs != nil and ctx.outputs[0] != nil: 
             ctx.outputs[0].t 
           else: AVMEDIA_TYPE_VIDEO
-  result = ctx.filter.queryFormats(ctx)
+  result = cint ctx.filter.queryFormats(ctx)
   if result < 0:
     if result != -(EAGAIN):
-      echo(ctx, av_Log_Error, "Query format failed for \'%s\': %s\n", ctx.name, avErr2str(result))
+      echo("Query format failed for \'%s\': %s\n", ctx.name, result)
     return result
   result = filterCheckFormats(ctx)
   if result < 0:
@@ -9232,6 +9236,7 @@ proc ffDefaultQueryFormats*(ctx: ptr AVFilterContext): cint =
       return result
   return 0
 
+
 proc mergeFormatsInternal*(a: AVFilterFormats; b: AVFilterFormats; t: AVMediaType; check: cint): cint =
   var
     i: cint
@@ -9251,11 +9256,11 @@ proc mergeFormatsInternal*(a: AVFilterFormats; b: AVFilterFormats; t: AVMediaTyp
       while j < b.nbFormats:
         var adesc = avPixFmtDescGet(a.formats[i])
         var bdesc = avPixFmtDescGet(b.formats[j])
-        alpha2 = alpha2 or adesc.flags and bdesc.flags and av_Pix_Fmt_Flag_Alpha
-        chroma2 = chroma2 or adesc.nbComponents > 1 and bdesc.nbComponents > 1
+        alpha2 = alpha2 or adesc.flags.cint and bdesc.flags.cint and AV_PIX_FMT_FLAG_ALPHA
+        chroma2 = chroma2 or cint adesc.nbComponents > 1 and  bdesc.nbComponents > 1
         if a.formats[i] == b.formats[j]:
-          alpha1 = alpha1 or adesc.flags and av_Pix_Fmt_Flag_Alpha
-          chroma1 = chroma1 or adesc.nbComponents > 1
+          alpha1 = alpha1 or adesc.flags.cint and AV_PIX_FMT_FLAG_ALPHA
+          chroma1 = chroma1 or cint adesc.nbComponents > 1
         inc(j)
       inc(i)
   if alpha2 > alpha1 or chroma2 > chroma1:
@@ -9266,235 +9271,165 @@ proc mergeFormatsInternal*(a: AVFilterFormats; b: AVFilterFormats; t: AVMediaTyp
       j: cint
       k: cint = 0
       skip: cint = 0
-    if 0:
-      if not a.nbFormats or not b.nbFormats:
-        if check:
-          return 1
-        if not a.nbFormats:
-          ##  FFSWAP(AVFilterFormats *, a, b);
-        skip = 1
-    if not skip:
+
+    if skip == 0:
       i = 0
       while i < a.nbFormats:
         j = 0
         while j < b.nbFormats:
           if a.formats[i] == b.formats[j]:
-            if check:
+            if check != 0:
               return 1
-            a.formats[inc(k)] = a.formats[i]
+            a.formats[k] = a.formats[i]; k.inc
             break
           inc(j)
         inc(i)
-      if not k:
+      if k == 0:
         return 0
-      avAssert2(not check)
       a.nbFormats = k
     while true:
-      var tmp: ptr ptr ptr AVFilterFormats
-      var i: cint
-      if not (tmp = avReallocArray(a.refs, a.refcount + b.refcount, sizeof((tmp[])))):
-        return -(enomem)
-      a.refs = tmp
-      i = 0
-      while i < b.refcount:
+      var tmp: AVFilterFormats
+      a.refs.setLen a.refcount + b.refcount
+      for i in 0..<b.refcount:
         a.refs[a.refcount] = b.refs[i]
-        a.refs[inc(a.refcount)][] = a
-        inc(i)
-      avFreep(addr(b.refs))
-      avFreep(addr(b.formats))
-      avFreep(addr(b))
-      if not 0:
+        inc(a.refcount)
+        a.refs[a.refcount] = a
         break
-    if not 0:
       break
   return 1
 
-proc ffCanMergeFormats*(a: ptr AVFilterFormats; b: ptr AVFilterFormats;
-                       t: AVMediaType): cint =
-  return mergeFormatsInternal(cast[ptr AVFilterFormats](a),
-                             cast[ptr AVFilterFormats](b), t, 1)
+proc ffCanMergeFormats*(a: AVFilterFormats; b: AVFilterFormats; t: AVMediaType): cint =
+  return mergeFormatsInternal(a, b, t, 1)
 
-proc mergeSampleratesInternal*(a: ptr AVFilterFormats; b: ptr AVFilterFormats;
-                              check: cint): cint =
+proc mergeSampleratesInternal*(a:  AVFilterFormats; b:  AVFilterFormats; check: cint): cint =
   if a == b:
     return 1
   while true:
     var
-      i: cint
-      j: cint
       k: cint = 0
       skip: cint = 0
-    if 1:
-      if not a.nbFormats or not b.nbFormats:
-        if check:
-          return 1
-        if not a.nbFormats:
-          ##  FFSWAP(AVFilterFormats *, a, b);
-        skip = 1
-    if not skip:
-      i = 0
-      while i < a.nbFormats:
-        j = 0
-        while j < b.nbFormats:
+    if a.nbFormats == 0 or  b.nbFormats == 0:
+      if check != 0:
+        return 1
+      if a.nbFormats == 0:
+        ##  FFSWAP(AVFilterFormats *, a, b);
+      skip = 1
+    if skip == 0:
+      for i in 0..<a.nbFormats:
+        for j in 0..<b.nbFormats:
           if a.formats[i] == b.formats[j]:
-            if check:
+            if check != 0:
               return 1
-            a.formats[inc(k)] = a.formats[i]
+            a.formats[k] = a.formats[i];inc(k)
             break
-          inc(j)
-        inc(i)
-      if not k:
+      if k == 0:
         return 0
-      avAssert2(not check)
       a.nbFormats = k
     while true:
-      var tmp: ptr ptr ptr AVFilterFormats
-      var i: cint
-      if not (tmp = avReallocArray(a.refs, a.refcount + b.refcount, sizeof((tmp[])))):
-        return -(enomem)
-      a.refs = tmp
-      i = 0
-      while i < b.refcount:
-        a.refs[a.refcount] = b.refs[i]
-        a.refs[inc(a.refcount)][] = a
-        inc(i)
-      avFreep(addr(b.refs))
-      avFreep(addr(b.formats))
-      avFreep(addr(b))
-      if not 0:
+      b.refs.setLen  a.refcount + b.refcount
+      for i in 0..<b.refcount:
+        b.refs.add a
+        inc(b.refcount)
         break
-    if not 0:
       break
   return 1
 
-proc ffCanMergeSamplerates*(a: ptr AVFilterFormats; b: ptr AVFilterFormats): cint =
-  return mergeSampleratesInternal(cast[ptr AVFilterFormats](a),
-                                 cast[ptr AVFilterFormats](b), 1)
+proc ffCanMergeSamplerates*(a:  AVFilterFormats; b:  AVFilterFormats): cint =
+  return mergeSampleratesInternal(a, b, 1)
 
-proc ffMergeChannelLayouts*(a: ptr AVFilterChannelLayouts;
-                           b: ptr AVFilterChannelLayouts): cint =
-  var channelLayouts: ptr uint64T
-  var aAll: cuint = a.allLayouts + a.allCounts
-  var bAll: cuint = b.allLayouts + b.allCounts
+template FF_LAYOUT2COUNT(l: untyped):untyped = 
+  if (l and 0x8000000000000000'u64) != 0: l and 0x7FFFFFFF else: 0
+
+template KNOWN(l):untyped = not FF_LAYOUT2COUNT(l)
+
+
+proc ffMergeChannelLayouts*(a: AVFilterChannelLayouts; b: AVFilterChannelLayouts): cint =
+  var channelLayouts: seq[uint64]
+  var aAll = a.allLayouts + a.allCounts
+  var bAll = b.allLayouts + b.allCounts
   var
     retMax: cint
     retNb: cint = 0
     i: cint
     j: cint
     round: cint
-  avAssert2(a.refcount and b.refcount)
   if a == b:
     return 1
   if aAll < bAll:
     ##  FFSWAP(AVFilterChannelLayouts *, a, b);
-    ffswap(unsigned, aAll, bAll)
-  if aAll:
-    if aAll == 1 and not bAll:
-      i = j = 0
-      while i < b.nbChannelLayouts:
-        if known(b.channelLayouts[i]):
-          b.channelLayouts[inc(j)] = b.channelLayouts[i]
-        inc(i)
-      if not j:
+    swap(aAll, bAll)
+  if aAll != 0:
+    if aAll == 1 and bAll == 0:
+      j = 0
+      for i in 0..<b.nbChannelLayouts:
+        if KNOWN(b.channelLayouts[i]) != 0:
+          b.channelLayouts[j] = b.channelLayouts[i]; inc(j)
+      if j == 0:
         return 0
       b.nbChannelLayouts = j
     while true:
-      var tmp: ptr ptr ptr AVFilterChannelLayouts
-      var i: cint
-      if not (tmp = avReallocArray(b.refs, b.refcount + a.refcount, sizeof((tmp[])))):
-        return -(enomem)
-      b.refs = tmp
-      i = 0
-      while i < a.refcount:
-        b.refs[b.refcount] = a.refs[i]
-        b.refs[inc(b.refcount)][] = b
-        inc(i)
-      avFreep(addr(a.refs))
-      avFreep(addr(a.channelLayouts))
-      avFreep(addr(a))
-      if not 0:
+      b.refs.setLen b.refcount + a.refcount
+      for i in 0..<a.refcount:
+        b.refs.add a
+        inc(b.refcount)
         break
     return 1
   retMax = a.nbChannelLayouts + b.nbChannelLayouts
-  if not (channelLayouts = avMallocArray(retMax, sizeof((channelLayouts[])))):
-    return -(enomem)
-  i = 0
-  while i < a.nbChannelLayouts:
-    if not known(a.channelLayouts[i]):
+  channelLayouts.setLen retMax
+  for i in 0..<a.nbChannelLayouts:
+    if KNOWN(a.channelLayouts[i]) == 0:
       continue
-    j = 0
-    while j < b.nbChannelLayouts:
+    for j in 0..<b.nbChannelLayouts:
       if a.channelLayouts[i] == b.channelLayouts[j]:
-        channelLayouts[inc(retNb)] = a.channelLayouts[i]
-        a.channelLayouts[i] = b.channelLayouts[j] = 0
+        channelLayouts[retNb] = a.channelLayouts[i]
+        retNb.inc
+        b.channelLayouts[j] = 0
+        a.channelLayouts[i] = 0
         break
-      inc(j)
-    inc(i)
   round = 0
   while round < 2:
-    i = 0
-    while i < a.nbChannelLayouts:
+    for i in 0..<a.nbChannelLayouts:
       var
-        fmt: uint64T = a.channelLayouts[i]
-        bfmt: uint64T
-      if not fmt or not known(fmt):
+        fmt: uint64 = a.channelLayouts[i]
+        bfmt: uint64
+      if fmt == 0 or KNOWN(fmt) == 0:
         continue
       bfmt = ff_Count2layout(avGetChannelLayoutNbChannels(fmt))
-      j = 0
-      while j < b.nbChannelLayouts:
+      for j in 0..<b.nbChannelLayouts:
         if b.channelLayouts[j] == bfmt:
-          channelLayouts[inc(retNb)] = a.channelLayouts[i]
-        inc(j)
-      inc(i)
+          channelLayouts[retNb] = a.channelLayouts[i];inc(retNb)
     ##  FFSWAP(AVFilterChannelLayouts *, a, b);
     inc(round)
-  i = 0
-  while i < a.nbChannelLayouts:
-    if known(a.channelLayouts[i]):
+  for i in 0..<a.nbChannelLayouts:
+    if KNOWN(a.channelLayouts[i]):
       continue
-    j = 0
-    while j < b.nbChannelLayouts:
+    for j in 0..<b.nbChannelLayouts:
       if a.channelLayouts[i] == b.channelLayouts[j]:
-        channelLayouts[inc(retNb)] = a.channelLayouts[i]
-      inc(j)
-    inc(i)
-  if not retNb:
-    avFree(channelLayouts)
+        channelLayouts[retNb] = a.channelLayouts[i]
+        inc(retNb)
+  if retNb == 0:
     return 0
   if a.refcount > b.refcount:
     while true:
-      var tmp: ptr ptr ptr AVFilterChannelLayouts
-      var i: cint
-      if not (tmp = avReallocArray(b.refs, b.refcount + a.refcount, sizeof((tmp[])))):
-        avFree(channelLayouts)
-        return -(enomem)
-      b.refs = tmp
-      i = 0
-      while i < a.refcount:
-        b.refs[b.refcount] = a.refs[i]
-        b.refs[inc(b.refcount)][] = b
+      b.refs.setLen b.refcount + a.refcount
+      for i in 0..<a.refcount:
+        # b.refs[b.refcount] = a.refs[i]
+        a.refs[b.refcount] = b
+        inc(b.refcount)
         inc(i)
-      avFreep(addr(a.refs))
-      avFreep(addr(a.channelLayouts))
-      avFreep(addr(a))
-      if not 0:
         break
-  avFreep(addr(b.channelLayouts))
   b.channelLayouts = channelLayouts
   b.nbChannelLayouts = retNb
   return 1
 
 proc ffMergeSamplerates*(a: ptr AVFilterFormats; b: ptr AVFilterFormats): cint =
-  avAssert2(a.refcount and b.refcount)
   return mergeSampleratesInternal(a, b, 0)
 
-proc ffMergeFormats*(a: ptr AVFilterFormats; b: ptr AVFilterFormats;
-                    t: AVMediaType): cint =
-  avAssert2(a.refcount and b.refcount)
+proc ffMergeFormats*(a: ptr AVFilterFormats; b: ptr AVFilterFormats;t: AVMediaType): cint =
   return mergeFormatsInternal(a, b, t, 0)
 
 
-proc queryFormats*(graph: ptr AVFilterGraph; logCtx: ptr AVClass): cint =
+proc queryFormats*(graph: AVFilterGraph; logCtx: AVClass): cint =
   var
     i: cint
     j: cint
@@ -9546,8 +9481,7 @@ proc queryFormats*(graph: ptr AVFilterGraph; logCtx: ptr AVClass): cint =
           inc(countAlreadyMerged)
         elif not convertNeeded:
           inc(countMerged)
-          if ((result = ffMergeChannelLayouts(link.incfg.channelLayouts,
-                                        link.outcfg.channelLayouts)) <= 0):
+          if ((result = ffMergeChannelLayouts(link.incfg.channelLayouts, link.outcfg.channelLayouts)) <= 0):
             if result < 0:
               return result
             convertNeeded = 1
@@ -9557,8 +9491,8 @@ proc queryFormats*(graph: ptr AVFilterGraph; logCtx: ptr AVClass): cint =
           inc(countAlreadyMerged)
         elif not convertNeeded:
           inc(countMerged)
-          if ((result = ffMergeSamplerates(link.incfg.samplerates,
-                                     link.outcfg.samplerates)) <= 0):
+          result = cint ffMergeSamplerates(link.incfg.samplerates, link.outcfg.samplerates) <= 0
+          if result != 0:
             if result < 0:
               return result
             convertNeeded = 1
@@ -9568,8 +9502,8 @@ proc queryFormats*(graph: ptr AVFilterGraph; logCtx: ptr AVClass): cint =
         inc(countAlreadyMerged)
       elif not convertNeeded:
         inc(countMerged)
-        if ((result = ffMergeFormats(link.incfg.formats, link.outcfg.formats,
-                               link.t)) <= 0):
+        result = ffMergeFormats(link.incfg.formats, link.outcfg.formats, link.t) <= 0
+        if result != 0:
           if result < 0:
             return result
           convertNeeded = 1
@@ -9581,69 +9515,51 @@ proc queryFormats*(graph: ptr AVFilterGraph; logCtx: ptr AVClass): cint =
           outlink: ptr AVFilterLink
         var instName: array[30, char]
         if graph.disableAutoConvert:
-          echo(logCtx, av_Log_Error, "The filters \'%s\' and \'%s\' do not have a common format and automatic conversion is disabled.\n",
-                link.src.name, link.dst.name)
-          return -(einval)
+          echo("The filters \'%s\' and \'%s\' do not have a common format and automatic conversion is disabled.\n", link.src.name, link.dst.name)
+          return -(EINVAL)
         case link.t
         of AVMEDIA_TYPE_VIDEO:
           if not (filter = avfilterGetByName("scale")):
-            echo(logCtx, av_Log_Error, "\'scale\' filter not present, cannot convert pixel formats.\n")
-            return -(einval)
+            echo( "\'scale\' filter not present, cannot convert pixel formats.\n")
+            return -(EINVAL)
           snprintf(instName, sizeof((instName)), "auto_scaler_%d", inc(scalerCount))
-          if (result = avfilterGraphCreateFilter(addr(convert), filter, instName,
-              graph.scaleSwsOpts, nil, graph)) < 0:
+          if (result = avfilterGraphCreateFilter(addr(convert), filter, instName, graph.scaleSwsOpts, nil, graph)) < 0:
             return result
         of AVMEDIA_TYPE_AUDIO:
-          if not (filter = avfilterGetByName("aresample")):
-            echo(logCtx, av_Log_Error, "\'aresample\' filter not present, cannot convert audio formats.\n")
-            return -(einval)
-          snprintf(instName, sizeof((instName)), "auto_resampler_%d",
-                   inc(resamplerCount))
-          if (result = avfilterGraphCreateFilter(addr(convert), filter, instName,
-              graph.aresampleSwrOpts, nil, graph)) < 0:
+          filter = avfilterGetByName("aresample")
+          if filter == nil:
+            echo( "\'aresample\' filter not present, cannot convert audio formats.\n")
+            return -(EINVAL)
+          snprintf(instName, sizeof((instName)), "auto_resampler_%d", inc(resamplerCount))
+          result = avfilterGraphCreateFilter(addr(convert), filter, instName,graph.aresampleSwrOpts, nil, graph)
+          if result < 0:
             return result
         else:
-          return -(einval)
-        if (result = avfilterInsertFilter(link, convert, 0, 0)) < 0:
+          return -(EINVAL)
+        result = avfilterInsertFilter(link, convert, 0, 0)
+        if result < 0:
           return result
-        if (result = filterQueryFormats(convert)) < 0:
+        result = filterQueryFormats(convert)
+        if result < 0:
           return result
         inlink = convert.inputs[0]
         outlink = convert.outputs[0]
 
         if outlink.t == AVMEDIA_TYPE_AUDIO:
-          avAssert0(inlink.incfg.samplerates.refcount > 0)
-          avAssert0(inlink.outcfg.samplerates.refcount > 0)
-          avAssert0(outlink.incfg.samplerates.refcount > 0)
-          avAssert0(outlink.outcfg.samplerates.refcount > 0)
-          avAssert0(inlink.incfg.channelLayouts.refcount > 0)
-          avAssert0(inlink.outcfg.channelLayouts.refcount > 0)
-          avAssert0(outlink.incfg.channelLayouts.refcount > 0)
-          avAssert0(outlink.outcfg.channelLayouts.refcount > 0)
-        if ((result = ffMergeFormats(inlink.incfg.formats, inlink.outcfg.formats,
-                               inlink.t)) <= 0) or
-            ((result = ffMergeFormats(outlink.incfg.formats, outlink.outcfg.formats,
-                                 outlink.t)) <= 0) or
-            inlink.t == AVMEDIA_TYPE_AUDIO and
-            (((result = ffMergeSamplerates(inlink.incfg.samplerates,
-                                      inlink.outcfg.samplerates)) <= 0) or
-            ((result = ffMergeChannelLayouts(inlink.incfg.channelLayouts,
-                                        inlink.outcfg.channelLayouts)) <= 0)) or
+        if ((result = ffMergeFormats(inlink.incfg.formats, inlink.outcfg.formats, inlink.t)) <= 0) or
+            ((result = ffMergeFormats(outlink.incfg.formats, outlink.outcfg.formats,outlink.t)) <= 0) or
+            inlink.t == AVMEDIA_TYPE_AUDIO and (((result = ffMergeSamplerates(inlink.incfg.samplerates, inlink.outcfg.samplerates)) <= 0) or
+            ((result = ffMergeChannelLayouts(inlink.incfg.channelLayouts, inlink.outcfg.channelLayouts)) <= 0)) or
             outlink.t == AVMEDIA_TYPE_AUDIO and
-            (((result = ffMergeSamplerates(outlink.incfg.samplerates,
-                                      outlink.outcfg.samplerates)) <= 0) or
-            ((result = ffMergeChannelLayouts(outlink.incfg.channelLayouts,
-                                        outlink.outcfg.channelLayouts)) <= 0)):
+            (((result = ffMergeSamplerates(outlink.incfg.samplerates,outlink.outcfg.samplerates)) <= 0) or
+            ((result = ffMergeChannelLayouts(outlink.incfg.channelLayouts,outlink.outcfg.channelLayouts)) <= 0)):
           if result < 0:
             return result
-          echo(logCtx, av_Log_Error, "Impossible to convert between the formats supported by the filter \'%s\' and the filter \'%s\'\n",
-                link.src.name, link.dst.name)
+          echo( "Impossible to convert between the formats supported by the filter \'%s\' and the filter \'%s\'\n", link.src.name, link.dst.name)
           return -(enosys)
       inc(j)
     inc(i)
-  echo(graph, av_Log_Debug,
-        "query_formats: %d queried, %d merged, %d already done, %d delayed\n",
-        countQueried, countMerged, countAlreadyMerged, countDelayed)
+  echo("query_formats: %d queried, %d merged, %d already done, %d delayed\n",countQueried, countMerged, countAlreadyMerged, countDelayed)
   if countDelayed:
     var bp: AVBPrint
     if countQueried or countMerged:
@@ -9654,8 +9570,7 @@ proc queryFormats*(graph: ptr AVFilterGraph; logCtx: ptr AVClass): cint =
       if not formatsDeclared(graph.filters[i]):
         avBprintf(addr(bp), "%s%s", if bp.len: ", " else: "", graph.filters[i].name)
       inc(i)
-    echo(graph, av_Log_Error, "The following filters could not choose their formats: %s\nConsider inserting the (a)format filter near their input or output.\n",
-          bp.str)
+    echo( "The following filters could not choose their formats: %s\nConsider inserting the (a)format filter near their input or output.\n", bp.str)
     return -(eio)
   return 0
 
@@ -9733,7 +9648,7 @@ proc reduceFormatsOnFilter*(filter: ptr AVFilterContext): cint =
   i = 0
   while i < filter.nbInputs:
     var inlink: ptr AVFilterLink = filter.inputs[i]
-    var fmt: uint64T
+    var fmt: uint64
     if not inlink.outcfg.channelLayouts or
         inlink.outcfg.channelLayouts.nbChannelLayouts != 1:
       continue
@@ -9836,7 +9751,7 @@ const
 ##  allowable substitutions for channel pairs when comparing layouts,
 ##  ordered by priority for both values
 
-var chSubst*: UncheckedArray[array[2, uint64T]] = [[ch_Front_Pair, ch_Center_Pair],
+var chSubst*: UncheckedArray[array[2, uint64]] = [[ch_Front_Pair, ch_Center_Pair],
     [ch_Front_Pair, ch_Wide_Pair], [ch_Front_Pair, av_Ch_Front_Center],
     [ch_Center_Pair, ch_Front_Pair], [ch_Center_Pair, ch_Wide_Pair],
     [ch_Center_Pair, av_Ch_Front_Center], [ch_Wide_Pair, ch_Front_Pair],
@@ -9875,8 +9790,8 @@ proc swapChannelLayoutsOnFilter*(filter: ptr AVFilterContext) =
       continue
     j = 0
     while j < outlink.incfg.channelLayouts.nbChannelLayouts:
-      var inChlayout: uint64T = link.outcfg.channelLayouts.channelLayouts[0]
-      var outChlayout: uint64T = outlink.incfg.channelLayouts.channelLayouts[j]
+      var inChlayout: uint64 = link.outcfg.channelLayouts.channelLayouts[0]
+      var outChlayout: uint64 = outlink.incfg.channelLayouts.channelLayouts[j]
       var inChannels: cint = avGetChannelLayoutNbChannels(inChlayout)
       var outChannels: cint = avGetChannelLayoutNbChannels(outChlayout)
       var countDiff: cint = outChannels - inChannels
@@ -9900,8 +9815,8 @@ proc swapChannelLayoutsOnFilter*(filter: ptr AVFilterContext) =
         ##                    value is not altered
       k = 0
       while k < ff_Array_Elems(chSubst):
-        var cmp0: uint64T = chSubst[k][0]
-        var cmp1: uint64T = chSubst[k][1]
+        var cmp0: uint64 = chSubst[k][0]
+        var cmp1: uint64 = chSubst[k][1]
         if (inChlayout and cmp0) and (not (outChlayout and cmp0)) and
             (outChlayout and cmp1) and (not (inChlayout and cmp1)):
           inChlayout = inChlayout and not cmp0
@@ -9926,7 +9841,7 @@ proc swapChannelLayoutsOnFilter*(filter: ptr AVFilterContext) =
         bestCountDiff = countDiff
       inc(j)
     avAssert0(bestIdx >= 0)
-    ffswap(uint64T, outlink.incfg.channelLayouts.channelLayouts[0],
+    ffswap(uint64, outlink.incfg.channelLayouts.channelLayouts[0],
            outlink.incfg.channelLayouts.channelLayouts[bestIdx])
     inc(i)
 
@@ -10187,7 +10102,7 @@ proc avBuffersrcAddFrameInternal*(ctx: AVFilterContext; frame: AVFrame; flags: c
     case ctx.outputs[0].t
     of AVMEDIA_TYPE_VIDEO:
       check_Video_Param_Change(ctx, s, frame.width, frame.height, frame.format, frame.pts)
-    of AVMEDIA_TYPE_AUDIO:     ##  For layouts unknown on input but known on link after negotiation.
+    of AVMEDIA_TYPE_AUDIO:     ##  For layouts unknown on input but KNOWN on link after negotiation.
       if frame.channelLayout == 0:
         frame.channelLayout = s.channelLayout
       check_Audio_Param_Change(ctx, s, frame.sampleRate, frame.channelLayout, frame.channels, frame.format, frame.pts)
