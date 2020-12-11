@@ -3,4 +3,6 @@ client
 test*
 preprocess*
 treesitter
-all.cpp
+all*
+*.c
+*.h

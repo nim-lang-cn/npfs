@@ -279,7 +279,7 @@ when nimvm:
     gStateCT* {.compileTime, used.} = new(State)
 else:
   var
-    gState* = State(includeDirs: @["/mnt/c/openssl","/mnt/c/openssl/ssl","/mnt/c/openssl/include","/mnt/c/nghttp3/lib/includes","/mnt/c/nghttp3/lib","/mnt/c/ngtcp2/crypto/includes",
+    gState* = State(mode:"c",includeDirs: @["/mnt/c/openssl","/mnt/c/openssl/ssl","/mnt/c/openssl/include","/mnt/c/nghttp3/lib/includes","/mnt/c/nghttp3/lib","/mnt/c/ngtcp2/crypto/includes",
       "/mnt/c/ngtcp2/crypto","/mnt/c/ngtcp2/lib","/mnt/c/ngtcp2/lib/includes","/mnt/c/ngtcp2/third-party","/mnt/c/ngtcp2/third-party/http-parser"])
 
 proc querySettingSeq*(setting: MultipleValueSetting): seq[string] {.
@@ -1247,8 +1247,7 @@ proc getPreprocessor*(gState: State, fullpath: string) =
   for def in gState.defines:
     args.add &"-D{def}"
 
-  args.add @["-D__attribute__(x)=", "-D__restrict=", "-D__restrict__=", "-D__extension__=", "-D__inline__=inline","-D__inline=inline", "-D_Noreturn=", &"{fullpath.sanitizePath}"]
-  args.add @[&"{fullpath.sanitizePath}"]
+  args.add @[ &"{fullpath.sanitizePath}"]
 
   # Include content only from file
   var
@@ -1258,7 +1257,7 @@ proc getPreprocessor*(gState: State, fullpath: string) =
     newHeaders: HashSet[string]
 
   # Include content only from file
-  gState.code = ""
+  # gState.code = ""
   while true:
     if outp.readLine(line):
       # We want to keep blank lines here for comment processing
@@ -1266,7 +1265,9 @@ proc getPreprocessor*(gState: State, fullpath: string) =
         # # 1 "path/to/file.h" 1
         start = false
         line = line.split('"')[1].sanitizePath(noQuote = true)
-        if sfile == line or (DirSep notin line and sfileName == line):
+        # echo "line: ",line
+
+        if sfile == line or (DirSep notin line and sfileName == line) or line.contains "FFmpeg":
           start = true
         elif gState.recurse:
           if (pDir == "" or pDir in line) and line notin gState.headersProcessed:
@@ -1279,10 +1280,8 @@ proc getPreprocessor*(gState: State, fullpath: string) =
                 start = gState.isIncluded(line)
                 if start:
                   break
-      elif ": fatal error:" in line:
-        doAssert false,
-          "\n\nFailed in preprocessing, check if `cIncludeDir()` is needed or compiler `mode` is correct (c/cpp)" &
-          "\n\nERROR:$1\n" % line.split(": fatal error:")[1]
+      elif "error:" in line:
+          echo line
       else:
         if start:
           if "#undef" in line:
@@ -1494,43 +1493,45 @@ var source: seq[string] = @["test.c"]
 var all: string
 var hAndC: seq[string]
 
-if enablePreprocessing:
-  var csources = @["/mnt/c/nghttp3/lib","/mnt/c/ngtcp2/crypto","/mnt/c/ngtcp2/lib","/mnt/c/ngtcp2/third-party/http-parser","/mnt/c/ngtcp2/examples"]
-  for dir in csources:
-    for f in walkDirRec(dir):
-      let(path,name,ext) = splitFile f
-      if "test" notin path and "test" notin name and "client" notin name and "h09" notin name and "demos" notin path and "gnutls" notin path and ext in [".c",".cc"]:
-        hAndC.add f
+# if enablePreprocessing:
+#   var csources = @["/mnt/c/nghttp3/lib","/mnt/c/ngtcp2/crypto","/mnt/c/ngtcp2/lib","/mnt/c/ngtcp2/third-party/http-parser","/mnt/c/ngtcp2/examples"]
+#   for dir in csources:
+#     for f in walkDirRec(dir):
+#       let(path,name,ext) = splitFile f
+#       if "test" notin path and "test" notin name and "client" notin name and "h09" notin name and "demos" notin path and "gnutls" notin path and ext in [".c",".cc"]:
+#         hAndC.add f
 
-  for hc in hAndC:
-    all &= readFile(hc)
-    # preprocess(hc) 
-  writeFile("all.cpp",all)
-  # quit()
-  process("all.cpp") 
+#   for hc in hAndC:
+#     all &= readFile(hc)
+#     # preprocess(hc) 
+#   writeFile("all.cpp",all)
+#   # quit()
+#   process("all.cpp") 
 
-  # var sorted = funcGraph.topoSort()
-  # echo sorted.join("->")
-  # var sortedFunc: string
-  # while sorted.len > 0:
-  #   var s = sorted.pop
-  #   if funcDefs.hasKey s:
-  #     sortedFunc &= funcDefs[s]
-  # writeFile("sortedFunc.cpp", sortedFunc)
-  var sortedTypes = typeGraph.topoSort()
-  var sortedType: string
-  while sortedTypes.len > 0:
-    var s = sortedTypes.pop
-    if typeDefs.hasKey(s):
-      sortedType &= typeDefs[s]
+#   # var sorted = funcGraph.topoSort()
+#   # echo sorted.join("->")
+#   # var sortedFunc: string
+#   # while sorted.len > 0:
+#   #   var s = sorted.pop
+#   #   if funcDefs.hasKey s:
+#   #     sortedFunc &= funcDefs[s]
+#   # writeFile("sortedFunc.cpp", sortedFunc)
+#   var sortedTypes = typeGraph.topoSort()
+#   var sortedType: string
+#   while sortedTypes.len > 0:
+#     var s = sortedTypes.pop
+#     if typeDefs.hasKey(s):
+#       sortedType &= typeDefs[s]
 
-  writeFile("sortedType.cpp", sortedType)
+#   writeFile("sortedType.cpp", sortedType)
   
-  # writeFile("funcsPreprocessed.cpp", preprocessedFuncs)
-  # findFunctionDefinition()
-else:
-  for src in source:
-      let src = src.expandSymlinkAbs()
-      process(src)
-
+#   # writeFile("funcsPreprocessed.cpp", preprocessedFuncs)
+#   # findFunctionDefinition()
+# else:
+#   for src in source:
+#       let src = src.expandSymlinkAbs()
+#       process(src)
+gState.includeDirs = @["/mnt/c/FFmpeg", "/mnt/c/msys64/mingw64/x86_64-w64-mingw32/include/"]
+gState.getPreprocessor("/mnt/c/FFmpeg/libavformat/mov.c")
+writeFile("mov.c",gState.code)
 echo "finish"

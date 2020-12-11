@@ -1,0 +1,4 @@
+--hints:off
+--threads:on
+--define:release
+--warnings:off
